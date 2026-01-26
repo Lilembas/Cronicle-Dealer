@@ -1,0 +1,90 @@
+# 服务器配置
+server:
+  mode: "master"  # master 或 worker
+  host: "0.0.0.0"
+  http_port: 8080
+  grpc_port: 9090
+  
+# Master 配置
+master:
+  # 选举配置
+  election:
+    enabled: true
+    lease_duration: 10  # 秒
+    renew_interval: 3   # 秒
+  
+  # 调度配置
+  scheduler:
+    enabled: true
+    tick_interval: 60  # 秒
+  
+  # 心跳检测
+  heartbeat:
+    timeout: 30  # 秒，超过此时间未收到心跳视为离线
+    check_interval: 10  # 秒
+
+# Worker 配置
+worker:
+  # Master 地址
+  master_address: "localhost:9090"
+  
+  # 节点信息
+  node:
+    hostname: ""  # 为空则自动获取
+    tags: ["default"]
+  
+  # 心跳配置
+  heartbeat:
+    interval: 10  # 秒
+  
+  # 任务执行配置
+  executor:
+    max_concurrent_jobs: 10
+    default_timeout: 3600  # 秒
+
+# 数据库配置
+database:
+  driver: "postgres"
+  host: "localhost"
+  port: 5432
+  database: "cronicle"
+  username: "cronicle"
+  password: "cronicle_password"
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime: 300  # 秒
+
+# Redis 配置
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 10
+
+# 安全配置
+security:
+  # JWT 配置
+  jwt:
+    secret: "change-me-in-production"
+    expire_hours: 24
+  
+  # Worker 通信 Token
+  worker_token: "change-me-in-production"
+
+# 日志配置
+logging:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # json 或 console
+  output: "stdout"  # stdout 或文件路径
+  
+# 存储配置
+storage:
+  # 日志存储路径
+  log_dir: "./logs"
+  
+  # 日志保留时间
+  log_retention_days: 30
+  
+  # 日志文件最大大小
+  max_log_size_mb: 100

@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package cronicle;
+
+option go_package = "github.com/cronicle/cronicle-next/pkg/grpc/pb";
+
+// Master 与 Worker 之间的核心通信服务
+service CronicleService {
+  // Worker 向 Master 注册
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+  
+  // Worker 发送心跳
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // Master 向 Worker 提交任务
+  rpc SubmitTask(TaskRequest) returns (TaskResponse);
+  
+  // Worker 向 Master 流式传输日志
+  rpc StreamLogs(stream LogChunk) returns (LogAck);
+  
+  // Worker 上报任务执行结果
+  rpc ReportTaskResult(TaskResult) returns (TaskResultAck);
+  
+  // Master 中止任务
+  rpc AbortTask(AbortTaskRequest) returns (AbortTaskResponse);
+}
+
+// ========== 节点注册 ==========
+
+message RegisterNodeRequest {
+  string hostname = 1;
+  string ip = 2;
+  repeated string tags = 3;
+  NodeResources resources = 4;
+  string version = 5;
+}
+
+message RegisterNodeResponse {
+  string node_id = 1;
+  bool success = 2;
+  string message = 3;
+  string security_token = 4;
+}
+
+// ========== 心跳 ==========
+
+message HeartbeatRequest {
+  string node_id = 1;
+  NodeResources resources = 2;
+  repeated string running_jobs = 3;
+  int64 timestamp = 4;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+  int64 server_time = 2;
+}
+
+// ========== 任务执行 ==========
+
+message TaskRequest {
+  string job_id = 1;
+  string event_id = 2;
+  TaskType type = 3;
+  string command = 4;
+  map<string, string> env = 5;
+  int32 timeout = 6;
+  string working_dir = 7;
+  int64 scheduled_time = 8;
+}
+
+enum TaskType {
+  SHELL = 0;
+  HTTP = 1;
+  DOCKER = 2;
+}
+
+message TaskResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+// ========== 日志流 ==========
+
+message LogChunk {
+  string job_id = 1;
+  string event_id = 2;
+  bytes content = 3;
+  int64 timestamp = 4;
+  StreamType stream_type = 5;
+}
+
+enum StreamType {
+  STDOUT = 0;
+  STDERR = 1;
+  SYSTEM = 2;
+}
+
+message LogAck {
+  bool received = 1;
+}
+
+// ========== 任务结果上报 ==========
+
+message TaskResult {
+  string job_id = 1;
+  string event_id = 2;
+  int32 exit_code = 3;
+  int64 start_time = 4;
+  int64 end_time = 5;
+  ResourceUsage resource_usage = 6;
+  string error_message = 7;
+}
+
+message TaskResultAck {
+  bool received = 1;
+}
+
+// ========== 任务中止 ==========
+
+message AbortTaskRequest {
+  string job_id = 1;
+  string event_id = 2;
+  string reason = 3;
+}
+
+message AbortTaskResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ========== 公共数据结构 ==========
+
+message NodeResources {
+  double cpu_usage = 1;
+  double memory_usage = 2;
+  double memory_total = 3;
+  double disk_usage = 4;
+  double disk_total = 5;
+  int32 cpu_cores = 6;
+}
+
+message ResourceUsage {
+  double cpu_percent = 1;
+  int64 memory_bytes = 2;
+  double elapsed_seconds = 3;
+}

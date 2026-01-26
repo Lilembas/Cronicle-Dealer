@@ -1,0 +1,52 @@
+# 二进制文件
+/bin/
+/dist/
+cmd/master/master
+cmd/master/master.exe
+cmd/worker/worker
+cmd/worker/worker.exe
+
+# 日志文件
+/logs/
+*.log
+
+# 配置文件（不提交敏感信息）
+config.yaml
+config.local.yaml
+
+# Go 相关
+vendor/
+*.test
+*.out
+go.sum
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.agent
+
+# 前端
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.env.local
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+
+# 数据库
+*.db
+*.sqlite
+
+# Docker
+docker-compose.override.yml
+
+# 操作系统
+.DS_Store
+Thumbs.db
+PROMPT.md
+# 生成的 Protobuf 代码（可选，看是否提交）
+# pkg/grpc/pb/
