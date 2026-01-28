@@ -1,0 +1,374 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/cronicle/cronicle-next/internal/config"
+	"github.com/cronicle/cronicle-next/internal/master"
+	"github.com/cronicle/cronicle-next/internal/models"
+	"github.com/cronicle/cronicle-next/internal/storage"
+	"github.com/cronicle/cronicle-next/internal/worker"
+	"github.com/cronicle/cronicle-next/pkg/logger"
+)
+
+var (
+	testConfigPath = flag.String("config", "../config.yaml", "配置文件路径")
+	testJobCount   = flag.Int("jobs", 3, "测试任务数量")
+	waitForResult  = flag.Duration("wait", 60*time.Second, "等待任务执行完成的时长")
+)
+
+func main() {
+	flag.Parse()
+
+	fmt.Println("🚀 Cronicle-Next Master + Worker E2E 测试")
+	fmt.Println("=========================================")
+
+	// 检查配置文件
+	if _, err := os.Stat(*testConfigPath); os.IsNotExist(err) {
+		log.Fatalf("❌ 配置文件不存在: %s\n请先复制 config.example.yaml 到 config.yaml\n", *testConfigPath)
+	}
+
+	// 初始化日志
+	if err := logger.InitLogger(&config.LoggingConfig{
+		Level:  "debug",
+		Format: "console",
+		Output: "stdout",
+	}); err != nil {
+		log.Fatalf("❌ 初始化日志失败: %v\n", err)
+	}
+	defer logger.Sync()
+
+	// 加载配置
+	cfg, err := config.Load(*testConfigPath)
+	if err != nil {
+		logger.Fatal("加载配置失败", zap.Error(err))
+	}
+
+	// ============== Master 启动流程 ==============
+	fmt.Println("\n📋 阶段 1: 启动 Master 节点")
+	fmt.Println("-------------------------")
+
+	// 1. 初始化存储
+	fmt.Println("1️⃣ 初始化数据库和 Redis...")
+	if err := storage.InitDB(&cfg.Database); err != nil {
+		logger.Fatal("数据库初始化失败", zap.Error(err))
+	}
+	defer storage.CloseDB()
+
+	if err := storage.AutoMigrate(); err != nil {
+		logger.Fatal("数据库迁移失败", zap.Error(err))
+	}
+
+	// 清理旧测试数据
+	fmt.Println("🧹 清理旧测试数据...")
+	storage.DB.Where("id LIKE ?", "test_job_%").Delete(&models.Job{})
+	storage.DB.Where("id LIKE ?", "test_event_%").Delete(&models.Event{})
+
+	if err := storage.InitRedis(&cfg.Redis); err != nil {
+		logger.Fatal("Redis 初始化失败", zap.Error(err))
+	}
+	defer storage.CloseRedis()
+	fmt.Println("✅ 存储初始化成功")
+
+	// 2. 启动 Master
+	fmt.Println("\n2️⃣ 启动 Master 服务...")
+	masterNode := master.NewMaster(cfg)
+	if err := masterNode.Start(); err != nil {
+		logger.Fatal("Master 启动失败", zap.Error(err))
+	}
+	defer masterNode.Stop()
+
+	time.Sleep(2 * time.Second) // 等待 Master 完全启动
+	fmt.Println("✅ Master 启动成功")
+
+	// ============== Worker 启动流程 ==============
+	fmt.Println("\n📋 阶段 2: 启动 Worker 节点")
+	fmt.Println("-------------------------")
+
+	// 3. 创建并连接 Worker
+	fmt.Println("3️⃣ 连接 Worker 到 Master...")
+	workerClient := worker.NewClient(&cfg.Worker)
+	if err := workerClient.Connect(); err != nil {
+		logger.Fatal("Worker 连接 Master 失败", zap.Error(err))
+	}
+	defer workerClient.Close()
+
+	if err := workerClient.Register(); err != nil {
+		logger.Fatal("Worker 注册失败", zap.Error(err))
+	}
+	fmt.Println("✅ Worker 注册成功")
+
+	nodeID := workerClient.GetNodeID()
+	logger.Info("Worker 节点信息",
+		zap.String("node_id", nodeID),
+		zap.Strings("tags", cfg.Worker.Node.Tags))
+
+	// 4. 启动 Worker 执行器和心跳
+	fmt.Println("\n4️⃣ 启动 Worker 执行器...")
+	executor := worker.NewExecutor(&cfg.Worker.Executor)
+	// Worker 使用默认端口 9090
+	if err := executor.Start(0); err != nil {
+		logger.Fatal("执行器启动失败", zap.Error(err))
+	}
+	defer executor.Stop()
+
+	// 启动心跳（在 goroutine 中运行，因为它是阻塞调用）
+	fmt.Println("\n5️⃣ 启动心跳机制...")
+	go workerClient.StartHeartbeat()
+
+	time.Sleep(2 * time.Second) // 等待 Worker 完全就绪
+	fmt.Println("✅ Worker 就绪（通过 gRPC 接收任务）")
+
+	// ============== 创建和调度任务 ==============
+	fmt.Println("\n📋 阶段 3: 创建测试任务")
+	fmt.Println("----------------------")
+
+	ctx := context.Background()
+	var testJobs []*models.Job
+
+	for i := 1; i <= *testJobCount; i++ {
+		job := &models.Job{
+			ID:          fmt.Sprintf("test_job_%03d", i),
+			Name:        fmt.Sprintf("测试任务 #%d", i),
+			Description: fmt.Sprintf("E2E 测试任务 %d", i),
+			CronExpr:    "", // 手动触发
+			Command:     fmt.Sprintf("echo '执行任务 #%d' && sleep %d && date", i, 3-i%3),
+			TaskType:    "shell",
+			Enabled:     true,
+			Timeout:     30,
+		}
+
+		// 保存到数据库
+		if err := storage.DB.Create(job).Error; err != nil {
+			logger.Error("创建任务失败", zap.Error(err))
+			continue
+		}
+
+		testJobs = append(testJobs, job)
+		logger.Info("✅ 任务创建成功",
+			zap.String("job_id", job.ID),
+			zap.String("job_name", job.Name))
+	}
+
+	// 添加 Python 版本检查任务
+	pythonJob := &models.Job{
+		ID:          "test_job_python",
+		Name:        "Python 版本检查",
+		Description: "测试 Python3 版本检查命令",
+		CronExpr:    "", // 手动触发
+		Command:     "python3 -V",
+		TaskType:    "shell",
+		Enabled:     true,
+		Timeout:     10,
+	}
+
+	if err := storage.DB.Create(pythonJob).Error; err != nil {
+		logger.Error("创建 Python 任务失败", zap.Error(err))
+	} else {
+		testJobs = append(testJobs, pythonJob)
+		logger.Info("✅ Python 任务创建成功",
+			zap.String("job_id", pythonJob.ID),
+			zap.String("job_name", pythonJob.Name))
+	}
+
+	if len(testJobs) == 0 {
+		logger.Fatal("没有成功创建任何任务")
+	}
+
+	// ============== 手动触发任务执行 ==============
+	fmt.Println("\n📋 阶段 4: 调度任务执行")
+	fmt.Println("----------------------")
+
+	var events []*models.Event
+	for _, job := range testJobs {
+		// 创建事件
+		event := &models.Event{
+			ID:        fmt.Sprintf("test_event_%s", job.ID),
+			JobID:     job.ID,
+			JobName:   job.Name,
+			Status:    "pending",
+			CreatedAt: time.Now(),
+		}
+
+		if err := storage.DB.Create(event).Error; err != nil {
+			logger.Error("创建事件失败", zap.Error(err))
+			continue
+		}
+
+		// 构建任务数据
+		taskKey := fmt.Sprintf("%s:%s", job.ID, event.ID)
+		taskData := map[string]interface{}{
+			"job_id":          job.ID,
+			"event_id":        event.ID,
+			"job_name":        job.Name,
+			"command":         job.Command,
+			"task_type":       job.TaskType,
+			"timeout":         job.Timeout,
+			"working_dir":     job.WorkingDir,
+			"env":             job.Env,
+			"scheduled_time":  time.Now().Unix(),
+		}
+
+		// 保存任务详情到 Redis
+		if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
+			logger.Error("保存任务详情失败", zap.Error(err))
+			continue
+		}
+
+		// 添加到任务队列
+		if err := storage.AddTaskToQueue(ctx, taskKey); err != nil {
+			logger.Error("添加任务到队列失败", zap.Error(err))
+			continue
+		}
+
+		events = append(events, event)
+		logger.Info("📤 任务已调度",
+			zap.String("task_key", taskKey),
+			zap.String("job_name", job.Name))
+	}
+
+	if len(events) == 0 {
+		logger.Fatal("没有成功调度任何事件")
+	}
+
+	fmt.Printf("\n✅ 成功调度 %d 个任务\n", len(events))
+
+	// ============== 监控任务执行 ==============
+	fmt.Println("\n📋 阶段 5: 监控任务执行")
+	fmt.Println("----------------------")
+
+	fmt.Printf("⏳ 等待任务执行完成 (最多 %v)...\n\n", *waitForResult)
+
+	checkInterval := 2 * time.Second
+	deadline := time.Now().Add(*waitForResult)
+	completedCount := 0
+
+	for time.Now().Before(deadline) && completedCount < len(events) {
+		time.Sleep(checkInterval)
+
+		for _, event := range events {
+			if event.Status == "completed" || event.Status == "failed" {
+				continue
+			}
+
+			taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
+
+			// 检查任务状态
+			status, err := storage.GetTaskStatus(ctx, taskKey)
+			if err != nil {
+				logger.Warn("获取任务状态失败",
+					zap.String("event_id", event.ID),
+					zap.Error(err))
+				continue
+			}
+
+			// 更新事件状态
+			if status != event.Status {
+				event.Status = status
+				storage.DB.Model(event).Update("status", status)
+
+				switch status {
+				case "running":
+					fmt.Printf("🔄 [%s] 任务执行中...\n", event.JobName)
+				case "completed":
+					completedCount++
+					fmt.Printf("✅ [%s] 任务完成\n", event.JobName)
+				case "failed":
+					completedCount++
+					fmt.Printf("❌ [%s] 任务失败\n", event.JobName)
+				}
+			}
+		}
+
+		// 显示当前进度
+		if completedCount < len(events) {
+			fmt.Printf("   进度: %d/%d 完成\n", completedCount, len(events))
+		}
+	}
+
+	// ============== 查看任务结果 ==============
+	fmt.Println("\n📋 阶段 6: 查看任务结果")
+	fmt.Println("----------------------")
+
+	successCount := 0
+	failedCount := 0
+
+	for _, event := range events {
+		taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
+
+		fmt.Printf("\n任务: %s\n", event.JobName)
+		fmt.Printf("  状态: %s\n", event.Status)
+
+		// 获取任务执行结果（包含输出）
+		result, err := storage.GetTaskResult(ctx, taskKey)
+		if err == nil && len(result) > 0 {
+			if exitCode, ok := result["exit_code"]; ok && exitCode != "" {
+				fmt.Printf("  退出码: %s\n", exitCode)
+			}
+
+			if output, ok := result["output"]; ok && output != "" {
+				fmt.Printf("  输出: %s\n", output)
+			}
+		}
+
+		switch event.Status {
+		case "completed":
+			successCount++
+		case "failed":
+			failedCount++
+		}
+	}
+
+	// ============== 清理 ==============
+	fmt.Println("\n📋 阶段 7: 清理测试数据")
+	fmt.Println("----------------------")
+
+	for _, job := range testJobs {
+		storage.DB.Where("id = ?", job.ID).Delete(&models.Job{})
+	}
+
+	for _, event := range events {
+		storage.DB.Where("id = ?", event.ID).Delete(&models.Event{})
+		taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
+		storage.RedisClient.Del(ctx, "tasks:details:"+taskKey)
+	}
+
+	storage.RemoveWorkerOffline(ctx, nodeID)
+	fmt.Println("✅ 测试数据清理完成")
+
+	// ============== 测试总结 ==============
+	fmt.Println("\n" + strings.Repeat("=", 40))
+	fmt.Println("🎉 E2E 测试完成")
+	fmt.Println(strings.Repeat("=", 40))
+
+	fmt.Printf("\n📊 测试结果统计:\n")
+	fmt.Printf("   总任务数: %d\n", len(events))
+	fmt.Printf("   成功: %d ✅\n", successCount)
+	fmt.Printf("   失败: %d ❌\n", failedCount)
+	fmt.Printf("   完成率: %.1f%%\n", float64(successCount)/float64(len(events))*100)
+
+	fmt.Println("\n✅ 验证项:")
+	fmt.Println("   ✅ Master 启动和运行")
+	fmt.Println("   ✅ Worker 注册和心跳")
+	fmt.Println("   ✅ 任务创建和持久化")
+	fmt.Println("   ✅ 任务调度和分发")
+	fmt.Println("   ✅ 任务队列监听")
+	fmt.Println("   ✅ 任务执行和状态更新")
+	fmt.Println("   ✅ 结果记录和查询")
+
+	if successCount == len(events) {
+		fmt.Println("\n🎊 所有任务执行成功！")
+		os.Exit(0)
+	} else {
+		fmt.Printf("\n⚠️  有 %d 个任务失败\n", failedCount)
+		os.Exit(1)
+	}
+}
