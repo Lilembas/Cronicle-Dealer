@@ -1,26 +1,6 @@
 version: '3.8'
 
 services:
-  # PostgreSQL 数据库
-  postgres:
-    image: postgres:15-alpine
-    container_name: cronicle-postgres
-    environment:
-      POSTGRES_DB: cronicle
-      POSTGRES_USER: cronicle
-      POSTGRES_PASSWORD: cronicle_password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cronicle"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - cronicle_network
-
   # Redis 缓存
   redis:
     image: redis:7-alpine
@@ -49,19 +29,12 @@ services:
       - "9090:9090"
     environment:
       - SERVER_MODE=master
-      - DATABASE_HOST=postgres
-      - DATABASE_PORT=5432
-      - DATABASE_NAME=cronicle
-      - DATABASE_USER=cronicle
-      - DATABASE_PASSWORD=cronicle_password
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     volumes:
       - ./config.yaml:/app/config.yaml
       - master_logs:/app/logs
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -88,7 +61,6 @@ services:
       replicas: 2
 
 volumes:
-  postgres_data:
   redis_data:
   master_logs:
   worker_logs:

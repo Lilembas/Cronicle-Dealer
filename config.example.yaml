@@ -7,17 +7,11 @@ server:
   
 # Master 配置
 master:
-  # 选举配置
-  election:
-    enabled: true
-    lease_duration: 10  # 秒
-    renew_interval: 3   # 秒
-  
   # 调度配置
   scheduler:
     enabled: true
     tick_interval: 60  # 秒
-  
+
   # 心跳检测
   heartbeat:
     timeout: 30  # 秒，超过此时间未收到心跳视为离线
@@ -44,12 +38,16 @@ worker:
 
 # 数据库配置
 database:
-  driver: "postgres"
-  host: "localhost"
-  port: 5432
-  database: "cronicle"
-  username: "cronicle"
-  password: "cronicle_password"
+  # 驱动类型: "sqlite" 或 "postgres"
+  driver: "sqlite"
+  # SQLite 配置
+  path: "./cronicle.db"
+  # PostgreSQL 配置（当 driver 为 "postgres" 时使用）
+  # host: "localhost"
+  # port: 5432
+  # database: "cronicle"
+  # username: "cronicle"
+  # password: "cronicle_password"
   max_open_conns: 25
   max_idle_conns: 10
   conn_max_lifetime: 300  # 秒

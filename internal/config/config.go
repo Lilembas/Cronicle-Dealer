@@ -27,16 +27,8 @@ type ServerConfig struct {
 
 // MasterConfig Master 配置
 type MasterConfig struct {
-	Election  ElectionConfig  `mapstructure:"election"`
 	Scheduler SchedulerConfig `mapstructure:"scheduler"`
 	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"`
-}
-
-// ElectionConfig 选举配置
-type ElectionConfig struct {
-	Enabled       bool `mapstructure:"enabled"`
-	LeaseDuration int  `mapstructure:"lease_duration"`
-	RenewInterval int  `mapstructure:"renew_interval"`
 }
 
 // SchedulerConfig 调度器配置
@@ -87,10 +79,15 @@ type DatabaseConfig struct {
 	MaxOpenConns    int    `mapstructure:"max_open_conns"`
 	MaxIdleConns    int    `mapstructure:"max_idle_conns"`
 	ConnMaxLifetime int    `mapstructure:"conn_max_lifetime"`
+	// SQLite 特定配置
+	Path string `mapstructure:"path"`
 }
 
 // DSN 返回数据库连接字符串
 func (c *DatabaseConfig) DSN() string {
+	if c.Driver == "sqlite" {
+		return c.Path
+	}
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		c.Host, c.Port, c.Username, c.Password, c.Database)
 }
@@ -140,20 +137,18 @@ func Load(configPath string) (*Config, error) {
 	viper.SetConfigFile(configPath)
 	viper.SetConfigType("yaml")
 
-	// 设置默认值
 	setDefaults()
 
-	// 读取配置文件
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
-	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
-	return &config, nil
+	return &cfg, nil
 }
 
 // setDefaults 设置默认值
@@ -164,6 +159,8 @@ func setDefaults() {
 	viper.SetDefault("server.grpc_port", 9090)
 
 	// 数据库默认值
+	viper.SetDefault("database.driver", "sqlite")
+	viper.SetDefault("database.path", "./cronicle.db")
 	viper.SetDefault("database.max_open_conns", 25)
 	viper.SetDefault("database.max_idle_conns", 10)
 	viper.SetDefault("database.conn_max_lifetime", 300)
@@ -176,4 +173,15 @@ func setDefaults() {
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.format", "json")
 	viper.SetDefault("logging.output", "stdout")
+
+	// Master 默认值
+	viper.SetDefault("master.scheduler.enabled", true)
+	viper.SetDefault("master.scheduler.tick_interval", 1)
+	viper.SetDefault("master.heartbeat.timeout", 60)
+	viper.SetDefault("master.heartbeat.check_interval", 30)
+
+	// Worker 默认值
+	viper.SetDefault("worker.executor.max_concurrent_jobs", 10)
+	viper.SetDefault("worker.executor.default_timeout", 300)
+	viper.SetDefault("worker.heartbeat.interval", 30)
 }

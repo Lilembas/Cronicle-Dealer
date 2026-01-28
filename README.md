@@ -56,7 +56,7 @@
 - **Web 框架**：Gin
 - **RPC**：gRPC
 - **调度**：robfig/cron/v3
-- **数据库**：PostgreSQL
+- **数据库**：SQLite (默认) / PostgreSQL (可选)
 - **缓存**：Redis
 - **WebSocket**：Melody
 
@@ -74,8 +74,7 @@
 
 - Go 1.22+
 - Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
+- Redis 7+ (可选，用于分布式缓存和队列)
 
 ### 本地开发
 
@@ -98,13 +97,13 @@ npm install
 3. **配置环境**
 ```bash
 cp config.example.yaml config.yaml
-# 编辑 config.yaml 配置数据库和 Redis 连接
+# 编辑 config.yaml 配置 Redis 连接（可选）
 ```
 
 4. **运行服务**
 ```bash
-# 启动 PostgreSQL 和 Redis（使用 Docker）
-docker-compose up -d postgres redis
+# 启动 Redis（使用 Docker，可选）
+docker-compose up -d redis
 
 # 运行 Master
 make run-master
@@ -126,7 +125,10 @@ npm run dev
 ### Docker 部署
 
 ```bash
-# 一键启动所有服务
+# 启动 Redis（如果需要）
+docker-compose up -d redis
+
+# 或者启动所有服务（包括前端）
 docker-compose up -d
 
 # 查看日志

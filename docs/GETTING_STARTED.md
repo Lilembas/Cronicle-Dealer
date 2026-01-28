@@ -13,8 +13,8 @@
 #### 后端
 - **语言**: Go 1.22+
 - **框架**: Gin (REST API), gRPC, robfig/cron
-- **数据库**: PostgreSQL 15+
-- **缓存**: Redis 7+
+- **数据库**: SQLite (默认) / PostgreSQL (可选)
+- **缓存**: Redis 7+ (可选)
 - **日志**: Zap
 
 #### 前端
@@ -67,7 +67,7 @@
 ```bash
 cd s:\projects\cronicle-next
 
-# 启动所有服务（PostgreSQL + Redis + Master + Worker）
+# 启动所有服务（Redis + Master + Worker）
 docker-compose -f deployments/docker-compose.yml up -d
 
 # 查看日志
@@ -89,8 +89,9 @@ docker-compose -f deployments/docker-compose.yml down
 **必需**：
 - Go 1.22+
 - Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
+
+**可选**：
+- Redis 7+ (用于分布式缓存和队列)
 
 **安装 Go**：
 - 下载：https://golang.org/dl/
@@ -99,10 +100,10 @@ docker-compose -f deployments/docker-compose.yml down
 #### 2. 启动基础服务
 
 ```bash
-# 使用 Docker 启动 PostgreSQL 和 Redis
-docker-compose -f deployments/docker-compose.yml up -d postgres redis
+# 使用 Docker 启动 Redis（可选）
+docker-compose -f deployments/docker-compose.yml up -d redis
 
-# 或手动启动本地 PostgreSQL 和 Redis
+# 或手动启动本地 Redis（可选）
 ```
 
 #### 3. 配置文件
@@ -113,7 +114,7 @@ cd s:\projects\cronicle-next
 # 复制配置模板
 copy config.example.yaml config.yaml
 
-# 编辑 config.yaml，修改数据库和 Redis 连接信息
+# 编辑 config.yaml，修改 Redis 连接信息（可选）
 ```
 
 #### 4. 后端启动
@@ -308,11 +309,8 @@ server:
   grpc_port: 9090     # gRPC 端口
 
 database:
-  host: localhost
-  port: 5432
-  database: cronicle
-  username: cronicle
-  password: cronicle_password
+  driver: sqlite       # 数据库驱动: sqlite 或 postgres
+  path: ./cronicle.db  # SQLite 数据库文件路径
 
 redis:
   host: localhost
@@ -363,9 +361,8 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 **问题**: `连接数据库失败`
 
 **解决**:
-- 确保 PostgreSQL 已启动
-- 检查 config.yaml 中的数据库配置
-- 手动创建数据库: `CREATE DATABASE cronicle;`
+- 默认使用 SQLite，无需额外配置
+- 如果使用 PostgreSQL，确保已启动并检查 config.yaml 中的数据库配置
 
 ### 4. 前端无法访问后端 API
 

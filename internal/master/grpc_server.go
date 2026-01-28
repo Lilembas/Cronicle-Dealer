@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	
+	"time"
+
 	"google.golang.org/grpc"
 	"go.uber.org/zap"
-	
+
 	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/models"
@@ -17,13 +18,18 @@ import (
 	"github.com/cronicle/cronicle-next/pkg/utils"
 )
 
+const (
+	defaultMaxConcurrent = 10
+	workerVersion = "0.1.0"
+)
+
 // GRPCServer Master 的 gRPC 服务器
 type GRPCServer struct {
 	pb.UnimplementedCronicleServiceServer
-	
+
 	cfg        *config.Config
 	grpcServer *grpc.Server
-	nodes      sync.Map // 存储在线节点信息
+	nodes      sync.Map
 }
 
 // NewGRPCServer 创建 gRPC 服务器
@@ -36,27 +42,23 @@ func NewGRPCServer(cfg *config.Config) *GRPCServer {
 // Start 启动 gRPC 服务器
 func (s *GRPCServer) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.GRPCPort)
-	
+
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("监听端口失败: %w", err)
 	}
-	
-	// 创建 gRPC 服务器
+
 	s.grpcServer = grpc.NewServer()
-	
-	// 注册服务
 	pb.RegisterCronicleServiceServer(s.grpcServer, s)
-	
+
 	logger.Info("gRPC 服务器启动", zap.String("address", addr))
-	
-	// 启动服务器（阻塞）
+
 	go func() {
 		if err := s.grpcServer.Serve(listener); err != nil {
-			logger.Error("gRPC 服务器启动失败", zap.Error(err))
+			logger.Error("gRPC 服务器运行失败", zap.Error(err))
 		}
 	}()
-	
+
 	return nil
 }
 
@@ -73,31 +75,10 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 	logger.Info("收到节点注册请求",
 		zap.String("hostname", req.Hostname),
 		zap.String("ip", req.Ip))
-	
-	// 生成节点 ID
+
 	nodeID := utils.GenerateID("node")
-	
-	// 创建节点记录
-	node := &models.Node{
-		ID:            nodeID,
-		Hostname:      req.Hostname,
-		IP:            req.Ip,
-		Tags:          tagsToString(req.Tags),
-		Status:        "online",
-		CPUCores:      int(req.Resources.CpuCores),
-		CPUUsage:      req.Resources.CpuUsage,
-		MemoryTotal:   req.Resources.MemoryTotal,
-		MemoryUsage:   req.Resources.MemoryUsage,
-		MemoryPercent: (req.Resources.MemoryUsage / req.Resources.MemoryTotal) * 100,
-		DiskTotal:     req.Resources.DiskTotal,
-		DiskUsage:     req.Resources.DiskUsage,
-		DiskPercent:   (req.Resources.DiskUsage / req.Resources.DiskTotal) * 100,
-		Version:       req.Version,
-		RunningJobs:   0,
-		MaxConcurrent: 10, // 默认值，可以从配置或请求中获取
-	}
-	
-	// 保存到数据库
+	node := s.buildNode(nodeID, req)
+
 	if err := storage.DB.Create(node).Error; err != nil {
 		logger.Error("保存节点信息失败", zap.Error(err))
 		return &pb.RegisterNodeResponse{
@@ -105,12 +86,11 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 			Message: "保存节点信息失败",
 		}, nil
 	}
-	
-	// 保存到内存
+
 	s.nodes.Store(nodeID, node)
-	
+
 	logger.Info("节点注册成功", zap.String("node_id", nodeID))
-	
+
 	return &pb.RegisterNodeResponse{
 		NodeId:        nodeID,
 		Success:       true,
@@ -122,54 +102,24 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 // Heartbeat 心跳检测
 func (s *GRPCServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*pb.HeartbeatResponse, error) {
 	logger.Debug("收到心跳", zap.String("node_id", req.NodeId))
-	
-	// 更新节点信息
+
 	var node models.Node
 	if err := storage.DB.Where("id = ?", req.NodeId).First(&node).Error; err != nil {
 		logger.Warn("节点不存在", zap.String("node_id", req.NodeId))
-		return &pb.HeartbeatResponse{
-			Success: false,
-		}, nil
+		return &pb.HeartbeatResponse{Success: false}, nil
 	}
-	
-	// 更新资源信息和心跳时间
-	updates := map[string]interface{}{
-		"cpu_usage":       req.Resources.CpuUsage,
-		"memory_usage":    req.Resources.MemoryUsage,
-		"memory_percent":  (req.Resources.MemoryUsage / req.Resources.MemoryTotal) * 100,
-		"disk_usage":      req.Resources.DiskUsage,
-		"disk_percent":    (req.Resources.DiskUsage / req.Resources.DiskTotal) * 100,
-		"running_jobs":    len(req.RunningJobs),
-		"last_heartbeat":  "NOW()",
-		"status":          "online",
-	}
-	
-	if err := storage.DB.Model(&node).Updates(updates).Error; err != nil {
-		logger.Error("更新节点信息失败", zap.Error(err))
-		return &pb.HeartbeatResponse{
-			Success: false,
-		}, nil
-	}
-	
-	// 更新内存缓存
-	node.CPUUsage = req.Resources.CpuUsage
-	node.MemoryUsage = req.Resources.MemoryUsage
-	node.MemoryPercent = (req.Resources.MemoryUsage / req.Resources.MemoryTotal) * 100
-	node.DiskUsage = req.Resources.DiskUsage
-	node.DiskPercent = (req.Resources.DiskUsage / req.Resources.DiskTotal) * 100
-	node.RunningJobs = len(req.RunningJobs)
+
+	s.updateNodeHeartbeat(&node, req)
 	s.nodes.Store(req.NodeId, &node)
-	
+
 	return &pb.HeartbeatResponse{
 		Success:    true,
-		ServerTime: ctx.Value("server_time").(int64),
+		ServerTime: time.Now().Unix(),
 	}, nil
 }
 
 // SubmitTask 提交任务（Master -> Worker）
 func (s *GRPCServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.TaskResponse, error) {
-	// NOTE: 这个方法通常由 Master 调用 Worker，不是 Worker 调用 Master
-	// 这里只是占位实现
 	return &pb.TaskResponse{
 		Accepted: false,
 		Message:  "此接口由 Worker 实现",
@@ -184,14 +134,13 @@ func (s *GRPCServer) StreamLogs(stream pb.CronicleService_StreamLogsServer) erro
 			logger.Error("接收日志流失败", zap.Error(err))
 			return err
 		}
-		
+
 		logger.Debug("收到日志",
 			zap.String("job_id", chunk.JobId),
 			zap.String("event_id", chunk.EventId),
 			zap.Int("size", len(chunk.Content)))
-		
-		// TODO: 将日志写入存储
-		// TODO: 通过 WebSocket 推送给前端
+
+		// TODO: 将日志写入存储并通过 WebSocket 推送给前端
 	}
 }
 
@@ -201,59 +150,104 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 		zap.String("job_id", req.JobId),
 		zap.String("event_id", req.EventId),
 		zap.Int32("exit_code", req.ExitCode))
-	
-	// 更新任务执行记录
+
 	var event models.Event
 	if err := storage.DB.Where("id = ?", req.EventId).First(&event).Error; err != nil {
 		logger.Error("查询任务记录失败", zap.Error(err))
 		return &pb.TaskResultAck{Received: false}, nil
 	}
-	
-	// 更新状态
+
 	status := "success"
 	if req.ExitCode != 0 {
 		status = "failed"
 	}
-	
-	startTime := utils.UnixToTime(req.StartTime)
-	endTime := utils.UnixToTime(req.EndTime)
-	
+
 	updates := map[string]interface{}{
 		"status":       status,
-		"start_time":   startTime,
-		"end_time":     endTime,
+		"start_time":   utils.UnixToTime(req.StartTime),
+		"end_time":     utils.UnixToTime(req.EndTime),
 		"duration":     req.EndTime - req.StartTime,
 		"exit_code":    req.ExitCode,
 		"cpu_percent":  req.ResourceUsage.CpuPercent,
 		"memory_bytes": req.ResourceUsage.MemoryBytes,
 	}
-	
+
 	if req.ErrorMessage != "" {
 		updates["error_message"] = req.ErrorMessage
 	}
-	
+
 	if err := storage.DB.Model(&event).Updates(updates).Error; err != nil {
 		logger.Error("更新任务记录失败", zap.Error(err))
 		return &pb.TaskResultAck{Received: false}, nil
 	}
-	
-	// TODO: 发送通知（Webhook、邮件等）
-	// TODO: 触发链式任务
-	
+
+	// TODO: 发送通知（Webhook、邮件等）、触发链式任务
+
 	return &pb.TaskResultAck{Received: true}, nil
 }
 
 // AbortTask 中止任务
 func (s *GRPCServer) AbortTask(ctx context.Context, req *pb.AbortTaskRequest) (*pb.AbortTaskResponse, error) {
-	// NOTE: 这个方法通常由 Master 调用 Worker，不是 Worker 调用 Master
-	// 这里只是占位实现
 	return &pb.AbortTaskResponse{
 		Success: false,
 		Message: "此接口由 Worker 实现",
 	}, nil
 }
 
-// tagsToString 将标签数组转为 JSON 字符串
+// buildNode 构建节点对象
+func (s *GRPCServer) buildNode(nodeID string, req *pb.RegisterNodeRequest) *models.Node {
+	return &models.Node{
+		ID:            nodeID,
+		Hostname:      req.Hostname,
+		IP:            req.Ip,
+		Tags:          tagsToString(req.Tags),
+		Status:        "online",
+		CPUCores:      int(req.Resources.CpuCores),
+		CPUUsage:      req.Resources.CpuUsage,
+		MemoryTotal:   req.Resources.MemoryTotal,
+		MemoryUsage:   req.Resources.MemoryUsage,
+		MemoryPercent: calculatePercent(req.Resources.MemoryUsage, req.Resources.MemoryTotal),
+		DiskTotal:     req.Resources.DiskTotal,
+		DiskUsage:     req.Resources.DiskUsage,
+		DiskPercent:   calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal),
+		Version:       req.Version,
+		RunningJobs:   0,
+		MaxConcurrent: defaultMaxConcurrent,
+	}
+}
+
+// updateNodeHeartbeat 更新节点心跳信息
+func (s *GRPCServer) updateNodeHeartbeat(node *models.Node, req *pb.HeartbeatRequest) {
+	updates := map[string]interface{}{
+		"cpu_usage":       req.Resources.CpuUsage,
+		"memory_usage":    req.Resources.MemoryUsage,
+		"memory_percent":  calculatePercent(req.Resources.MemoryUsage, req.Resources.MemoryTotal),
+		"disk_usage":      req.Resources.DiskUsage,
+		"disk_percent":    calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal),
+		"running_jobs":    len(req.RunningJobs),
+		"last_heartbeat":  "NOW()",
+		"status":          "online",
+	}
+
+	storage.DB.Model(node).Updates(updates)
+
+	node.CPUUsage = req.Resources.CpuUsage
+	node.MemoryUsage = req.Resources.MemoryUsage
+	node.MemoryPercent = calculatePercent(req.Resources.MemoryUsage, req.Resources.MemoryTotal)
+	node.DiskUsage = req.Resources.DiskUsage
+	node.DiskPercent = calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal)
+	node.RunningJobs = len(req.RunningJobs)
+}
+
+// calculatePercent 计算百分比
+func calculatePercent(value, total float64) float64 {
+	if total == 0 {
+		return 0
+	}
+	return (value / total) * 100
+}
+
+// tagsToString 将标签数组转为字符串
 func tagsToString(tags []string) string {
 	if len(tags) == 0 {
 		return "[]"

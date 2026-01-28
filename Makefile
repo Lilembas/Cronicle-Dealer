@@ -81,6 +81,10 @@ test-coverage:
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "✅ 覆盖率报告已生成: coverage.html"
 
+integration-test:
+	@echo "运行集成测试..."
+	@cd test && go run integration_test.go
+
 # 清理
 clean:
 	@echo "清理构建文件..."
@@ -115,6 +119,7 @@ help:
 	@echo "  make docker         - 构建 Docker 镜像"
 	@echo "  make docker-up      - 启动 Docker Compose"
 	@echo "  make test           - 运行测试"
+	@echo "  make integration-test - 运行集成测试"
 	@echo "  make clean          - 清理构建文件"
 	@echo "  make fmt            - 格式化代码"
 	@echo "  make lint           - 代码检查"
