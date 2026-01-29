@@ -71,6 +71,7 @@ func main() {
 		api.POST("/shell/execute", executeShellHandler)
 		api.GET("/health", healthCheckHandler)
 		api.GET("/stats", statsHandler)
+		api.GET("/nodes", getNodesHandler)
 	}
 
 	// 启动Web服务器
@@ -95,6 +96,7 @@ func main() {
 func executeShellHandler(c *gin.Context) {
 	var req struct {
 		Command string `json:"command" binding:"required"`
+		NodeID  string `json:"node_id"` // 可选：指定执行节点
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -104,9 +106,18 @@ func executeShellHandler(c *gin.Context) {
 		return
 	}
 
-	// 检查Worker是否在线
+	// 检查Worker是否在线（检查最近60秒有心跳的节点）
+	heartbeatTimeout := time.Now().Add(-60 * time.Second)
 	var nodes []models.Node
-	if err := storage.DB.Where("status = ?", "online").Find(&nodes).Error; err != nil || len(nodes) == 0 {
+
+	query := storage.DB.Where("status = ? AND last_heartbeat > ?", "online", heartbeatTimeout)
+
+	// 如果指定了节点ID，只查询该节点
+	if req.NodeID != "" {
+		query = query.Where("id = ?", req.NodeID)
+	}
+
+	if err := query.Find(&nodes).Error; err != nil || len(nodes) == 0 {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "没有可用的Worker节点",
 		})
@@ -222,13 +233,54 @@ func executeShellHandler(c *gin.Context) {
 
 // healthCheckHandler 健康检查
 func healthCheckHandler(c *gin.Context) {
+	// 检查最近60秒有心跳的节点
+	heartbeatTimeout := time.Now().Add(-60 * time.Second)
 	var onlineNodes int64
-	storage.DB.Model(&models.Node{}).Where("status = ?", "online").Count(&onlineNodes)
+	storage.DB.Model(&models.Node{}).
+		Where("status = ? AND last_heartbeat > ?", "online", heartbeatTimeout).
+		Count(&onlineNodes)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":       "ok",
 		"online_nodes": onlineNodes,
 		"timestamp":    time.Now().Unix(),
+	})
+}
+
+// getNodesHandler 获取所有在线节点列表
+func getNodesHandler(c *gin.Context) {
+	// 获取最近60秒有心跳的在线节点
+	heartbeatTimeout := time.Now().Add(-60 * time.Second)
+	var nodes []models.Node
+	if err := storage.DB.Where("status = ? AND last_heartbeat > ?", "online", heartbeatTimeout).
+		Find(&nodes).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "查询节点失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 转换为简化的节点信息
+	type NodeInfo struct {
+		ID       string `json:"id"`
+		Hostname string `json:"hostname"`
+		IP       string `json:"ip"`
+		Tags     string `json:"tags"`
+	}
+
+	nodeList := make([]NodeInfo, 0, len(nodes))
+	for _, node := range nodes {
+		nodeList = append(nodeList, NodeInfo{
+			ID:       node.ID,
+			Hostname: node.Hostname,
+			IP:       node.IP,
+			Tags:     string(node.Tags), // 转换JSON字符串
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"nodes": nodeList,
+		"count": len(nodeList),
 	})
 }
 
@@ -239,7 +291,11 @@ func statsHandler(c *gin.Context) {
 		RunningJobs int64 `json:"running_jobs"`
 	}
 
-	storage.DB.Model(&models.Node{}).Where("status = ?", "online").Count(&stats.OnlineNodes)
+	// 只统计最近60秒有心跳的节点
+	heartbeatTimeout := time.Now().Add(-60 * time.Second)
+	storage.DB.Model(&models.Node{}).
+		Where("status = ? AND last_heartbeat > ?", "online", heartbeatTimeout).
+		Count(&stats.OnlineNodes)
 	storage.DB.Model(&models.Event{}).Where("status = ?", "running").Count(&stats.RunningJobs)
 
 	c.JSON(http.StatusOK, stats)
