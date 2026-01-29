@@ -15,7 +15,7 @@ import (
 
 func main() {
 	// 加载配置
-	cfg, err := config.Load("../../config.yaml")
+	cfg, err := config.Load("../../../config.yaml")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v\n", err)
 	}
