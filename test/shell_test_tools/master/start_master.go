@@ -9,6 +9,7 @@ import (
 
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/master"
+	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
@@ -47,6 +48,11 @@ func main() {
 	defer storage.CloseRedis()
 
 	fmt.Println("✅ 存储初始化成功")
+
+	// 将所有Worker节点状态设置为offline（Master重启时重置）
+	fmt.Println("\n🔄 重置Worker节点状态...")
+	storage.DB.Model(&models.Node{}).Where("status = ?", "online").Update("status", "offline")
+	fmt.Println("✅ 已将所有在线Worker标记为离线")
 
 	// 启动Master
 	fmt.Println("\n🚀 启动 Master 节点...")

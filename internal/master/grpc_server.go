@@ -118,6 +118,41 @@ func (s *GRPCServer) Heartbeat(ctx context.Context, req *pb.HeartbeatRequest) (*
 	}, nil
 }
 
+// UnregisterNode Worker下线通知
+func (s *GRPCServer) UnregisterNode(ctx context.Context, req *pb.UnregisterNodeRequest) (*pb.UnregisterNodeResponse, error) {
+	logger.Info("收到Worker下线通知", zap.String("node_id", req.NodeId))
+
+	var node models.Node
+	if err := storage.DB.Where("id = ?", req.NodeId).First(&node).Error; err != nil {
+		logger.Warn("节点不存在", zap.String("node_id", req.NodeId))
+		return &pb.UnregisterNodeResponse{
+			Success: false,
+			Message: "节点不存在",
+		}, nil
+	}
+
+	// 更新节点状态为offline
+	if err := storage.DB.Model(&node).Updates(map[string]interface{}{
+		"status": "offline",
+	}).Error; err != nil {
+		logger.Error("更新节点状态失败", zap.Error(err))
+		return &pb.UnregisterNodeResponse{
+			Success: false,
+			Message: "更新节点状态失败",
+		}, nil
+	}
+
+	// 从内存缓存中移除
+	s.nodes.Delete(req.NodeId)
+
+	logger.Info("Worker已下线", zap.String("node_id", req.NodeId), zap.String("hostname", node.Hostname))
+
+	return &pb.UnregisterNodeResponse{
+		Success: true,
+		Message: "下线成功",
+	}, nil
+}
+
 // SubmitTask 提交任务（Master -> Worker）
 func (s *GRPCServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.TaskResponse, error) {
 	return &pb.TaskResponse{
@@ -200,6 +235,7 @@ func (s *GRPCServer) buildNode(nodeID string, req *pb.RegisterNodeRequest) *mode
 		ID:            nodeID,
 		Hostname:      req.Hostname,
 		IP:            req.Ip,
+		GRPCAddress:   req.GrpcAddress,
 		Tags:          tagsToString(req.Tags),
 		Status:        "online",
 		CPUCores:      int(req.Resources.CpuCores),

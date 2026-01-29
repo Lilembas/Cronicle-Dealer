@@ -186,7 +186,14 @@ func (d *Dispatcher) getGRPCClient(node *models.Node) (pb.CronicleServiceClient,
 		return client, nil
 	}
 
-	addr := fmt.Sprintf("%s:%d", node.IP, defaultWorkerPort)
+	// 优先使用 Worker 注册时提供的 gRPC 地址
+	var addr string
+	if node.GRPCAddress != "" {
+		addr = node.GRPCAddress
+	} else {
+		// 回退到使用 IP 和默认端口
+		addr = fmt.Sprintf("%s:%d", node.IP, defaultWorkerPort)
+	}
 
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

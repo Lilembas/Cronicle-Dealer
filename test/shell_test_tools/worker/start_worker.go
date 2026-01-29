@@ -54,6 +54,13 @@ func main() {
 	}
 	defer workerClient.Close()
 
+	// 设置 executor gRPC 地址（用于Master连接Worker）
+	grpcHost := cfg.Server.Host
+	if grpcHost == "0.0.0.0" {
+		grpcHost = "localhost" // 如果监听在0.0.0.0，使用localhost连接
+	}
+	workerClient.SetGRPCAddress(grpcHost, cfg.Worker.Executor.GRPCPort)
+
 	if err := workerClient.Register(); err != nil {
 		logger.Fatal("Worker 注册失败", zap.Error(err))
 	}

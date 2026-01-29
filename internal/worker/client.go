@@ -31,6 +31,7 @@ type Client struct {
 	securityToken string
 	hostname      string
 	localIP       string
+	grpcAddress   string // executor gRPC 服务地址
 }
 
 // NewClient 创建 Worker 客户端
@@ -61,6 +62,11 @@ func (c *Client) Connect() error {
 	return nil
 }
 
+// SetGRPCAddress 设置 executor gRPC 地址
+func (c *Client) SetGRPCAddress(host string, port int) {
+	c.grpcAddress = fmt.Sprintf("%s:%d", host, port)
+}
+
 // Register 注册节点
 func (c *Client) Register() error {
 	logger.Info("向 Master 注册节点...")
@@ -72,11 +78,12 @@ func (c *Client) Register() error {
 	}
 
 	req := &pb.RegisterNodeRequest{
-		Hostname:  c.hostname,
-		Ip:        c.localIP,
-		Tags:      c.cfg.Node.Tags,
-		Resources: resources,
-		Version:   workerVersion,
+		Hostname:    c.hostname,
+		Ip:          c.localIP,
+		Tags:        c.cfg.Node.Tags,
+		Resources:   resources,
+		Version:     workerVersion,
+		GrpcAddress: c.grpcAddress,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -181,6 +188,23 @@ func (c *Client) Close() error {
 		return nil
 	}
 
+	// 向Master发送下线通知
+	if c.nodeID != "" && c.client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		logger.Info("向Master发送下线通知", zap.String("node_id", c.nodeID))
+		if _, err := c.client.UnregisterNode(ctx, &pb.UnregisterNodeRequest{
+			NodeId: c.nodeID,
+		}); err != nil {
+			// 即使发送失败也继续关闭连接
+			logger.Warn("发送下线通知失败", zap.Error(err))
+		} else {
+			logger.Info("已成功通知Master下线")
+		}
+	}
+
+	// 从Redis移除
 	ctx := context.Background()
 	if err := storage.RemoveWorkerOffline(ctx, c.nodeID); err != nil {
 		logger.Warn("从 Redis 移除 Worker 失败", zap.Error(err))

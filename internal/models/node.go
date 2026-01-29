@@ -9,7 +9,10 @@ type Node struct {
 	ID       string `gorm:"primaryKey;type:varchar(64)" json:"id"`
 	Hostname string `gorm:"type:varchar(255);not null" json:"hostname"`
 	IP       string `gorm:"type:varchar(50);not null" json:"ip"`
-	
+
+	// gRPC 执行器地址
+	GRPCAddress string `gorm:"type:varchar(255)" json:"grpc_address"` // Worker executor gRPC 服务地址
+
 	// 节点标签
 	Tags     string `gorm:"type:varchar(500)" json:"tags"` // JSON 存储标签数组
 	

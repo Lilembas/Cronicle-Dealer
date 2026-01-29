@@ -12,8 +12,8 @@ import (
 func main() {
 	fmt.Println("🧹 清理数据库中的旧Worker节点...")
 
-	// 加载配置
-	cfg, err := config.Load("../../../config.yaml")
+	// 加载配置（使用绝对路径）
+	cfg, err := config.Load("/codespace/developers/linnan/claudeProjects/cronicle-next/config.yaml")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v\n", err)
 	}

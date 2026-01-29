@@ -8,19 +8,22 @@ option go_package = "github.com/cronicle/cronicle-next/pkg/grpc/pb";
 service CronicleService {
   // Worker 向 Master 注册
   rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
-  
+
   // Worker 发送心跳
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
-  
+
+  // Worker 下线通知
+  rpc UnregisterNode(UnregisterNodeRequest) returns (UnregisterNodeResponse);
+
   // Master 向 Worker 提交任务
   rpc SubmitTask(TaskRequest) returns (TaskResponse);
-  
+
   // Worker 向 Master 流式传输日志
   rpc StreamLogs(stream LogChunk) returns (LogAck);
-  
+
   // Worker 上报任务执行结果
   rpc ReportTaskResult(TaskResult) returns (TaskResultAck);
-  
+
   // Master 中止任务
   rpc AbortTask(AbortTaskRequest) returns (AbortTaskResponse);
 }
@@ -33,6 +36,7 @@ message RegisterNodeRequest {
   repeated string tags = 3;
   NodeResources resources = 4;
   string version = 5;
+  string grpc_address = 6; // Worker executor gRPC 服务地址（格式：host:port）
 }
 
 message RegisterNodeResponse {
@@ -54,6 +58,17 @@ message HeartbeatRequest {
 message HeartbeatResponse {
   bool success = 1;
   int64 server_time = 2;
+}
+
+// ========== 节点下线 ==========
+
+message UnregisterNodeRequest {
+  string node_id = 1;
+}
+
+message UnregisterNodeResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 // ========== 任务执行 ==========
