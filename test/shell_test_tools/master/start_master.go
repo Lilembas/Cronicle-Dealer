@@ -15,7 +15,6 @@ import (
 )
 
 func main() {
-	// 加载配置
 	cfg, err := config.Load("../../../config.yaml")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v\n", err)
@@ -49,15 +48,13 @@ func main() {
 
 	fmt.Println("✅ 存储初始化成功")
 
-	// 将所有Worker节点状态设置为offline（Master重启时重置）
+	// Master重启时将所有在线Worker节点状态重置为offline
 	fmt.Println("\n🔄 重置Worker节点状态...")
 	storage.DB.Model(&models.Node{}).Where("status = ?", "online").Update("status", "offline")
 	fmt.Println("✅ 已将所有在线Worker标记为离线")
 
 	// 启动Master
 	fmt.Println("\n🚀 启动 Master 节点...")
-	fmt.Println("======================")
-
 	masterNode := master.NewMaster(cfg)
 	if err := masterNode.Start(); err != nil {
 		logger.Fatal("Master 启动失败", zap.Error(err))
@@ -72,9 +69,8 @@ func main() {
 	fmt.Println("========================================")
 	fmt.Printf("📡 gRPC 地址: %s:%d\n", cfg.Server.Host, cfg.Server.GRPCPort)
 	fmt.Printf("🌐 API 地址: %s:%d\n", cfg.Server.Host, cfg.Server.HTTPPort)
-	fmt.Println("========================================\n")
+	fmt.Println("========================================")
 	fmt.Println("📝 按 Ctrl+C 停止服务")
 
-	// 保持运行
 	select {}
 }

@@ -17,7 +17,6 @@ import (
 )
 
 func main() {
-	// 加载配置
 	cfg, err := config.Load("../../../config.yaml")
 	if err != nil {
 		log.Fatalf("加载配置失败: %v\n", err)
@@ -48,10 +47,9 @@ func main() {
 		logger.Fatal("Redis 初始化失败", zap.Error(err))
 	}
 	defer storage.CloseRedis()
-
 	fmt.Println("✅ 存储初始化成功")
 
-	// 设置Gin
+	// 设置Gin模式
 	if cfg.Logging.Level == "debug" {
 		gin.SetMode(gin.DebugMode)
 	} else {
@@ -60,7 +58,7 @@ func main() {
 
 	router := gin.Default()
 
-	// 提供静态文件
+	// 静态文件
 	router.StaticFile("/", "./shell_test.html")
 	router.Static("/static", "./static")
 
@@ -71,7 +69,7 @@ func main() {
 		api.GET("/health", healthCheckHandler)
 		api.GET("/stats", statsHandler)
 		api.GET("/nodes", getNodesHandler)
-		api.GET("/logs/:event_id", getLogsHandler) // 获取任务日志
+		api.GET("/logs/:event_id", getLogsHandler)
 	}
 
 	// 启动Web服务器
@@ -82,7 +80,7 @@ func main() {
 	fmt.Println("========================================")
 	fmt.Printf("📝 测试页面: http://%s\n", addr)
 	fmt.Printf("🔧 API地址: http://%s/api/v1\n", addr)
-	fmt.Println("========================================\n")
+	fmt.Println("========================================")
 	fmt.Println("📝 按 Ctrl+C 停止服务")
 
 	logger.Info("Web服务器启动", zap.String("address", addr))
@@ -131,7 +129,8 @@ func executeShellHandler(c *gin.Context) {
 	ctx := context.Background()
 	taskKey := fmt.Sprintf("%s:%s", jobID, eventID)
 
-	// 先创建Job记录（Dispatcher需要从jobs表查询任务配置）
+	// 创建Job记录（Dispatcher需要从jobs表查询任务配置）
+	now := time.Now()
 	job := &models.Job{
 		ID:          jobID,
 		Name:        "Shell测试命令",
@@ -141,14 +140,10 @@ func executeShellHandler(c *gin.Context) {
 		Enabled:     false,       // 禁用，避免被调度器重复执行
 		TaskType:    "shell",
 		Command:     req.Command,
-		WorkingDir:  "",
-		Env:         "",
 		TargetType:  "any",
-		TargetValue: "",
 		Timeout:     30,
-		MaxRetries:  0,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	if err := storage.DB.Create(job).Error; err != nil {
@@ -164,7 +159,7 @@ func executeShellHandler(c *gin.Context) {
 		JobID:     jobID,
 		JobName:   "Shell测试命令",
 		Status:    "pending",
-		CreatedAt: time.Now(),
+		CreatedAt: now,
 	}
 
 	if err := storage.DB.Create(event).Error; err != nil {
@@ -182,9 +177,7 @@ func executeShellHandler(c *gin.Context) {
 		"command":        req.Command,
 		"task_type":      "shell",
 		"timeout":        30,
-		"working_dir":    "",
-		"env":            "", // 使用空字符串而不是map
-		"scheduled_time": time.Now().Unix(),
+		"scheduled_time": now.Unix(),
 	}
 
 	if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
@@ -204,11 +197,11 @@ func executeShellHandler(c *gin.Context) {
 
 	// 立即返回event_id，让前端通过轮询获取实时输出
 	c.JSON(http.StatusOK, gin.H{
-		"event_id":  eventID,
-		"job_id":    jobID,
-		"command":   req.Command,
-		"status":    "queued",
-		"message":   "任务已提交，正在执行中",
+		"event_id": eventID,
+		"job_id":   jobID,
+		"command":  req.Command,
+		"status":   "queued",
+		"message":  "任务已提交，正在执行中",
 	})
 }
 
@@ -230,7 +223,6 @@ func healthCheckHandler(c *gin.Context) {
 
 // getNodesHandler 获取所有在线节点列表
 func getNodesHandler(c *gin.Context) {
-	// 获取最近60秒有心跳的在线节点
 	heartbeatTimeout := time.Now().Add(-60 * time.Second)
 	var nodes []models.Node
 	if err := storage.DB.Where("status = ? AND last_heartbeat > ?", "online", heartbeatTimeout).
@@ -242,18 +234,12 @@ func getNodesHandler(c *gin.Context) {
 	}
 
 	// 转换为简化的节点信息
-	type NodeInfo struct {
-		ID       string `json:"id"`
-		Hostname string `json:"hostname"`
-		IP       string `json:"ip"`
-	}
-
-	nodeList := make([]NodeInfo, 0, len(nodes))
+	nodeList := make([]gin.H, 0, len(nodes))
 	for _, node := range nodes {
-		nodeList = append(nodeList, NodeInfo{
-			ID:       node.ID,
-			Hostname: node.Hostname,
-			IP:       node.IP,
+		nodeList = append(nodeList, gin.H{
+			"id":       node.ID,
+			"hostname": node.Hostname,
+			"ip":       node.IP,
 		})
 	}
 
@@ -273,38 +259,31 @@ func getLogsHandler(c *gin.Context) {
 		return
 	}
 
-	// 从Redis获取日志
 	ctx := context.Background()
 	logKey := fmt.Sprintf("task_logs:%s", eventID)
-	logs, err := storage.RedisClient.Get(ctx, logKey).Result()
+	logs, _ := storage.RedisClient.Get(ctx, logKey).Result()
 
 	// 检查任务是否完成
 	var event models.Event
 	complete := false
 	exitCode := 0
+	status := "unknown"
 
 	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err == nil {
-		// 任务记录存在
+		status = event.Status
 		if event.Status == "success" || event.Status == "failed" {
 			complete = true
 			exitCode = event.ExitCode
 		}
 	}
 
-	response := gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"event_id":  eventID,
 		"logs":      logs,
 		"complete":  complete,
 		"exit_code": exitCode,
-		"status":    event.Status,
-	}
-
-	// 如果日志不存在，返回空字符串
-	if err != nil {
-		response["logs"] = ""
-	}
-
-	c.JSON(http.StatusOK, response)
+		"status":    status,
+	})
 }
 
 // statsHandler 获取统计信息

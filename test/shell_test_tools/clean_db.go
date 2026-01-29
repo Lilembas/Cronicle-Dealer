@@ -42,23 +42,18 @@ func main() {
 	}
 
 	// 删除所有节点
-	result := storage.DB.Where("1 = 1").Delete(&models.Node{})
-	if result.Error != nil {
+	if result := storage.DB.Delete(&models.Node{}); result.Error != nil {
 		fmt.Printf("❌ 删除节点失败: %v\n", result.Error)
 		return
+	} else {
+		fmt.Printf("✅ 已删除 %d 个节点记录\n", result.RowsAffected)
 	}
 
-	fmt.Printf("✅ 已删除 %d 个节点记录\n", result.RowsAffected)
-
 	// 删除所有事件
-	var eventCount int64
-	storage.DB.Model(&models.Event{}).Count(&eventCount)
-	if eventCount > 0 {
-		result = storage.DB.Where("1 = 1").Delete(&models.Event{})
-		if result.Error != nil {
-			fmt.Printf("❌ 删除事件失败: %v\n", result.Error)
-			return
-		}
+	if result := storage.DB.Delete(&models.Event{}); result.Error != nil {
+		fmt.Printf("❌ 删除事件失败: %v\n", result.Error)
+		return
+	} else if result.RowsAffected > 0 {
 		fmt.Printf("✅ 已删除 %d 个事件记录\n", result.RowsAffected)
 	}
 
