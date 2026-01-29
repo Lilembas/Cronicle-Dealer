@@ -6,6 +6,26 @@ cmd/master/master.exe
 cmd/worker/worker
 cmd/worker/worker.exe
 
+# 项目根目录的可执行文件（go build或go run生成）
+start_master
+start_worker
+start_master.exe
+start_worker.exe
+clean_db
+clean_db.exe
+test_config
+test_config.exe
+shell_web_server
+shell_web_server.exe
+worker_test
+worker_test.exe
+
+# test目录下的可执行文件
+test/worker_test
+test/worker_test.exe
+test/*_test
+test/*_test.exe
+
 # 日志文件
 /logs/
 *.log
