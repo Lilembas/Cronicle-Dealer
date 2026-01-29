@@ -131,6 +131,33 @@ func executeShellHandler(c *gin.Context) {
 	ctx := context.Background()
 	taskKey := fmt.Sprintf("%s:%s", jobID, eventID)
 
+	// 先创建Job记录（Dispatcher需要从jobs表查询任务配置）
+	job := &models.Job{
+		ID:          jobID,
+		Name:        "Shell测试命令",
+		Description: "通过Web界面执行的临时Shell命令测试",
+		Category:    "test",
+		CronExpr:    "* * * * *", // 临时任务，使用假的cron表达式
+		Enabled:     false,       // 禁用，避免被调度器重复执行
+		TaskType:    "shell",
+		Command:     req.Command,
+		WorkingDir:  "",
+		Env:         "",
+		TargetType:  "any",
+		TargetValue: "",
+		Timeout:     30,
+		MaxRetries:  0,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := storage.DB.Create(job).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "创建任务失败: " + err.Error(),
+		})
+		return
+	}
+
 	// 创建事件
 	event := &models.Event{
 		ID:        eventID,
@@ -214,6 +241,7 @@ func executeShellHandler(c *gin.Context) {
 
 				// 清理测试数据
 				storage.DB.Where("id = ?", eventID).Delete(&models.Event{})
+				storage.DB.Where("id = ?", jobID).Delete(&models.Job{})  // 清理临时Job
 				storage.RedisClient.Del(ctx, "tasks:details:"+taskKey)
 				storage.RedisClient.Del(ctx, "tasks:result:"+taskKey)
 				storage.RedisClient.Del(ctx, "tasks:status:"+taskKey)
