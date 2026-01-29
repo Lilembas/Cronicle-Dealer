@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -14,6 +17,15 @@ import (
 )
 
 func main() {
+	// 添加panic恢复机制
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("Worker panic",
+				zap.Any("panic", r),
+				zap.Stack("stack"))
+		}
+	}()
+
 	// 加载配置
 	cfg, err := config.Load("../../../config.yaml")
 	if err != nil {
@@ -96,6 +108,14 @@ func main() {
 	fmt.Println("========================================\n")
 	fmt.Println("📝 按 Ctrl+C 停止服务")
 
-	// 保持运行
-	select {}
+	// 优雅关闭：监听系统信号
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// 等待信号
+	sig := <-sigChan
+	logger.Info("收到关闭信号，正在优雅关闭...", zap.String("signal", sig.String()))
+
+	fmt.Println("\n🛑 正在关闭 Worker...")
+	// defer会自动调用workerClient.Close()和executor.Stop()
 }
