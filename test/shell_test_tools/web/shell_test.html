@@ -544,6 +544,31 @@
 
         // 页面加载时显示欢迎信息
         showStatus('准备就绪！输入命令开始测试', 'info');
+
+        // 自动检查Worker状态
+        async function checkWorkerStatus() {
+            try {
+                const response = await fetch('/api/v1/health');
+                const data = await response.json();
+
+                if (data.online_nodes > 0) {
+                    showStatus(`✅ 系统就绪！${data.online_nodes} 个 Worker 节点在线`, 'success');
+                    return true;
+                } else {
+                    showStatus('⚠️ 没有在线的 Worker 节点，请先启动 Worker', 'warning');
+                    return false;
+                }
+            } catch (error) {
+                showStatus('❌ 无法连接到 Master 服务器', 'error');
+                return false;
+            }
+        }
+
+        // 页面加载后立即检查状态
+        checkWorkerStatus();
+
+        // 每10秒自动检查一次状态
+        setInterval(checkWorkerStatus, 10000);
     </script>
 </body>
 </html>
