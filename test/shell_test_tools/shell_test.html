@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cronicle Shell命令测试工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '▶';
+            color: #667eea;
+            font-size: 14px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        #commandInput {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s;
+        }
+
+        #commandInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .status {
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+            border-left: 4px solid #d32f2f;
+        }
+
+        .status.warning {
+            background: #fff3e0;
+            color: #f57c00;
+            border-left: 4px solid #f57c00;
+        }
+
+        #outputContainer {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        #output {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #d4d4d4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #output .command {
+            color: #4ec9b0;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        #output .timestamp {
+            color: #858585;
+        }
+
+        #output .output {
+            color: #d4d4d4;
+            margin: 10px 0;
+        }
+
+        #output .error {
+            color: #f48771;
+        }
+
+        #output .success {
+            color: #4ec9b0;
+        }
+
+        #output .separator {
+            color: #569cd6;
+            margin: 15px 0;
+            border-bottom: 1px dashed #569cd6;
+            padding-bottom: 15px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .example-btn {
+            padding: 8px 15px;
+            background: #f5f5f5;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Courier New', monospace;
+        }
+
+        .example-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .clear-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .clear-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Cronicle Shell命令测试工具</h1>
+            <p>实时向Worker发送Shell命令并查看执行结果</p>
+        </div>
+
+        <div class="content">
+            <!-- 命令输入区域 -->
+            <div class="section">
+                <div class="section-title">Shell命令输入</div>
+
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="commandInput"
+                        placeholder="输入要执行的Shell命令，例如: ls -la, pwd, whoami..."
+                        autofocus
+                    >
+                    <button class="btn btn-primary" id="executeBtn" onclick="executeCommand()">
+                        <span>▶</span> 执行命令
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearOutput()">
+                        清空输出
+                    </button>
+                </div>
+
+                <div class="examples">
+                    <span style="color: #666; font-size: 14px; padding: 8px 0;">快速示例：</span>
+                    <button class="example-btn" onclick="setCommand('pwd')">pwd</button>
+                    <button class="example-btn" onclick="setCommand('ls -la')">ls -la</button>
+                    <button class="example-btn" onclick="setCommand('whoami')">whoami</button>
+                    <button class="example-btn" onclick="setCommand('date')">date</button>
+                    <button class="example-btn" onclick="setCommand('uname -a')">uname -a</button>
+                    <button class="example-btn" onclick="setCommand('df -h')">df -h</button>
+                    <button class="example-btn" onclick="setCommand('free -h')">free -h</button>
+                    <button class="example-btn" onclick="setCommand('uptime')">uptime</button>
+                    <button class="example-btn" onclick="setCommand('echo $HOME')">echo $HOME</button>
+                    <button class="example-btn" onclick="setCommand('ps aux | head -20')">ps aux | head -20</button>
+                </div>
+            </div>
+
+            <!-- 状态提示 -->
+            <div id="statusInfo" class="status info"></div>
+
+            <!-- 输出区域 -->
+            <div class="section">
+                <div class="section-title">
+                    执行结果
+                    <button class="clear-btn" onclick="clearOutput()">清空</button>
+                </div>
+                <div id="outputContainer">
+                    <div id="output">
+                        <div style="color: #858585; text-align: center; padding: 50px;">
+                            等待命令执行...<br>
+                            <small style="color: #666;">在上方输入命令并点击"执行命令"</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计信息 -->
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="label">总执行次数</div>
+                    <div class="value" id="totalExecutions">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">成功次数</div>
+                    <div class="value" id="successCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">失败次数</div>
+                    <div class="value" id="failedCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="label">平均执行时间</div>
+                    <div class="value" id="avgTime">0ms</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stats = {
+            total: 0,
+            success: 0,
+            failed: 0,
+            totalTime: 0
+        };
+
+        // API配置
+        const API_BASE = '/api/v1';
+
+        // 设置命令
+        function setCommand(cmd) {
+            document.getElementById('commandInput').value = cmd;
+            document.getElementById('commandInput').focus();
+        }
+
+        // 显示状态
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusInfo');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type + ' show';
+
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => {
+                    statusDiv.className = 'status';
+                }, 5000);
+            }
+        }
+
+        // 更新统计
+        function updateStats(duration, success) {
+            stats.total++;
+            stats.totalTime += duration;
+
+            if (success) {
+                stats.success++;
+            } else {
+                stats.failed++;
+            }
+
+            document.getElementById('totalExecutions').textContent = stats.total;
+            document.getElementById('successCount').textContent = stats.success;
+            document.getElementById('failedCount').textContent = stats.failed;
+            document.getElementById('avgTime').textContent =
+                Math.round(stats.totalTime / stats.total) + 'ms';
+        }
+
+        // 添加输出
+        function addOutput(command, output, exitCode, duration, error) {
+            const outputDiv = document.getElementById('output');
+
+            // 如果是第一次输出，清除占位文本
+            if (outputDiv.querySelector('div[style*="color: #858585"]')) {
+                outputDiv.innerHTML = '';
+            }
+
+            const timestamp = new Date().toLocaleString('zh-CN');
+            const statusClass = exitCode === 0 ? 'success' : 'error';
+            const statusText = exitCode === 0 ? '✓ 成功' : '✗ 失败';
+
+            let html = '<div class="separator"></div>' +
+                       '<div class="command">$ ' + command + '</div>' +
+                       '<div class="timestamp">⏰ ' + timestamp + ' | ⏱ ' + duration + 'ms | <span class="' + statusClass + '">' + statusText + '</span></div>';
+
+            if (error) {
+                html += '<div class="error">❌ 错误: ' + error + '</div>';
+            }
+
+            if (output) {
+                html += '<div class="output">' + escapeHtml(output) + '</div>';
+            }
+
+            outputDiv.innerHTML += html;
+
+            // 滚动到底部
+            const container = document.getElementById('outputContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 清空输出
+        function clearOutput() {
+            document.getElementById('output').innerHTML =
+                '<div style="color: #858585; text-align: center; padding: 50px;">等待命令执行...<br>' +
+                '<small style="color: #666;">在上方输入命令并点击"执行命令"</small></div>';
+            showStatus('输出已清空', 'info');
+        }
+
+        // 执行命令
+        async function executeCommand() {
+            const commandInput = document.getElementById('commandInput');
+            const command = commandInput.value.trim();
+            const executeBtn = document.getElementById('executeBtn');
+
+            if (!command) {
+                showStatus('请输入要执行的命令', 'warning');
+                return;
+            }
+
+            // 禁用按钮，显示加载状态
+            executeBtn.disabled = true;
+            executeBtn.innerHTML = '<div class="loading"></div> 执行中...';
+            showStatus('正在执行命令...', 'info');
+
+            const startTime = Date.now();
+
+            try {
+                const response = await fetch(API_BASE + '/shell/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ command: command })
+                });
+
+                const data = await response.json();
+                const duration = Date.now() - startTime;
+
+                if (response.ok) {
+                    addOutput(
+                        command,
+                        data.output,
+                        data.exit_code,
+                        duration,
+                        null
+                    );
+                    updateStats(duration, data.exit_code === 0);
+                    showStatus('命令执行完成 (退出码: ' + data.exit_code + ', 耗时: ' + duration + 'ms)',
+                             data.exit_code === 0 ? 'success' : 'warning');
+                } else {
+                    addOutput(command, null, null, duration, data.error || '执行失败');
+                    updateStats(duration, false);
+                    showStatus(data.error || '命令执行失败', 'error');
+                }
+            } catch (error) {
+                const duration = Date.now() - startTime;
+                addOutput(command, null, null, duration, '网络错误: ' + error.message);
+                updateStats(duration, false);
+                showStatus('网络错误: ' + error.message, 'error');
+            } finally {
+                // 恢复按钮状态
+                executeBtn.disabled = false;
+                executeBtn.innerHTML = '<span>▶</span> 执行命令';
+
+                // 清空输入框（可选）
+                // commandInput.value = '';
+                commandInput.focus();
+            }
+        }
+
+        // 回车键执行
+        document.getElementById('commandInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                executeCommand();
+            }
+        });
+
+        // 页面加载时显示欢迎信息
+        showStatus('准备就绪！输入命令开始测试', 'info');
+    </script>
+</body>
+</html>

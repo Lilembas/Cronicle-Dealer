@@ -20,10 +20,19 @@ import (
 )
 
 var (
-	testConfigPath = flag.String("config", "../config.yaml", "配置文件路径")
-	testJobCount   = flag.Int("jobs", 3, "测试任务数量")
-	waitForResult  = flag.Duration("wait", 60*time.Second, "等待任务执行完成的时长")
+	configPath = flag.String("config", "../config.yaml", "配置文件路径")
+	jobCount   = flag.Int("jobs", 3, "测试任务数量")
+	waitTime   = flag.Duration("wait", 60*time.Second, "等待任务执行完成的时长")
 )
+
+type testContext struct {
+	config      *config.Config
+	masterNode  *master.Master
+	workerClient *worker.Client
+	executor    *worker.Executor
+	jobs        []*models.Job
+	events      []*models.Event
+}
 
 func main() {
 	flag.Parse()
@@ -31,12 +40,48 @@ func main() {
 	fmt.Println("🚀 Cronicle-Next Master + Worker E2E 测试")
 	fmt.Println("=========================================")
 
-	// 检查配置文件
-	if _, err := os.Stat(*testConfigPath); os.IsNotExist(err) {
-		log.Fatalf("❌ 配置文件不存在: %s\n请先复制 config.example.yaml 到 config.yaml\n", *testConfigPath)
+	ctx := &testContext{}
+	ctx.config = loadConfig(*configPath)
+	initializeLogger(ctx.config)
+
+	initializeStorage(ctx.config)
+	defer storage.CloseDB()
+	defer storage.CloseRedis()
+
+	startMaster(ctx)
+	defer ctx.masterNode.Stop()
+
+	startWorker(ctx)
+	defer ctx.workerClient.Close()
+	defer ctx.executor.Stop()
+
+	ctx.jobs = createTestJobs(*jobCount)
+	ctx.events = scheduleJobs(ctx.jobs)
+
+	waitForJobCompletion(ctx.events, *waitTime)
+	displayJobResults(ctx.events)
+
+	cleanupTestData(ctx)
+	exitCode := printTestSummary(ctx.events)
+
+	// 所有 defer 语句执行完毕后退出
+	os.Exit(exitCode)
+}
+
+func loadConfig(path string) *config.Config {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		log.Fatalf("❌ 配置文件不存在: %s\n请先复制 config.example.yaml 到 config.yaml\n", path)
 	}
 
-	// 初始化日志
+	cfg, err := config.Load(path)
+	if err != nil {
+		logger.Fatal("加载配置失败", zap.Error(err))
+	}
+
+	return cfg
+}
+
+func initializeLogger(cfg *config.Config) {
 	if err := logger.InitLogger(&config.LoggingConfig{
 		Level:  "debug",
 		Format: "console",
@@ -45,185 +90,166 @@ func main() {
 		log.Fatalf("❌ 初始化日志失败: %v\n", err)
 	}
 	defer logger.Sync()
+}
 
-	// 加载配置
-	cfg, err := config.Load(*testConfigPath)
-	if err != nil {
-		logger.Fatal("加载配置失败", zap.Error(err))
-	}
+func initializeStorage(cfg *config.Config) {
+	fmt.Println("\n📋 阶段 1: 初始化存储")
+	fmt.Println("----------------------")
 
-	// ============== Master 启动流程 ==============
-	fmt.Println("\n📋 阶段 1: 启动 Master 节点")
-	fmt.Println("-------------------------")
-
-	// 1. 初始化存储
 	fmt.Println("1️⃣ 初始化数据库和 Redis...")
+
 	if err := storage.InitDB(&cfg.Database); err != nil {
 		logger.Fatal("数据库初始化失败", zap.Error(err))
 	}
-	defer storage.CloseDB()
 
 	if err := storage.AutoMigrate(); err != nil {
 		logger.Fatal("数据库迁移失败", zap.Error(err))
 	}
 
-	// 清理旧测试数据
-	fmt.Println("🧹 清理旧测试数据...")
-	storage.DB.Where("id LIKE ?", "test_job_%").Delete(&models.Job{})
-	storage.DB.Where("id LIKE ?", "test_event_%").Delete(&models.Event{})
+	cleanupOldTestData()
 
 	if err := storage.InitRedis(&cfg.Redis); err != nil {
 		logger.Fatal("Redis 初始化失败", zap.Error(err))
 	}
-	defer storage.CloseRedis()
+
 	fmt.Println("✅ 存储初始化成功")
+}
 
-	// 2. 启动 Master
-	fmt.Println("\n2️⃣ 启动 Master 服务...")
-	masterNode := master.NewMaster(cfg)
-	if err := masterNode.Start(); err != nil {
-		logger.Fatal("Master 启动失败", zap.Error(err))
-	}
-	defer masterNode.Stop()
+func cleanupOldTestData() {
+	fmt.Println("🧹 清理旧测试数据...")
+	storage.DB.Where("id LIKE ?", "test_job_%").Delete(&models.Job{})
+	storage.DB.Where("id LIKE ?", "test_event_%").Delete(&models.Event{})
+}
 
-	time.Sleep(2 * time.Second) // 等待 Master 完全启动
-	fmt.Println("✅ Master 启动成功")
-
-	// ============== Worker 启动流程 ==============
-	fmt.Println("\n📋 阶段 2: 启动 Worker 节点")
+func startMaster(ctx *testContext) {
+	fmt.Println("\n📋 阶段 2: 启动 Master 节点")
 	fmt.Println("-------------------------")
 
-	// 3. 创建并连接 Worker
+	fmt.Println("2️⃣ 启动 Master 服务...")
+	ctx.masterNode = master.NewMaster(ctx.config)
+
+	if err := ctx.masterNode.Start(); err != nil {
+		logger.Fatal("Master 启动失败", zap.Error(err))
+	}
+
+	time.Sleep(2 * time.Second)
+	fmt.Println("✅ Master 启动成功")
+}
+
+func startWorker(ctx *testContext) {
+	fmt.Println("\n📋 阶段 3: 启动 Worker 节点")
+	fmt.Println("-------------------------")
+
 	fmt.Println("3️⃣ 连接 Worker 到 Master...")
-	workerClient := worker.NewClient(&cfg.Worker)
-	if err := workerClient.Connect(); err != nil {
+	ctx.workerClient = worker.NewClient(&ctx.config.Worker)
+
+	if err := ctx.workerClient.Connect(); err != nil {
 		logger.Fatal("Worker 连接 Master 失败", zap.Error(err))
 	}
-	defer workerClient.Close()
 
-	if err := workerClient.Register(); err != nil {
+	if err := ctx.workerClient.Register(); err != nil {
 		logger.Fatal("Worker 注册失败", zap.Error(err))
 	}
+
 	fmt.Println("✅ Worker 注册成功")
 
-	nodeID := workerClient.GetNodeID()
+	nodeID := ctx.workerClient.GetNodeID()
 	logger.Info("Worker 节点信息",
 		zap.String("node_id", nodeID),
-		zap.Strings("tags", cfg.Worker.Node.Tags))
+		zap.Strings("tags", ctx.config.Worker.Node.Tags))
 
-	// 4. 启动 Worker 执行器和心跳
 	fmt.Println("\n4️⃣ 启动 Worker 执行器...")
-	executor := worker.NewExecutor(&cfg.Worker.Executor)
-	// Worker 使用默认端口 9090
-	if err := executor.Start(0); err != nil {
+	ctx.executor = worker.NewExecutor(&ctx.config.Worker.Executor)
+
+	if err := ctx.executor.Start(0); err != nil {
 		logger.Fatal("执行器启动失败", zap.Error(err))
 	}
-	defer executor.Stop()
 
-	// 启动心跳（在 goroutine 中运行，因为它是阻塞调用）
 	fmt.Println("\n5️⃣ 启动心跳机制...")
-	go workerClient.StartHeartbeat()
+	go ctx.workerClient.StartHeartbeat()
 
-	time.Sleep(2 * time.Second) // 等待 Worker 完全就绪
+	time.Sleep(2 * time.Second)
 	fmt.Println("✅ Worker 就绪（通过 gRPC 接收任务）")
+}
 
-	// ============== 创建和调度任务 ==============
-	fmt.Println("\n📋 阶段 3: 创建测试任务")
+func createTestJobs(count int) []*models.Job {
+	fmt.Println("\n📋 阶段 4: 创建测试任务")
 	fmt.Println("----------------------")
 
-	ctx := context.Background()
-	var testJobs []*models.Job
+	var jobs []*models.Job
 
-	for i := 1; i <= *testJobCount; i++ {
+	// 创建标准测试任务
+	for i := 1; i <= count; i++ {
 		job := &models.Job{
 			ID:          fmt.Sprintf("test_job_%03d", i),
 			Name:        fmt.Sprintf("测试任务 #%d", i),
 			Description: fmt.Sprintf("E2E 测试任务 %d", i),
-			CronExpr:    "", // 手动触发
+			CronExpr:    "",
 			Command:     fmt.Sprintf("echo '执行任务 #%d' && sleep %d && date", i, 3-i%3),
 			TaskType:    "shell",
 			Enabled:     true,
 			Timeout:     30,
 		}
 
-		// 保存到数据库
 		if err := storage.DB.Create(job).Error; err != nil {
 			logger.Error("创建任务失败", zap.Error(err))
 			continue
 		}
 
-		testJobs = append(testJobs, job)
+		jobs = append(jobs, job)
 		logger.Info("✅ 任务创建成功",
 			zap.String("job_id", job.ID),
 			zap.String("job_name", job.Name))
 	}
 
-	// 添加 Python 版本检查任务
+	// 创建 Python 版本检查任务
 	pythonJob := &models.Job{
 		ID:          "test_job_python",
 		Name:        "Python 版本检查",
 		Description: "测试 Python3 版本检查命令",
-		CronExpr:    "", // 手动触发
+		CronExpr:    "",
 		Command:     "python3 -V",
 		TaskType:    "shell",
 		Enabled:     true,
 		Timeout:     10,
 	}
 
-	if err := storage.DB.Create(pythonJob).Error; err != nil {
-		logger.Error("创建 Python 任务失败", zap.Error(err))
-	} else {
-		testJobs = append(testJobs, pythonJob)
+	if err := storage.DB.Create(pythonJob).Error; err == nil {
+		jobs = append(jobs, pythonJob)
 		logger.Info("✅ Python 任务创建成功",
 			zap.String("job_id", pythonJob.ID),
 			zap.String("job_name", pythonJob.Name))
+	} else {
+		logger.Error("创建 Python 任务失败", zap.Error(err))
 	}
 
-	if len(testJobs) == 0 {
+	if len(jobs) == 0 {
 		logger.Fatal("没有成功创建任何任务")
 	}
 
-	// ============== 手动触发任务执行 ==============
-	fmt.Println("\n📋 阶段 4: 调度任务执行")
+	return jobs
+}
+
+func scheduleJobs(jobs []*models.Job) []*models.Event {
+	fmt.Println("\n📋 阶段 5: 调度任务执行")
 	fmt.Println("----------------------")
 
 	var events []*models.Event
-	for _, job := range testJobs {
-		// 创建事件
-		event := &models.Event{
-			ID:        fmt.Sprintf("test_event_%s", job.ID),
-			JobID:     job.ID,
-			JobName:   job.Name,
-			Status:    "pending",
-			CreatedAt: time.Now(),
-		}
+	ctx := context.Background()
 
+	for _, job := range jobs {
+		event := createEvent(job)
 		if err := storage.DB.Create(event).Error; err != nil {
 			logger.Error("创建事件失败", zap.Error(err))
 			continue
 		}
 
-		// 构建任务数据
 		taskKey := fmt.Sprintf("%s:%s", job.ID, event.ID)
-		taskData := map[string]interface{}{
-			"job_id":          job.ID,
-			"event_id":        event.ID,
-			"job_name":        job.Name,
-			"command":         job.Command,
-			"task_type":       job.TaskType,
-			"timeout":         job.Timeout,
-			"working_dir":     job.WorkingDir,
-			"env":             job.Env,
-			"scheduled_time":  time.Now().Unix(),
-		}
 
-		// 保存任务详情到 Redis
-		if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
-			logger.Error("保存任务详情失败", zap.Error(err))
+		if !saveTaskDetails(ctx, taskKey, job, event) {
 			continue
 		}
 
-		// 添加到任务队列
 		if err := storage.AddTaskToQueue(ctx, taskKey); err != nil {
 			logger.Error("添加任务到队列失败", zap.Error(err))
 			continue
@@ -240,62 +266,106 @@ func main() {
 	}
 
 	fmt.Printf("\n✅ 成功调度 %d 个任务\n", len(events))
+	return events
+}
 
-	// ============== 监控任务执行 ==============
-	fmt.Println("\n📋 阶段 5: 监控任务执行")
+func createEvent(job *models.Job) *models.Event {
+	return &models.Event{
+		ID:        fmt.Sprintf("test_event_%s", job.ID),
+		JobID:     job.ID,
+		JobName:   job.Name,
+		Status:    "pending",
+		CreatedAt: time.Now(),
+	}
+}
+
+func saveTaskDetails(ctx context.Context, taskKey string, job *models.Job, event *models.Event) bool {
+	taskData := map[string]interface{}{
+		"job_id":         job.ID,
+		"event_id":       event.ID,
+		"job_name":       job.Name,
+		"command":        job.Command,
+		"task_type":      job.TaskType,
+		"timeout":        job.Timeout,
+		"working_dir":    job.WorkingDir,
+		"env":            job.Env,
+		"scheduled_time": time.Now().Unix(),
+	}
+
+	if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
+		logger.Error("保存任务详情失败", zap.Error(err))
+		return false
+	}
+
+	return true
+}
+
+func waitForJobCompletion(events []*models.Event, timeout time.Duration) {
+	fmt.Println("\n📋 阶段 6: 监控任务执行")
 	fmt.Println("----------------------")
 
-	fmt.Printf("⏳ 等待任务执行完成 (最多 %v)...\n\n", *waitForResult)
+	fmt.Printf("⏳ 等待任务执行完成 (最多 %v)...\n\n", timeout)
 
 	checkInterval := 2 * time.Second
-	deadline := time.Now().Add(*waitForResult)
+	deadline := time.Now().Add(timeout)
 	completedCount := 0
 
 	for time.Now().Before(deadline) && completedCount < len(events) {
 		time.Sleep(checkInterval)
 
 		for _, event := range events {
-			if event.Status == "completed" || event.Status == "failed" {
+			if isEventFinished(event) {
 				continue
 			}
 
-			taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
-
-			// 检查任务状态
-			status, err := storage.GetTaskStatus(ctx, taskKey)
-			if err != nil {
-				logger.Warn("获取任务状态失败",
-					zap.String("event_id", event.ID),
-					zap.Error(err))
-				continue
-			}
-
-			// 更新事件状态
-			if status != event.Status {
-				event.Status = status
-				storage.DB.Model(event).Update("status", status)
-
-				switch status {
-				case "running":
-					fmt.Printf("🔄 [%s] 任务执行中...\n", event.JobName)
-				case "completed":
-					completedCount++
-					fmt.Printf("✅ [%s] 任务完成\n", event.JobName)
-				case "failed":
-					completedCount++
-					fmt.Printf("❌ [%s] 任务失败\n", event.JobName)
-				}
+			updateEventStatus(event)
+			if isEventFinished(event) {
+				completedCount++
+				printStatusUpdate(event)
 			}
 		}
 
-		// 显示当前进度
 		if completedCount < len(events) {
 			fmt.Printf("   进度: %d/%d 完成\n", completedCount, len(events))
 		}
 	}
+}
 
-	// ============== 查看任务结果 ==============
-	fmt.Println("\n📋 阶段 6: 查看任务结果")
+func isEventFinished(event *models.Event) bool {
+	return event.Status == "completed" || event.Status == "failed"
+}
+
+func updateEventStatus(event *models.Event) {
+	taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
+	ctx := context.Background()
+
+	status, err := storage.GetTaskStatus(ctx, taskKey)
+	if err != nil {
+		logger.Warn("获取任务状态失败",
+			zap.String("event_id", event.ID),
+			zap.Error(err))
+		return
+	}
+
+	if status != event.Status {
+		event.Status = status
+		storage.DB.Model(event).Update("status", status)
+	}
+}
+
+func printStatusUpdate(event *models.Event) {
+	switch event.Status {
+	case "running":
+		fmt.Printf("🔄 [%s] 任务执行中...\n", event.JobName)
+	case "completed":
+		fmt.Printf("✅ [%s] 任务完成\n", event.JobName)
+	case "failed":
+		fmt.Printf("❌ [%s] 任务失败\n", event.JobName)
+	}
+}
+
+func displayJobResults(events []*models.Event) {
+	fmt.Println("\n📋 阶段 7: 查看任务结果")
 	fmt.Println("----------------------")
 
 	successCount := 0
@@ -303,11 +373,11 @@ func main() {
 
 	for _, event := range events {
 		taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
+		ctx := context.Background()
 
 		fmt.Printf("\n任务: %s\n", event.JobName)
 		fmt.Printf("  状态: %s\n", event.Status)
 
-		// 获取任务执行结果（包含输出）
 		result, err := storage.GetTaskResult(ctx, taskKey)
 		if err == nil && len(result) > 0 {
 			if exitCode, ok := result["exit_code"]; ok && exitCode != "" {
@@ -326,28 +396,36 @@ func main() {
 			failedCount++
 		}
 	}
+}
 
-	// ============== 清理 ==============
-	fmt.Println("\n📋 阶段 7: 清理测试数据")
+func cleanupTestData(ctx *testContext) {
+	fmt.Println("\n📋 阶段 8: 清理测试数据")
 	fmt.Println("----------------------")
 
-	for _, job := range testJobs {
+	redisCtx := context.Background()
+	nodeID := ctx.workerClient.GetNodeID()
+
+	for _, job := range ctx.jobs {
 		storage.DB.Where("id = ?", job.ID).Delete(&models.Job{})
 	}
 
-	for _, event := range events {
+	for _, event := range ctx.events {
 		storage.DB.Where("id = ?", event.ID).Delete(&models.Event{})
 		taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
-		storage.RedisClient.Del(ctx, "tasks:details:"+taskKey)
+		storage.RedisClient.Del(redisCtx, "tasks:details:"+taskKey)
 	}
 
-	storage.RemoveWorkerOffline(ctx, nodeID)
+	storage.RemoveWorkerOffline(redisCtx, nodeID)
 	fmt.Println("✅ 测试数据清理完成")
+}
 
-	// ============== 测试总结 ==============
+func printTestSummary(events []*models.Event) int {
 	fmt.Println("\n" + strings.Repeat("=", 40))
 	fmt.Println("🎉 E2E 测试完成")
 	fmt.Println(strings.Repeat("=", 40))
+
+	successCount := countEventsByStatus(events, "completed")
+	failedCount := countEventsByStatus(events, "failed")
 
 	fmt.Printf("\n📊 测试结果统计:\n")
 	fmt.Printf("   总任务数: %d\n", len(events))
@@ -355,6 +433,28 @@ func main() {
 	fmt.Printf("   失败: %d ❌\n", failedCount)
 	fmt.Printf("   完成率: %.1f%%\n", float64(successCount)/float64(len(events))*100)
 
+	printVerificationList()
+
+	if successCount == len(events) {
+		fmt.Println("\n🎊 所有任务执行成功！")
+		return 0
+	} else {
+		fmt.Printf("\n⚠️  有 %d 个任务失败\n", failedCount)
+		return 1
+	}
+}
+
+func countEventsByStatus(events []*models.Event, status string) int {
+	count := 0
+	for _, event := range events {
+		if event.Status == status {
+			count++
+		}
+	}
+	return count
+}
+
+func printVerificationList() {
 	fmt.Println("\n✅ 验证项:")
 	fmt.Println("   ✅ Master 启动和运行")
 	fmt.Println("   ✅ Worker 注册和心跳")
@@ -363,12 +463,4 @@ func main() {
 	fmt.Println("   ✅ 任务队列监听")
 	fmt.Println("   ✅ 任务执行和状态更新")
 	fmt.Println("   ✅ 结果记录和查询")
-
-	if successCount == len(events) {
-		fmt.Println("\n🎊 所有任务执行成功！")
-		os.Exit(0)
-	} else {
-		fmt.Printf("\n⚠️  有 %d 个任务失败\n", failedCount)
-		os.Exit(1)
-	}
 }
