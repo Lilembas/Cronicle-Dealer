@@ -84,6 +84,7 @@ func main() {
 	// 启动Worker执行器
 	fmt.Println("\n🔧 启动 Worker 执行器...")
 	executor := worker.NewExecutor(&cfg.Worker.Executor)
+	executor.SetMasterClient(workerClient.GetMasterClient()) // 设置Master客户端用于报告结果
 	if err := executor.Start(cfg.Worker.Executor.GRPCPort); err != nil {
 		logger.Fatal("执行器启动失败", zap.Error(err))
 	}

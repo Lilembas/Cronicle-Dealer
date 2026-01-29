@@ -227,6 +227,11 @@ func (c *Client) GetNodeID() string {
 	return c.nodeID
 }
 
+// GetMasterClient 获取Master gRPC客户端
+func (c *Client) GetMasterClient() pb.CronicleServiceClient {
+	return c.client
+}
+
 // getHostname 获取主机名
 func (c *Client) getHostname() string {
 	if c.cfg.Node.Hostname != "" {

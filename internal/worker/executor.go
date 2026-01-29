@@ -13,7 +13,6 @@ import (
 
 	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-next/internal/config"
-	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
@@ -26,11 +25,12 @@ const (
 type Executor struct {
 	pb.UnimplementedCronicleServiceServer
 
-	cfg         *config.ExecutorConfig
-	grpcServer  *grpc.Server
-	runningJobs sync.Map // map[eventID]*exec.Cmd
-	jobCount    int
-	mu          sync.Mutex
+	cfg          *config.ExecutorConfig
+	grpcServer   *grpc.Server
+	masterClient pb.CronicleServiceClient // Master客户端，用于报告任务结果
+	runningJobs  sync.Map                 // map[eventID]*exec.Cmd
+	jobCount     int
+	mu           sync.Mutex
 }
 
 // NewExecutor 创建执行器
@@ -38,6 +38,11 @@ func NewExecutor(cfg *config.ExecutorConfig) *Executor {
 	return &Executor{
 		cfg: cfg,
 	}
+}
+
+// SetMasterClient 设置Master客户端（用于报告任务结果）
+func (e *Executor) SetMasterClient(client pb.CronicleServiceClient) {
+	e.masterClient = client
 }
 
 // Start 启动 gRPC 服务器（接收任务）
@@ -237,6 +242,7 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 		result["error_message"] = execErr.Error()
 	}
 
+	// 存储到Redis供Master查询
 	storage.SetTaskResult(ctx, taskKey, result)
 
 	// 更新任务状态
@@ -246,15 +252,56 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 	}
 	storage.SetTaskStatus(ctx, taskKey, status)
 
-	// 更新数据库中的 Event 状态
-	storage.DB.Model(&models.Event{}).
-		Where("id = ?", req.EventId).
-		Updates(map[string]interface{}{
-			"status":     status,
-			"exit_code":  exitCode,
-			"duration":   int(endTime.Sub(startTime).Seconds()),
-			"end_time":   endTime,
-		})
+	// 向Master报告任务结果
+	if e.masterClient != nil {
+		go e.reportToMaster(req, startTime, endTime, exitCode, execErr)
+	} else {
+		logger.Warn("Master客户端未设置，无法主动报告任务结果",
+			zap.String("event_id", req.EventId))
+	}
+
+	logger.Debug("任务执行完成，结果已存储到Redis",
+		zap.String("event_id", req.EventId),
+		zap.String("status", status),
+		zap.Int("exit_code", exitCode))
+}
+
+// reportToMaster 向Master报告任务执行结果
+func (e *Executor) reportToMaster(req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, execErr error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result := &pb.TaskResult{
+		JobId:      req.JobId,
+		EventId:    req.EventId,
+		ExitCode:   int32(exitCode),
+		StartTime:  startTime.Unix(),
+		EndTime:    endTime.Unix(),
+		ResourceUsage: &pb.ResourceUsage{
+			CpuPercent:  0.0, // TODO: 实际测量
+			MemoryBytes: 0,   // TODO: 实际测量
+		},
+	}
+
+	if execErr != nil {
+		result.ErrorMessage = execErr.Error()
+	}
+
+	ack, err := e.masterClient.ReportTaskResult(ctx, result)
+	if err != nil {
+		logger.Error("向Master报告任务结果失败",
+			zap.String("event_id", req.EventId),
+			zap.Error(err))
+		return
+	}
+
+	if !ack.Received {
+		logger.Warn("Master未正确接收任务结果",
+			zap.String("event_id", req.EventId))
+	} else {
+		logger.Info("已成功向Master报告任务结果",
+			zap.String("event_id", req.EventId))
+	}
 }
 
 // extractExitCode 从错误中提取退出码
