@@ -293,6 +293,82 @@
         .clear-btn:hover {
             background: rgba(255, 255, 255, 0.2);
         }
+
+        /* 流式输出样式 */
+        .output-block {
+            background: #1e1e1e;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+
+        .output-block.streaming {
+            animation: pulse-border 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-border {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
+            50% { box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1); }
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #2d2d2d;
+            border-bottom: 1px solid #3d3d3d;
+        }
+
+        .output-command {
+            color: #4ec9b0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .output-meta {
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: #3d3d3d;
+            color: #d4d4d4;
+        }
+
+        .output-meta.executing {
+            background: #667eea;
+            color: white;
+        }
+
+        .output-meta.success {
+            background: #4ec9b0;
+            color: #1e1e1e;
+        }
+
+        .output-meta.failed {
+            background: #f48771;
+            color: #1e1e1e;
+        }
+
+        .output-content {
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .output-content.streaming {
+            background: #1a1a1a;
+        }
+
+        .output-text {
+            color: #d4d4d4;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -487,7 +563,7 @@
             showStatus('输出已清空', 'info');
         }
 
-        // 执行命令
+        // 执行命令（支持流式输出）
         async function executeCommand() {
             const commandInput = document.getElementById('commandInput');
             const command = commandInput.value.trim();
@@ -504,6 +580,9 @@
             showStatus('正在执行命令...', 'info');
 
             const startTime = Date.now();
+            let eventID = null;
+            let outputDiv = null;
+            let lastLogLength = 0;
 
             try {
                 // 获取选中的节点ID
@@ -516,41 +595,87 @@
                     },
                     body: JSON.stringify({
                         command: command,
-                        node_id: selectedNodeId || ""  // 如果未选择则为空字符串
+                        node_id: selectedNodeId || ""
                     })
                 });
 
                 const data = await response.json();
-                const duration = Date.now() - startTime;
 
-                if (response.ok) {
-                    addOutput(
-                        command,
-                        data.output,
-                        data.exit_code,
-                        duration,
-                        null
-                    );
-                    updateStats(duration, data.exit_code === 0);
-                    showStatus('命令执行完成 (退出码: ' + data.exit_code + ', 耗时: ' + duration + 'ms)',
-                             data.exit_code === 0 ? 'success' : 'warning');
-                } else {
-                    addOutput(command, null, null, duration, data.error || '执行失败');
-                    updateStats(duration, false);
-                    showStatus(data.error || '命令执行失败', 'error');
+                if (!response.ok) {
+                    throw new Error(data.error || '执行失败');
                 }
+
+                eventID = data.event_id;
+
+                // 创建新的输出块
+                outputDiv = document.createElement('div');
+                outputDiv.className = 'output-block';
+                outputDiv.innerHTML = `
+                    <div class="output-header">
+                        <div class="output-command">$ ${escapeHtml(command)}</div>
+                        <div class="output-meta executing">执行中...</div>
+                    </div>
+                    <div class="output-content streaming">
+                        <pre class="output-text"></pre>
+                    </div>
+                `;
+                outputContainer.appendChild(outputDiv);
+
+                const outputText = outputDiv.querySelector('.output-text');
+                const outputMeta = outputDiv.querySelector('.output-meta');
+
+                // 开始轮询获取实时输出
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const logsResponse = await fetch(`${API_BASE}/logs/${eventID}`);
+                        const logsData = await logsResponse.json();
+
+                        if (logsResponse.ok) {
+                            // 更新输出
+                            const currentLogs = logsData.logs || '';
+                            if (currentLogs.length > lastLogLength) {
+                                const newLogs = currentLogs.substring(lastLogLength);
+                                outputText.textContent += newLogs;
+                                lastLogLength = currentLogs.length;
+                                // 自动滚动到底部
+                                outputText.scrollTop = outputText.scrollHeight;
+                            }
+
+                            // 检查是否完成
+                            if (logsData.complete) {
+                                clearInterval(pollInterval);
+                                const duration = Date.now() - startTime;
+                                const exitCode = logsData.exit_code || 0;
+                                const success = (exitCode === 0);
+
+                                // 更新输出块样式
+                                outputDiv.classList.remove('streaming');
+                                outputMeta.textContent = `完成 (${duration}ms, 退出码: ${exitCode})`;
+                                outputMeta.className = success ? 'output-meta success' : 'output-meta failed';
+
+                                showStatus(`命令执行完成 (退出码: ${exitCode}, 耗时: ${duration}ms)`,
+                                        success ? 'success' : 'warning');
+                                updateStats(duration, success);
+
+                                // 恢复按钮状态
+                                executeBtn.disabled = false;
+                                executeBtn.innerHTML = '<span>▶</span> 执行命令';
+                                commandInput.focus();
+                            }
+                        }
+                    } catch (error) {
+                        console.error('轮询日志失败:', error);
+                        // 不中断轮询，继续尝试
+                    }
+                }, 200); // 每200ms轮询一次
+
             } catch (error) {
                 const duration = Date.now() - startTime;
                 addOutput(command, null, null, duration, '网络错误: ' + error.message);
                 updateStats(duration, false);
                 showStatus('网络错误: ' + error.message, 'error');
-            } finally {
-                // 恢复按钮状态
                 executeBtn.disabled = false;
                 executeBtn.innerHTML = '<span>▶</span> 执行命令';
-
-                // 清空输入框（可选）
-                // commandInput.value = '';
                 commandInput.focus();
             }
         }

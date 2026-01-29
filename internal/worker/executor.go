@@ -1,8 +1,11 @@
 package worker
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os/exec"
 	"sync"
@@ -180,7 +183,7 @@ func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, error) {
 	}
 }
 
-// executeShell 执行 Shell 脚本
+// executeShell 执行 Shell 脚本（支持流式输出）
 func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	ctx := context.Background()
 	if req.Timeout > 0 {
@@ -200,16 +203,105 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 		}
 	}
 
-	output, err := cmd.CombinedOutput()
+	// 创建管道来捕获实时输出
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return 1, "", fmt.Errorf("创建stdout管道失败: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return 1, "", fmt.Errorf("创建stderr管道失败: %w", err)
+	}
 
-	logger.Debug("命令输出",
-		zap.String("event_id", req.EventId),
-		zap.String("output", string(output)))
+	// 启动命令
+	if err := cmd.Start(); err != nil {
+		return 1, "", fmt.Errorf("启动命令失败: %w", err)
+	}
 
-	// TODO: 实时流式发送日志到 Master
+	// 用于收集完整输出
+	var fullOutput bytes.Buffer
+	outputChan := make(chan []byte, 100) // 缓冲通道避免阻塞
+
+	// 启动goroutine读取stdout
+	go e.readStream(stdout, req.EventId, "stdout", outputChan)
+	// 启动goroutine读取stderr
+	go e.readStream(stderr, req.EventId, "stderr", outputChan)
+
+	// 等待命令完成并收集输出
+	go func() {
+		for chunk := range outputChan {
+			fullOutput.Write(chunk)
+			// 实时发送到Master
+			e.streamLogToMaster(req.EventId, chunk)
+		}
+	}()
+
+	// 等待命令执行完成
+	err = cmd.Wait()
+	close(outputChan) // 关闭通道
 
 	exitCode, _ := extractExitCode(err)
-	return exitCode, string(output), err
+	return exitCode, fullOutput.String(), err
+}
+
+// readStream 读取输出流
+func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outputChan chan<- []byte) {
+	scanner := bufio.NewScanner(reader)
+	buf := make([]byte, 0, 1024) // 1KB缓冲区
+	scanner.Buffer(buf, 10*1024*1024) // 最大10MB行
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		// 添加换行符
+		lineWithNewline := append(line, '\n')
+		outputChan <- lineWithNewline
+
+		logger.Debug("实时输出",
+			zap.String("event_id", eventID),
+			zap.String("stream", streamType),
+			zap.String("line", string(line)))
+	}
+
+	if err := scanner.Err(); err != nil {
+		logger.Error("读取输出流失败",
+			zap.String("event_id", eventID),
+			zap.String("stream", streamType),
+			zap.Error(err))
+	}
+}
+
+// streamLogToMaster 流式发送日志到Master
+func (e *Executor) streamLogToMaster(eventID string, data []byte) {
+	if e.masterClient == nil {
+		return // Master客户端未设置
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	stream, err := e.masterClient.StreamLogs(ctx)
+	if err != nil {
+		logger.Warn("创建日志流失败", zap.String("event_id", eventID), zap.Error(err))
+		return
+	}
+
+	chunk := &pb.LogChunk{
+		EventId:    eventID,
+		Content:    data,
+		Timestamp:  time.Now().Unix(),
+		StreamType: pb.StreamType_STDOUT,
+	}
+
+	if err := stream.Send(chunk); err != nil {
+		logger.Warn("发送日志失败", zap.String("event_id", eventID), zap.Error(err))
+		return
+	}
+
+	// 获取确认
+	_, err = stream.CloseAndRecv()
+	if err != nil {
+		logger.Warn("获取日志确认失败", zap.String("event_id", eventID), zap.Error(err))
+	}
 }
 
 // executeHTTP 执行 HTTP 请求

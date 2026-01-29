@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -72,6 +71,7 @@ func main() {
 		api.GET("/health", healthCheckHandler)
 		api.GET("/stats", statsHandler)
 		api.GET("/nodes", getNodesHandler)
+		api.GET("/logs/:event_id", getLogsHandler) // 获取任务日志
 	}
 
 	// 启动Web服务器
@@ -202,61 +202,14 @@ func executeShellHandler(c *gin.Context) {
 		return
 	}
 
-	// 等待任务执行完成（最多30秒）
-	timeout := time.After(30 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	var finalStatus string
-	var finalOutput string
-	var finalExitCode int
-
-	for {
-		select {
-		case <-timeout:
-			c.JSON(http.StatusGatewayTimeout, gin.H{
-				"error": "命令执行超时",
-			})
-			return
-
-		case <-ticker.C:
-			status, err := storage.GetTaskStatus(ctx, taskKey)
-			if err != nil {
-				continue
-			}
-
-			if status == "completed" || status == "failed" {
-				finalStatus = status
-
-				// 获取执行结果
-				result, err := storage.GetTaskResult(ctx, taskKey)
-				if err == nil {
-					if output, ok := result["output"]; ok {
-						finalOutput = output
-					}
-					if exitCodeStr, ok := result["exit_code"]; ok && exitCodeStr != "" {
-						finalExitCode, _ = strconv.Atoi(exitCodeStr)
-					}
-				}
-
-				// 清理测试数据
-				storage.DB.Where("id = ?", eventID).Delete(&models.Event{})
-				storage.DB.Where("id = ?", jobID).Delete(&models.Job{})  // 清理临时Job
-				storage.RedisClient.Del(ctx, "tasks:details:"+taskKey)
-				storage.RedisClient.Del(ctx, "tasks:result:"+taskKey)
-				storage.RedisClient.Del(ctx, "tasks:status:"+taskKey)
-
-				// 返回结果
-				c.JSON(http.StatusOK, gin.H{
-					"command":   req.Command,
-					"output":    finalOutput,
-					"exit_code": finalExitCode,
-					"status":    finalStatus,
-				})
-				return
-			}
-		}
-	}
+	// 立即返回event_id，让前端通过轮询获取实时输出
+	c.JSON(http.StatusOK, gin.H{
+		"event_id":  eventID,
+		"job_id":    jobID,
+		"command":   req.Command,
+		"status":    "queued",
+		"message":   "任务已提交，正在执行中",
+	})
 }
 
 // healthCheckHandler 健康检查
@@ -308,6 +261,50 @@ func getNodesHandler(c *gin.Context) {
 		"nodes": nodeList,
 		"count": len(nodeList),
 	})
+}
+
+// getLogsHandler 获取任务日志（支持流式输出）
+func getLogsHandler(c *gin.Context) {
+	eventID := c.Param("event_id")
+	if eventID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "event_id参数缺失",
+		})
+		return
+	}
+
+	// 从Redis获取日志
+	ctx := context.Background()
+	logKey := fmt.Sprintf("task_logs:%s", eventID)
+	logs, err := storage.RedisClient.Get(ctx, logKey).Result()
+
+	// 检查任务是否完成
+	var event models.Event
+	complete := false
+	exitCode := 0
+
+	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err == nil {
+		// 任务记录存在
+		if event.Status == "success" || event.Status == "failed" {
+			complete = true
+			exitCode = event.ExitCode
+		}
+	}
+
+	response := gin.H{
+		"event_id":  eventID,
+		"logs":      logs,
+		"complete":  complete,
+		"exit_code": exitCode,
+		"status":    event.Status,
+	}
+
+	// 如果日志不存在，返回空字符串
+	if err != nil {
+		response["logs"] = ""
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // statsHandler 获取统计信息

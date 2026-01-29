@@ -3,6 +3,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -165,6 +166,10 @@ func (s *GRPCServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.T
 func (s *GRPCServer) StreamLogs(stream pb.CronicleService_StreamLogsServer) error {
 	for {
 		chunk, err := stream.Recv()
+		if err == io.EOF {
+			// 流结束，返回最终确认
+			return stream.SendAndClose(&pb.LogAck{Received: true})
+		}
 		if err != nil {
 			logger.Error("接收日志流失败", zap.Error(err))
 			return err
@@ -175,7 +180,17 @@ func (s *GRPCServer) StreamLogs(stream pb.CronicleService_StreamLogsServer) erro
 			zap.String("event_id", chunk.EventId),
 			zap.Int("size", len(chunk.Content)))
 
-		// TODO: 将日志写入存储并通过 WebSocket 推送给前端
+		// 将日志存储到Redis供前端查询
+		ctx := context.Background()
+		logKey := fmt.Sprintf("task_logs:%s", chunk.EventId)
+
+		// 追加日志内容
+		if err := storage.RedisClient.Append(ctx, logKey, string(chunk.Content)).Err(); err != nil {
+			logger.Error("存储日志失败", zap.Error(err))
+		}
+
+		// 设置过期时间（1小时）
+		storage.RedisClient.Expire(ctx, logKey, time.Hour)
 	}
 }
 
