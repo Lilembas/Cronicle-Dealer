@@ -565,6 +565,43 @@
         // 页面加载时显示欢迎信息
         showStatus('准备就绪！输入命令开始测试', 'info');
 
+        // 加载节点列表
+        async function loadNodes() {
+            try {
+                const response = await fetch('/api/v1/nodes');
+                const data = await response.json();
+
+                const nodeSelect = document.getElementById('nodeSelect');
+                const nodeCount = document.getElementById('nodeCount');
+
+                // 清空现有选项
+                nodeSelect.innerHTML = '<option value="">自动选择节点</option>';
+
+                if (data.nodes && data.nodes.length > 0) {
+                    // 添加节点选项
+                    data.nodes.forEach(node => {
+                        const option = document.createElement('option');
+                        option.value = node.id;
+                        option.textContent = `${node.hostname} (${node.ip})`;
+                        nodeSelect.appendChild(option);
+                    });
+
+                    nodeCount.textContent = `共 ${data.count} 个节点在线`;
+                    nodeCount.style.color = '#28a745';
+                } else {
+                    nodeCount.textContent = '暂无在线节点';
+                    nodeCount.style.color = '#dc3545';
+                }
+            } catch (error) {
+                console.error('加载节点列表失败:', error);
+                const nodeCount = document.getElementById('nodeCount');
+                if (nodeCount) {
+                    nodeCount.textContent = '加载节点列表失败';
+                    nodeCount.style.color = '#dc3545';
+                }
+            }
+        }
+
         // 自动检查Worker状态
         async function checkWorkerStatus() {
             try {
