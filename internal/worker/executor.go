@@ -192,7 +192,7 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "sh", "-c", req.Command)
+	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", req.Command)
 	if req.WorkingDir != "" {
 		cmd.Dir = req.WorkingDir
 	}
@@ -222,23 +222,59 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	var fullOutput bytes.Buffer
 	outputChan := make(chan []byte, 100) // 缓冲通道避免阻塞
 
+	// 创建日志流（如果Master客户端可用）
+	var logStream pb.CronicleService_StreamLogsClient
+	if e.masterClient != nil {
+		logStreamCtx, logStreamCancel := context.WithCancel(context.Background())
+		defer logStreamCancel()
+
+		logStream, err = e.masterClient.StreamLogs(logStreamCtx)
+		if err != nil {
+			logger.Warn("创建日志流失败，将只存储到内存", zap.String("event_id", req.EventId), zap.Error(err))
+			logStream = nil
+		}
+	}
+
+	// 启动goroutine读取并发送日志
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for chunk := range outputChan {
+			fullOutput.Write(chunk)
+
+			// 实时发送到Master
+			if logStream != nil {
+				chunk := &pb.LogChunk{
+					EventId:    req.EventId,
+					Content:    chunk,
+					Timestamp:  time.Now().Unix(),
+					StreamType: pb.StreamType_STDOUT,
+				}
+
+				if err := logStream.Send(chunk); err != nil {
+					logger.Warn("发送日志失败", zap.String("event_id", req.EventId), zap.Error(err))
+					break
+				}
+			}
+		}
+	}()
+
 	// 启动goroutine读取stdout
 	go e.readStream(stdout, req.EventId, "stdout", outputChan)
 	// 启动goroutine读取stderr
 	go e.readStream(stderr, req.EventId, "stderr", outputChan)
 
-	// 等待命令完成并收集输出
-	go func() {
-		for chunk := range outputChan {
-			fullOutput.Write(chunk)
-			// 实时发送到Master
-			e.streamLogToMaster(req.EventId, chunk)
-		}
-	}()
-
 	// 等待命令执行完成
 	err = cmd.Wait()
-	close(outputChan) // 关闭通道
+	close(outputChan) // 关闭输出通道
+	<-done             // 等待日志发送完成
+
+	// 关闭日志流
+	if logStream != nil {
+		if _, err := logStream.CloseAndRecv(); err != nil {
+			logger.Warn("关闭日志流失败", zap.Error(err))
+		}
+	}
 
 	exitCode, _ := extractExitCode(err)
 	return exitCode, fullOutput.String(), err
@@ -267,40 +303,6 @@ func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outp
 			zap.String("event_id", eventID),
 			zap.String("stream", streamType),
 			zap.Error(err))
-	}
-}
-
-// streamLogToMaster 流式发送日志到Master
-func (e *Executor) streamLogToMaster(eventID string, data []byte) {
-	if e.masterClient == nil {
-		return // Master客户端未设置
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	stream, err := e.masterClient.StreamLogs(ctx)
-	if err != nil {
-		logger.Warn("创建日志流失败", zap.String("event_id", eventID), zap.Error(err))
-		return
-	}
-
-	chunk := &pb.LogChunk{
-		EventId:    eventID,
-		Content:    data,
-		Timestamp:  time.Now().Unix(),
-		StreamType: pb.StreamType_STDOUT,
-	}
-
-	if err := stream.Send(chunk); err != nil {
-		logger.Warn("发送日志失败", zap.String("event_id", eventID), zap.Error(err))
-		return
-	}
-
-	// 获取确认
-	_, err = stream.CloseAndRecv()
-	if err != nil {
-		logger.Warn("获取日志确认失败", zap.String("event_id", eventID), zap.Error(err))
 	}
 }
 
