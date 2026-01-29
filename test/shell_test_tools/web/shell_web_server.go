@@ -293,7 +293,6 @@ func getNodesHandler(c *gin.Context) {
 		ID       string `json:"id"`
 		Hostname string `json:"hostname"`
 		IP       string `json:"ip"`
-		Tags     string `json:"tags"`
 	}
 
 	nodeList := make([]NodeInfo, 0, len(nodes))
@@ -302,7 +301,6 @@ func getNodesHandler(c *gin.Context) {
 			ID:       node.ID,
 			Hostname: node.Hostname,
 			IP:       node.IP,
-			Tags:     string(node.Tags), // 转换JSON字符串
 		})
 	}
 
