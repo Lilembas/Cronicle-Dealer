@@ -221,6 +221,7 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	// 用于收集完整输出
 	var fullOutput bytes.Buffer
 	outputChan := make(chan []byte, 100) // 缓冲通道避免阻塞
+	var wg sync.WaitGroup
 
 	// 创建日志流（如果Master客户端可用）
 	var logStream pb.CronicleService_StreamLogsClient
@@ -260,13 +261,25 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	}()
 
 	// 启动goroutine读取stdout
-	go e.readStream(stdout, req.EventId, "stdout", outputChan)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.readStream(stdout, req.EventId, "stdout", outputChan)
+	}()
+
 	// 启动goroutine读取stderr
-	go e.readStream(stderr, req.EventId, "stderr", outputChan)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.readStream(stderr, req.EventId, "stderr", outputChan)
+	}()
 
 	// 等待命令执行完成
 	err = cmd.Wait()
-	close(outputChan) // 关闭输出通道
+
+	// 等待所有读取goroutine完成
+	wg.Wait()
+	close(outputChan) // 所有goroutine完成后再关闭channel
 	<-done             // 等待日志发送完成
 
 	// 关闭日志流
