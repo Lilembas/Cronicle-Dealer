@@ -145,7 +145,7 @@ func executeShellHandler(c *gin.Context) {
 		"task_type":      "shell",
 		"timeout":        30,
 		"working_dir":    "",
-		"env":            map[string]string{},
+		"env":            "", // 使用空字符串而不是map
 		"scheduled_time": time.Now().Unix(),
 	}
 
