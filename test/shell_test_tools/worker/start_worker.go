@@ -43,6 +43,11 @@ func main() {
 	fmt.Println("\n🚀 启动 Worker 节点")
 	fmt.Println("====================")
 
+	// 调试：打印实际读取的配置
+	fmt.Printf("📋 Master地址配置: %s\n", cfg.Worker.MasterAddress)
+	fmt.Printf("📋 Server.Host: %s\n", cfg.Server.Host)
+	fmt.Printf("📋 Worker.GRPCPort: %d\n", cfg.Worker.Executor.GRPCPort)
+
 	workerClient := worker.NewClient(&cfg.Worker)
 	if err := workerClient.Connect(); err != nil {
 		logger.Fatal("Worker 连接 Master 失败", zap.Error(err))
