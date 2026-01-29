@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -63,8 +64,16 @@ func (c *Client) Connect() error {
 }
 
 // SetGRPCAddress 设置 executor gRPC 地址
+// 如果传入的host是"0.0.0.0"或空，则自动使用检测到的本地IP
 func (c *Client) SetGRPCAddress(host string, port int) {
+	if host == "0.0.0.0" || host == "" {
+		// 使用检测到的本地IP（在Connect时已设置）
+		host = c.localIP
+	}
 	c.grpcAddress = fmt.Sprintf("%s:%d", host, port)
+	logger.Info("设置 Worker executor gRPC 地址",
+		zap.String("address", c.grpcAddress),
+		zap.String("local_ip", c.localIP))
 }
 
 // Register 注册节点
@@ -233,7 +242,21 @@ func (c *Client) getHostname() string {
 
 // getLocalIP 获取本地 IP
 func getLocalIP() string {
-	// TODO: 实现获取本地 IP 逻辑
+	// 尝试获取真实的本地IP地址
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "127.0.0.1"
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+
+	// 如果找不到非loopback地址，返回127.0.0.1
 	return "127.0.0.1"
 }
 

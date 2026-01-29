@@ -182,6 +182,7 @@ func setDefaults() {
 	viper.SetDefault("master.heartbeat.check_interval", 30)
 
 	// Worker 默认值
+	viper.SetDefault("worker.executor.grpc_port", 9090)
 	viper.SetDefault("worker.executor.max_concurrent_jobs", 10)
 	viper.SetDefault("worker.executor.default_timeout", 300)
 	viper.SetDefault("worker.heartbeat.interval", 30)

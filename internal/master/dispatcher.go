@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -188,11 +189,16 @@ func (d *Dispatcher) getGRPCClient(node *models.Node) (pb.CronicleServiceClient,
 
 	// 优先使用 Worker 注册时提供的 gRPC 地址
 	var addr string
-	if node.GRPCAddress != "" {
+	if node.GRPCAddress != "" && !strings.HasSuffix(node.GRPCAddress, ":0") {
+		// 验证grpc_address有效（端口不为0）
 		addr = node.GRPCAddress
 	} else {
 		// 回退到使用 IP 和默认端口
 		addr = fmt.Sprintf("%s:%d", node.IP, defaultWorkerPort)
+		logger.Warn("Worker grpc_address无效，使用IP和默认端口",
+			zap.String("node_id", node.ID),
+			zap.String("grpc_address", node.GRPCAddress),
+			zap.String("fallback_addr", addr))
 	}
 
 	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
