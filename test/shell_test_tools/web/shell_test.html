@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cronicle Shell命令测试工具</title>
+    <!-- Google Fonts: JetBrains Mono for code, IBM Plex Sans for UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -11,105 +15,172 @@
             box-sizing: border-box;
         }
 
+        :root {
+            /* Developer Tool Color Palette */
+            --bg-primary: #0F172A;
+            --bg-secondary: #1E293B;
+            --bg-tertiary: #334155;
+            --text-primary: #F1F5F9;
+            --text-secondary: #CBD5E1;
+            --text-muted: #94A3B8;
+            --primary: #3B82F6;
+            --primary-hover: #2563EB;
+            --success: #22C55E;
+            --error: #EF4444;
+            --warning: #F59E0B;
+            --border: #334155;
+            --code-bg: #1E1E1E;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
             min-height: 100vh;
-            padding: 20px;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
+            padding: 20px;
         }
 
+        /* Header */
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+            margin-bottom: 32px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border);
         }
 
         .header h1 {
-            font-size: 32px;
-            margin-bottom: 10px;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header h1 svg {
+            width: 32px;
+            height: 32px;
+            color: var(--primary);
         }
 
         .header p {
-            font-size: 16px;
-            opacity: 0.9;
+            color: var(--text-muted);
+            font-size: 15px;
         }
 
-        .content {
-            padding: 30px;
+        /* Grid Layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 24px;
+            margin-bottom: 24px;
         }
 
-        .section {
-            margin-bottom: 30px;
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
-        .section-title {
+        /* Card */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: box-shadow 200ms ease;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
             font-size: 18px;
             font-weight: 600;
-            color: #333;
-            margin-bottom: 15px;
+            color: var(--text-primary);
             display: flex;
             align-items: center;
             gap: 10px;
         }
 
-        .section-title::before {
-            content: '▶';
-            color: #667eea;
+        .card-title svg {
+            width: 20px;
+            height: 20px;
+            color: var(--primary);
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
             font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
         }
 
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        #commandInput {
-            flex: 1;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
+        select, input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
             border-radius: 8px;
-            font-size: 16px;
-            font-family: 'Courier New', monospace;
-            transition: border-color 0.3s;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 200ms ease, box-shadow 200ms ease;
         }
 
-        #commandInput:focus {
+        select:focus, input[type="text"]:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
+        /* Buttons */
         .btn {
-            padding: 15px 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 24px;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 15px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            transition: all 200ms ease;
+            font-family: inherit;
+        }
+
+        .btn svg {
+            width: 18px;
+            height: 18px;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--primary);
             color: white;
         }
 
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        .btn-primary:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
         .btn-primary:disabled {
@@ -119,187 +190,205 @@
         }
 
         .btn-secondary {
-            background: #f5f5f5;
-            color: #333;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
         }
 
         .btn-secondary:hover {
-            background: #e0e0e0;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border-color: var(--text-muted);
         }
 
-        .status {
-            padding: 10px 15px;
+        .btn-icon {
+            padding: 8px;
             border-radius: 6px;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
             font-size: 14px;
-            margin-bottom: 15px;
-            display: none;
         }
 
-        .status.show {
-            display: block;
+        /* Input Group */
+        .input-group {
+            display: flex;
+            gap: 12px;
         }
 
-        .status.info {
-            background: #e3f2fd;
-            color: #1976d2;
-            border-left: 4px solid #1976d2;
+        .input-group input {
+            flex: 1;
         }
 
-        .status.success {
-            background: #e8f5e9;
-            color: #388e3c;
-            border-left: 4px solid #388e3c;
+        .input-group .btn {
+            white-space: nowrap;
         }
 
-        .status.error {
-            background: #ffebee;
-            color: #d32f2f;
-            border-left: 4px solid #d32f2f;
-        }
-
-        .status.warning {
-            background: #fff3e0;
-            color: #f57c00;
-            border-left: 4px solid #f57c00;
-        }
-
-        #outputContainer {
-            background: #1e1e1e;
-            border-radius: 8px;
-            padding: 20px;
-            min-height: 400px;
-            max-height: 600px;
-            overflow-y: auto;
-            position: relative;
-        }
-
-        #output {
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            color: #d4d4d4;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        #output .command {
-            color: #4ec9b0;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-
-        #output .timestamp {
-            color: #858585;
-        }
-
-        #output .output {
-            color: #d4d4d4;
-            margin: 10px 0;
-        }
-
-        #output .error {
-            color: #f48771;
-        }
-
-        #output .success {
-            color: #4ec9b0;
-        }
-
-        #output .separator {
-            color: #569cd6;
-            margin: 15px 0;
-            border-bottom: 1px dashed #569cd6;
-            padding-bottom: 15px;
-        }
-
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
+        /* Example Commands */
         .examples {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 15px;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .example-label {
+            font-size: 13px;
+            color: var(--text-muted);
+            padding: 8px 0;
         }
 
         .example-btn {
-            padding: 8px 15px;
-            background: #f5f5f5;
-            border: 1px solid #e0e0e0;
+            padding: 6px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
             border-radius: 6px;
-            font-size: 14px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
             cursor: pointer;
-            transition: all 0.2s;
-            font-family: 'Courier New', monospace;
+            transition: all 150ms ease;
         }
 
         .example-btn:hover {
-            background: #667eea;
+            background: var(--primary);
             color: white;
-            border-color: #667eea;
+            border-color: var(--primary);
+            transform: translateY(-1px);
         }
 
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .stat-card {
-            background: #f5f5f5;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .stat-card .label {
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 12px;
             font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
+            font-weight: 500;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
         }
 
-        .stat-card .value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #667eea;
+        .status-badge.online {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
         }
 
-        .clear-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 8px 15px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s;
+        .status-badge.offline {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
         }
 
-        .clear-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
+        .status-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s ease-in-out infinite;
         }
 
-        /* 流式输出样式 */
-        .output-block {
-            background: #1e1e1e;
-            border-radius: 8px;
-            margin-bottom: 15px;
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Output Container */
+        .output-container {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+
+        .output-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .output-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .output-title svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .output-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .output-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .output-content::-webkit-scrollbar-track {
+            background: var(--code-bg);
+        }
+
+        .output-content::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        .output-content::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        /* Output Block */
+        .output-block {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            animation: slideIn 200ms ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .output-block.streaming {
@@ -307,162 +396,287 @@
         }
 
         @keyframes pulse-border {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
-            50% { box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1); }
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            }
         }
 
-        .output-header {
+        .output-block-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 12px 15px;
-            background: #2d2d2d;
-            border-bottom: 1px solid #3d3d3d;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border);
         }
 
         .output-command {
-            color: #4ec9b0;
-            font-family: 'Courier New', monospace;
+            font-family: 'JetBrains Mono', monospace;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 500;
+            color: var(--primary);
         }
 
         .output-meta {
             font-size: 12px;
             padding: 4px 12px;
             border-radius: 12px;
-            background: #3d3d3d;
-            color: #d4d4d4;
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            font-weight: 500;
         }
 
         .output-meta.executing {
-            background: #667eea;
+            background: var(--primary);
             color: white;
         }
 
         .output-meta.success {
-            background: #4ec9b0;
-            color: #1e1e1e;
+            background: rgba(34, 197, 94, 0.2);
+            color: var(--success);
         }
 
         .output-meta.failed {
-            background: #f48771;
-            color: #1e1e1e;
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--error);
         }
 
-        .output-content {
-            padding: 15px;
-            max-height: 400px;
+        .output-block-content {
+            padding: 16px;
+            max-height: 300px;
             overflow-y: auto;
         }
 
-        .output-content.streaming {
-            background: #1a1a1a;
-        }
-
         .output-text {
-            color: #d4d4d4;
-            font-family: 'Courier New', monospace;
+            font-family: 'JetBrains Mono', monospace;
             font-size: 13px;
-            line-height: 1.6;
+            line-height: 1.7;
+            color: var(--text-secondary);
             white-space: pre-wrap;
             word-wrap: break-word;
             margin: 0;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .stat-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: transform 200ms ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .input-group .btn {
+                width: 100%;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .output-container {
+                height: 400px;
+            }
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Focus Visible */
+        :focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>🚀 Cronicle Shell命令测试工具</h1>
+        <!-- Header -->
+        <header class="header">
+            <h1>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 17l6-6-6-6M12 19h8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Cronicle Shell命令测试工具
+            </h1>
             <p>实时向Worker发送Shell命令并查看执行结果</p>
-        </div>
+        </header>
 
-        <div class="content">
-            <!-- 节点选择和命令输入区域 -->
-            <div class="section">
-                <div class="section-title">执行配置</div>
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Left Column: Command Input -->
+            <div class="left-column">
+                <!-- Configuration Card -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            执行配置
+                        </h2>
+                        <span class="status-badge" id="workerStatus">检查中...</span>
+                    </div>
 
-                <!-- 节点选择 -->
-                <div style="margin-bottom: 15px;">
-                    <label style="color: #333; font-size: 14px; font-weight: 600; margin-bottom: 8px; display: block;">
-                        选择Worker节点：
-                    </label>
-                    <select id="nodeSelect" style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; min-width: 300px;">
-                        <option value="">自动选择节点</option>
-                        <option value="" disabled>正在加载节点...</option>
-                    </select>
-                    <span id="nodeCount" style="margin-left: 10px; color: #666; font-size: 13px;"></span>
-                </div>
+                    <!-- Node Selection -->
+                    <div class="form-group">
+                        <label for="nodeSelect">选择Worker节点</label>
+                        <select id="nodeSelect" aria-label="选择Worker节点">
+                            <option value="">自动选择节点</option>
+                            <option value="" disabled>正在加载节点...</option>
+                        </select>
+                        <span id="nodeCount" style="font-size: 13px; color: var(--text-muted); margin-top: 8px; display: block;"></span>
+                    </div>
 
-                <div class="section-title" style="margin-top: 20px;">Shell命令输入</div>
+                    <!-- Command Input -->
+                    <div class="form-group">
+                        <label for="commandInput">Shell命令</label>
+                        <div class="input-group">
+                            <input
+                                type="text"
+                                id="commandInput"
+                                placeholder="输入要执行的Shell命令，例如: ls -la, pwd, whoami..."
+                                autofocus
+                                aria-label="输入Shell命令"
+                            >
+                            <button class="btn btn-primary" id="executeBtn" onclick="executeCommand()" aria-label="执行命令">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                执行命令
+                            </button>
+                            <button class="btn btn-secondary btn-icon" onclick="clearOutput()" aria-label="清空输出" title="清空输出">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                        </div>
 
-                <div class="input-group">
-                    <input
-                        type="text"
-                        id="commandInput"
-                        placeholder="输入要执行的Shell命令，例如: ls -la, pwd, whoami..."
-                        autofocus
-                    >
-                    <button class="btn btn-primary" id="executeBtn" onclick="executeCommand()">
-                        <span>▶</span> 执行命令
-                    </button>
-                    <button class="btn btn-secondary" onclick="clearOutput()">
-                        清空输出
-                    </button>
-                </div>
-
-                <div class="examples">
-                    <span style="color: #666; font-size: 14px; padding: 8px 0;">快速示例：</span>
-                    <button class="example-btn" onclick="setCommand('pwd')">pwd</button>
-                    <button class="example-btn" onclick="setCommand('ls -la')">ls -la</button>
-                    <button class="example-btn" onclick="setCommand('whoami')">whoami</button>
-                    <button class="example-btn" onclick="setCommand('date')">date</button>
-                    <button class="example-btn" onclick="setCommand('uname -a')">uname -a</button>
-                    <button class="example-btn" onclick="setCommand('df -h')">df -h</button>
-                    <button class="example-btn" onclick="setCommand('free -h')">free -h</button>
-                    <button class="example-btn" onclick="setCommand('uptime')">uptime</button>
-                    <button class="example-btn" onclick="setCommand('echo $HOME')">echo $HOME</button>
-                    <button class="example-btn" onclick="setCommand('ps aux | head -20')">ps aux | head -20</button>
-                </div>
-            </div>
-
-            <!-- 状态提示 -->
-            <div id="statusInfo" class="status info"></div>
-
-            <!-- 输出区域 -->
-            <div class="section">
-                <div class="section-title">
-                    执行结果
-                    <button class="clear-btn" onclick="clearOutput()">清空</button>
-                </div>
-                <div id="outputContainer">
-                    <div id="output">
-                        <div style="color: #858585; text-align: center; padding: 50px;">
-                            等待命令执行...<br>
-                            <small style="color: #666;">在上方输入命令并点击"执行命令"</small>
+                        <div class="examples">
+                            <span class="example-label">快速示例:</span>
+                            <button class="example-btn" onclick="setCommand('pwd')" aria-label="设置命令: pwd">pwd</button>
+                            <button class="example-btn" onclick="setCommand('ls -la')" aria-label="设置命令: ls -la">ls -la</button>
+                            <button class="example-btn" onclick="setCommand('whoami')" aria-label="设置命令: whoami">whoami</button>
+                            <button class="example-btn" onclick="setCommand('date')" aria-label="设置命令: date">date</button>
+                            <button class="example-btn" onclick="setCommand('uname -a')" aria-label="设置命令: uname -a">uname -a</button>
+                            <button class="example-btn" onclick="setCommand('df -h')" aria-label="设置命令: df -h">df -h</button>
+                            <button class="example-btn" onclick="setCommand('free -h')" aria-label="设置命令: free -h">free -h</button>
+                            <button class="example-btn" onclick="setCommand('uptime')" aria-label="设置命令: uptime">uptime</button>
+                            <button class="example-btn" onclick="setCommand('echo $HOME')" aria-label="设置命令: echo $HOME">echo $HOME</button>
+                            <button class="example-btn" onclick="setCommand('ps aux | head -20')" aria-label="设置命令: ps aux | head -20">ps aux | head -20</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 统计信息 -->
-            <div class="stats">
-                <div class="stat-card">
-                    <div class="label">总执行次数</div>
-                    <div class="value" id="totalExecutions">0</div>
+            <!-- Right Column: Stats -->
+            <div class="right-column">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">总执行次数</div>
+                        <div class="stat-value" id="totalExecutions">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">成功次数</div>
+                        <div class="stat-value" id="successCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">失败次数</div>
+                        <div class="stat-value" id="failedCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">平均执行时间</div>
+                        <div class="stat-value" id="avgTime">0ms</div>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <div class="label">成功次数</div>
-                    <div class="value" id="successCount">0</div>
+            </div>
+        </div>
+
+        <!-- Output Section -->
+        <div class="output-container">
+            <div class="output-header">
+                <div class="output-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 17 10 11 4 5"/>
+                        <line x1="12" y1="19" x2="20" y2="19"/>
+                    </svg>
+                    执行结果
                 </div>
-                <div class="stat-card">
-                    <div class="label">失败次数</div>
-                    <div class="value" id="failedCount">0</div>
-                </div>
-                <div class="stat-card">
-                    <div class="label">平均执行时间</div>
-                    <div class="value" id="avgTime">0ms</div>
+                <button class="btn btn-secondary btn-sm" onclick="clearOutput()" aria-label="清空输出">
+                    清空
+                </button>
+            </div>
+            <div class="output-content" id="outputContent">
+                <div class="empty-state" id="emptyState">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <p>等待命令执行...</p>
+                    <small style="color: var(--text-muted);">在上方输入命令并点击"执行命令"</small>
                 </div>
             </div>
         </div>
@@ -485,17 +699,39 @@
             document.getElementById('commandInput').focus();
         }
 
-        // 显示状态
-        function showStatus(message, type = 'info') {
-            const statusDiv = document.getElementById('statusInfo');
-            statusDiv.textContent = message;
-            statusDiv.className = 'status ' + type + ' show';
+        // 清空输出
+        function clearOutput() {
+            const outputContent = document.getElementById('outputContent');
+            outputContent.innerHTML = '';
 
-            if (type === 'success' || type === 'error') {
-                setTimeout(() => {
-                    statusDiv.className = 'status';
-                }, 5000);
-            }
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+            emptyState.id = 'emptyState';
+
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '1.5');
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z');
+            path.setAttribute('stroke-linecap', 'round');
+            path.setAttribute('stroke-linejoin', 'round');
+
+            svg.appendChild(path);
+
+            const p = document.createElement('p');
+            p.textContent = '等待命令执行...';
+
+            const small = document.createElement('small');
+            small.style.color = 'var(--text-muted)';
+            small.textContent = '在上方输入命令并点击"执行命令"';
+
+            emptyState.appendChild(svg);
+            emptyState.appendChild(p);
+            emptyState.appendChild(small);
+            outputContent.appendChild(emptyState);
         }
 
         // 更新统计
@@ -516,51 +752,56 @@
                 Math.round(stats.totalTime / stats.total) + 'ms';
         }
 
-        // 添加输出
-        function addOutput(command, output, exitCode, duration, error) {
-            const outputDiv = document.getElementById('output');
-
-            // 如果是第一次输出，清除占位文本
-            if (outputDiv.querySelector('div[style*="color: #858585"]')) {
-                outputDiv.innerHTML = '';
+        // 更新Worker状态
+        function updateWorkerStatus(online, count = 0) {
+            const statusBadge = document.getElementById('workerStatus');
+            if (online && count > 0) {
+                statusBadge.className = 'status-badge online';
+                statusBadge.textContent = count + ' 个节点在线';
+            } else {
+                statusBadge.className = 'status-badge offline';
+                statusBadge.textContent = '无节点在线';
             }
-
-            const timestamp = new Date().toLocaleString('zh-CN');
-            const statusClass = exitCode === 0 ? 'success' : 'error';
-            const statusText = exitCode === 0 ? '✓ 成功' : '✗ 失败';
-
-            let html = '<div class="separator"></div>' +
-                       '<div class="command">$ ' + command + '</div>' +
-                       '<div class="timestamp">⏰ ' + timestamp + ' | ⏱ ' + duration + 'ms | <span class="' + statusClass + '">' + statusText + '</span></div>';
-
-            if (error) {
-                html += '<div class="error">❌ 错误: ' + error + '</div>';
-            }
-
-            if (output) {
-                html += '<div class="output">' + escapeHtml(output) + '</div>';
-            }
-
-            outputDiv.innerHTML += html;
-
-            // 滚动到底部
-            const container = document.getElementById('outputContainer');
-            container.scrollTop = container.scrollHeight;
         }
 
-        // HTML转义
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        // 创建输出块（使用安全的DOM方法）
+        function createOutputBlock(command) {
+            const block = document.createElement('div');
+            block.className = 'output-block streaming';
 
-        // 清空输出
-        function clearOutput() {
-            document.getElementById('output').innerHTML =
-                '<div style="color: #858585; text-align: center; padding: 50px;">等待命令执行...<br>' +
-                '<small style="color: #666;">在上方输入命令并点击"执行命令"</small></div>';
-            showStatus('输出已清空', 'info');
+            // 创建header
+            const header = document.createElement('div');
+            header.className = 'output-block-header';
+
+            // 命令显示
+            const commandDiv = document.createElement('div');
+            commandDiv.className = 'output-command';
+            commandDiv.textContent = '$ ' + command;
+            header.appendChild(commandDiv);
+
+            // 状态显示
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'output-meta executing';
+            metaDiv.textContent = '执行中...';
+            header.appendChild(metaDiv);
+
+            block.appendChild(header);
+
+            // 创建内容区
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'output-block-content';
+
+            const preElement = document.createElement('pre');
+            preElement.className = 'output-text';
+            contentDiv.appendChild(preElement);
+
+            block.appendChild(contentDiv);
+
+            return {
+                block,
+                preElement,
+                metaDiv
+            };
         }
 
         // 执行命令（支持流式输出）
@@ -570,18 +811,28 @@
             const executeBtn = document.getElementById('executeBtn');
 
             if (!command) {
-                showStatus('请输入要执行的命令', 'warning');
+                commandInput.focus();
                 return;
             }
 
             // 禁用按钮，显示加载状态
             executeBtn.disabled = true;
-            executeBtn.innerHTML = '<div class="loading"></div> 执行中...';
-            showStatus('正在执行命令...', 'info');
+
+            // 清空按钮内容并添加spinner
+            while (executeBtn.firstChild) {
+                executeBtn.removeChild(executeBtn.firstChild);
+            }
+
+            const spinner = document.createElement('span');
+            spinner.className = 'spinner';
+            executeBtn.appendChild(spinner);
+
+            const textNode = document.createTextNode(' 执行中...');
+            executeBtn.appendChild(textNode);
 
             const startTime = Date.now();
             let eventID = null;
-            let outputDiv = null;
+            let outputElements = null;
             let lastLogLength = 0;
 
             try {
@@ -607,22 +858,15 @@
 
                 eventID = data.event_id;
 
-                // 创建新的输出块
-                outputDiv = document.createElement('div');
-                outputDiv.className = 'output-block';
-                outputDiv.innerHTML = `
-                    <div class="output-header">
-                        <div class="output-command">$ ${escapeHtml(command)}</div>
-                        <div class="output-meta executing">执行中...</div>
-                    </div>
-                    <div class="output-content streaming">
-                        <pre class="output-text"></pre>
-                    </div>
-                `;
-                outputContainer.appendChild(outputDiv);
+                // 移除空状态
+                const emptyState = document.getElementById('emptyState');
+                if (emptyState) {
+                    emptyState.remove();
+                }
 
-                const outputText = outputDiv.querySelector('.output-text');
-                const outputMeta = outputDiv.querySelector('.output-meta');
+                // 创建输出块
+                outputElements = createOutputBlock(command);
+                document.getElementById('outputContent').appendChild(outputElements.block);
 
                 // 开始轮询获取实时输出
                 const pollInterval = setInterval(async () => {
@@ -635,10 +879,10 @@
                             const currentLogs = logsData.logs || '';
                             if (currentLogs.length > lastLogLength) {
                                 const newLogs = currentLogs.substring(lastLogLength);
-                                outputText.textContent += newLogs;
+                                outputElements.preElement.textContent += newLogs;
                                 lastLogLength = currentLogs.length;
                                 // 自动滚动到底部
-                                outputText.scrollTop = outputText.scrollHeight;
+                                outputElements.preElement.scrollTop = outputElements.preElement.scrollHeight;
                             }
 
                             // 检查是否完成
@@ -649,17 +893,30 @@
                                 const success = (exitCode === 0);
 
                                 // 更新输出块样式
-                                outputDiv.classList.remove('streaming');
-                                outputMeta.textContent = `完成 (${duration}ms, 退出码: ${exitCode})`;
-                                outputMeta.className = success ? 'output-meta success' : 'output-meta failed';
+                                outputElements.block.classList.remove('streaming');
+                                outputElements.metaDiv.textContent = `完成 (${duration}ms, 退出码: ${exitCode})`;
+                                outputElements.metaDiv.className = success ? 'output-meta success' : 'output-meta failed';
 
-                                showStatus(`命令执行完成 (退出码: ${exitCode}, 耗时: ${duration}ms)`,
-                                        success ? 'success' : 'warning');
                                 updateStats(duration, success);
 
                                 // 恢复按钮状态
                                 executeBtn.disabled = false;
-                                executeBtn.innerHTML = '<span>▶</span> 执行命令';
+                                while (executeBtn.firstChild) {
+                                    executeBtn.removeChild(executeBtn.firstChild);
+                                }
+
+                                const playIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                                playIcon.setAttribute('viewBox', '0 0 24 24');
+                                playIcon.setAttribute('fill', 'currentColor');
+                                playIcon.style.width = '18px';
+                                playIcon.style.height = '18px';
+
+                                const playPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                                playPath.setAttribute('d', 'M8 5v14l11-7z');
+                                playIcon.appendChild(playPath);
+
+                                executeBtn.appendChild(playIcon);
+                                executeBtn.appendChild(document.createTextNode(' 执行命令'));
                                 commandInput.focus();
                             }
                         }
@@ -671,11 +928,43 @@
 
             } catch (error) {
                 const duration = Date.now() - startTime;
-                addOutput(command, null, null, duration, '网络错误: ' + error.message);
                 updateStats(duration, false);
-                showStatus('网络错误: ' + error.message, 'error');
+
+                // 创建错误输出块
+                if (!outputElements) {
+                    const emptyState = document.getElementById('emptyState');
+                    if (emptyState) {
+                        emptyState.remove();
+                    }
+
+                    outputElements = createOutputBlock(command);
+                    outputElements.metaDiv.textContent = '错误';
+                    outputElements.metaDiv.className = 'output-meta failed';
+                    outputElements.block.classList.remove('streaming');
+
+                    outputElements.preElement.style.color = 'var(--error)';
+                    outputElements.preElement.textContent = error.message;
+
+                    document.getElementById('outputContent').appendChild(outputElements.block);
+                }
+
                 executeBtn.disabled = false;
-                executeBtn.innerHTML = '<span>▶</span> 执行命令';
+                while (executeBtn.firstChild) {
+                    executeBtn.removeChild(executeBtn.firstChild);
+                }
+
+                const playIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                playIcon.setAttribute('viewBox', '0 0 24 24');
+                playIcon.setAttribute('fill', 'currentColor');
+                playIcon.style.width = '18px';
+                playIcon.style.height = '18px';
+
+                const playPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                playPath.setAttribute('d', 'M8 5v14l11-7z');
+                playIcon.appendChild(playPath);
+
+                executeBtn.appendChild(playIcon);
+                executeBtn.appendChild(document.createTextNode(' 执行命令'));
                 commandInput.focus();
             }
         }
@@ -687,9 +976,6 @@
             }
         });
 
-        // 页面加载时显示欢迎信息
-        showStatus('准备就绪！输入命令开始测试', 'info');
-
         // 加载节点列表
         async function loadNodes() {
             try {
@@ -700,30 +986,40 @@
                 const nodeCount = document.getElementById('nodeCount');
 
                 // 清空现有选项
-                nodeSelect.innerHTML = '<option value="">自动选择节点</option>';
+                while (nodeSelect.firstChild) {
+                    nodeSelect.removeChild(nodeSelect.firstChild);
+                }
+
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '自动选择节点';
+                nodeSelect.appendChild(defaultOption);
 
                 if (data.nodes && data.nodes.length > 0) {
                     // 添加节点选项
                     data.nodes.forEach(node => {
                         const option = document.createElement('option');
                         option.value = node.id;
-                        option.textContent = `${node.hostname} (${node.ip})`;
+                        option.textContent = node.hostname + ' (' + node.ip + ')';
                         nodeSelect.appendChild(option);
                     });
 
-                    nodeCount.textContent = `共 ${data.count} 个节点在线`;
-                    nodeCount.style.color = '#28a745';
+                    nodeCount.textContent = '共 ' + data.count + ' 个节点在线';
+                    nodeCount.style.color = 'var(--success)';
+                    updateWorkerStatus(true, data.count);
                 } else {
                     nodeCount.textContent = '暂无在线节点';
-                    nodeCount.style.color = '#dc3545';
+                    nodeCount.style.color = 'var(--error)';
+                    updateWorkerStatus(false, 0);
                 }
             } catch (error) {
                 console.error('加载节点列表失败:', error);
                 const nodeCount = document.getElementById('nodeCount');
                 if (nodeCount) {
                     nodeCount.textContent = '加载节点列表失败';
-                    nodeCount.style.color = '#dc3545';
+                    nodeCount.style.color = 'var(--error)';
                 }
+                updateWorkerStatus(false, 0);
             }
         }
 
@@ -734,14 +1030,15 @@
                 const data = await response.json();
 
                 if (data.online_nodes > 0) {
-                    showStatus(`✅ 系统就绪！${data.online_nodes} 个 Worker 节点在线`, 'success');
+                    updateWorkerStatus(true, data.online_nodes);
                     return true;
                 } else {
-                    showStatus('⚠️ 没有在线的 Worker 节点，请先启动 Worker', 'warning');
+                    updateWorkerStatus(false, 0);
                     return false;
                 }
             } catch (error) {
-                showStatus('❌ 无法连接到 Master 服务器', 'error');
+                console.error('检查Worker状态失败:', error);
+                updateWorkerStatus(false, 0);
                 return false;
             }
         }
