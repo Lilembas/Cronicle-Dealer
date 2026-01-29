@@ -23,6 +23,15 @@ const (
 var configPath = flag.String("config", "config.yaml", "配置文件路径")
 
 func main() {
+	// Panic 恢复机制
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("Worker panic",
+				zap.Any("panic", r),
+				zap.Stack("stack"))
+		}
+	}()
+
 	flag.Parse()
 
 	fmt.Printf("Cronicle-Next %s 节点 v%s\n", nodeType, version)

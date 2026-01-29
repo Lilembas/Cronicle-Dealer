@@ -1,12 +1,15 @@
 package master
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strconv"
-	
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	
+
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
@@ -81,6 +84,13 @@ func (s *APIServer) setupRoutes() {
 	
 	// 统计信息
 	api.GET("/stats", s.getStats)
+
+	// Shell 命令执行（ad-hoc）
+	shell := api.Group("/shell")
+	{
+		shell.POST("/execute", s.executeShell)       // 执行 Shell 命令
+		shell.GET("/logs/:event_id", s.getShellLogs) // 获取实时日志
+	}
 }
 
 // Start 启动 API 服务器
@@ -351,3 +361,171 @@ func (s *APIServer) getStats(c *gin.Context) {
 	
 	c.JSON(http.StatusOK, stats)
 }
+
+// ========== Shell 命令执行 ==========
+
+// executeShell 执行 Shell 命令（ad-hoc）
+func (s *APIServer) executeShell(c *gin.Context) {
+	var req struct {
+		Command string `json:"command" binding:"required"`
+		NodeID  string `json:"node_id"` // 可选：指定执行节点
+		Timeout int    `json:"timeout"`  // 可选：超时时间（秒），默认 30
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 设置默认超时
+	if req.Timeout <= 0 {
+		req.Timeout = 30
+	}
+
+	// 检查 Worker 是否在线（检查最近 60 秒有心跳的节点）
+	heartbeatTimeout := time.Now().Add(-60 * time.Second)
+	var nodes []models.Node
+
+	query := storage.DB.Where("status = ? AND last_heartbeat > ?", "online", heartbeatTimeout)
+
+	// 如果指定了节点 ID，只查询该节点
+	if req.NodeID != "" {
+		query = query.Where("id = ?", req.NodeID)
+	}
+
+	if err := query.Find(&nodes).Error; err != nil || len(nodes) == 0 {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "没有可用的 Worker 节点",
+		})
+		return
+	}
+
+	// 创建临时任务和事件
+	jobID := fmt.Sprintf("shell_adhoc_%d", time.Now().UnixNano())
+	eventID := fmt.Sprintf("shell_event_%d", time.Now().UnixNano())
+
+	ctx := context.Background()
+	taskKey := fmt.Sprintf("%s:%s", jobID, eventID)
+
+	// 创建 Job 记录（Dispatcher 需要从 jobs 表查询任务配置）
+	now := time.Now()
+	job := &models.Job{
+		ID:          jobID,
+		Name:        "Ad-hoc Shell 命令",
+		Description: "通过 API 执行的临时 Shell 命令",
+		Category:    "adhoc",
+		CronExpr:    "* * * * * *", // 临时任务，使用假的 cron 表达式
+		Enabled:     false,         // 禁用，避免被调度器重复执行
+		TaskType:    "shell",
+		Command:     req.Command,
+		TargetType:  "any",
+		Timeout:     req.Timeout,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if err := storage.DB.Create(job).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "创建任务失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 创建事件
+	event := &models.Event{
+		ID:        eventID,
+		JobID:     jobID,
+		JobName:   "Ad-hoc Shell 命令",
+		Status:    "pending",
+		NodeID:    nodes[0].ID, // 分配给第一个可用节点
+		CreatedAt: now,
+	}
+
+	if err := storage.DB.Create(event).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "创建事件失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 保存任务详情到 Redis
+	taskData := map[string]interface{}{
+		"job_id":         jobID,
+		"event_id":       eventID,
+		"job_name":       "Ad-hoc Shell 命令",
+		"command":        req.Command,
+		"task_type":      "shell",
+		"timeout":        req.Timeout,
+		"scheduled_time": now.Unix(),
+	}
+
+	if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "保存任务详情失败: " + err.Error(),
+		})
+		return
+	}
+
+	// 添加到任务队列
+	if err := storage.AddTaskToQueue(ctx, taskKey); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "添加任务到队列失败: " + err.Error(),
+		})
+		return
+	}
+
+	logger.Info("Shell 命令已提交",
+		zap.String("event_id", eventID),
+		zap.String("command", req.Command),
+		zap.String("node_id", nodes[0].ID))
+
+	// 立即返回 event_id，让前端通过轮询获取实时输出
+	c.JSON(http.StatusOK, gin.H{
+		"event_id": eventID,
+		"job_id":   jobID,
+		"command":  req.Command,
+		"status":   "queued",
+		"message":  "任务已提交，正在执行中",
+		"node_id":  nodes[0].ID,
+	})
+}
+
+// getShellLogs 获取 Shell 命令执行日志（支持流式输出）
+func (s *APIServer) getShellLogs(c *gin.Context) {
+	eventID := c.Param("event_id")
+	if eventID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "event_id 参数缺失",
+		})
+		return
+	}
+
+	ctx := context.Background()
+	logKey := fmt.Sprintf("task_logs:%s", eventID)
+	logs, _ := storage.RedisClient.Get(ctx, logKey).Result()
+
+	// 检查任务是否完成
+	var event models.Event
+	complete := false
+	exitCode := 0
+	status := "unknown"
+
+	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err == nil {
+		status = event.Status
+		if event.Status == "success" || event.Status == "failed" {
+			complete = true
+			exitCode = event.ExitCode
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"event_id":  eventID,
+		"logs":      logs,
+		"complete":  complete,
+		"exit_code": exitCode,
+		"status":    status,
+	})
+}
+

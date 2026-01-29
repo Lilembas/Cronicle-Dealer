@@ -52,6 +52,12 @@ const routes: RouteRecordRaw[] = [
                 name: 'Logs',
                 component: () => import('@/views/LogsView.vue'),
                 meta: { title: '日志查看' }
+            },
+            {
+                path: 'shell',
+                name: 'Shell',
+                component: () => import('@/views/ShellView.vue'),
+                meta: { title: 'Shell 执行' }
             }
         ]
     }

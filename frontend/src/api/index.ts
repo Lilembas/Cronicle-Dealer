@@ -152,3 +152,36 @@ export const statsApi = {
     get: () =>
         request.get<Stats>('/stats'),
 }
+
+// Shell 执行 API
+export interface ShellExecuteRequest {
+    command: string
+    node_id?: string
+    timeout?: number
+}
+
+export interface ShellExecuteResponse {
+    event_id: string
+    job_id: string
+    command: string
+    status: string
+    message: string
+    node_id?: string
+}
+
+export interface ShellLogsResponse {
+    event_id: string
+    logs: string
+    complete: boolean
+    exit_code: number
+    status: string
+}
+
+export const shellApi = {
+    execute: (data: ShellExecuteRequest) =>
+        request.post<ShellExecuteResponse>('/shell/execute', data),
+
+    getLogs: (eventId: string) =>
+        request.get<ShellLogsResponse>(`/shell/logs/${eventId}`),
+}
+

@@ -11,6 +11,7 @@ import (
 
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/master"
+	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
@@ -47,6 +48,10 @@ func main() {
 		logger.Fatal("存储初始化失败", zap.Error(err))
 	}
 	defer closeStorage()
+
+	if err := resetWorkerNodes(); err != nil {
+		logger.Warn("重置 Worker 节点状态失败", zap.Error(err))
+	}
 
 	m, err := startMaster(cfg)
 	if err != nil {
@@ -107,4 +112,20 @@ func waitForShutdown() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigChan
 	logger.Info("收到退出信号，正在关闭...", zap.String("signal", sig.String()))
+}
+
+// resetWorkerNodes 将所有在线的 Worker 节点状态重置为离线
+// 这可以防止 Master 重启后出现僵尸节点（Worker 已断开但状态仍为 online）
+func resetWorkerNodes() error {
+	logger.Info("重置 Worker 节点状态...")
+	result := storage.DB.Model(&models.Node{}).
+		Where("status = ?", "online").
+		Update("status", "offline")
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected > 0 {
+		logger.Info("已将在线 Worker 标记为离线", zap.Int64("count", result.RowsAffected))
+	}
+	return nil
 }
