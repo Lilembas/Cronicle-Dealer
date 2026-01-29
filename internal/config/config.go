@@ -64,6 +64,7 @@ type WorkerHeartbeat struct {
 
 // ExecutorConfig 执行器配置
 type ExecutorConfig struct {
+	GRPCPort          int `mapstructure:"grpc_port"`
 	MaxConcurrentJobs int `mapstructure:"max_concurrent_jobs"`
 	DefaultTimeout    int `mapstructure:"default_timeout"`
 }

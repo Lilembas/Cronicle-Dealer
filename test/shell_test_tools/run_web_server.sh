@@ -3,7 +3,7 @@
 # Web服务器启动脚本
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/web"
 
 echo "🌐 启动 Shell测试 Web 服务器..."
 echo "========================================"

@@ -63,12 +63,13 @@ func main() {
 	// 启动Worker执行器
 	fmt.Println("\n🔧 启动 Worker 执行器...")
 	executor := worker.NewExecutor(&cfg.Worker.Executor)
-	if err := executor.Start(0); err != nil {
+	if err := executor.Start(cfg.Worker.Executor.GRPCPort); err != nil {
 		logger.Fatal("执行器启动失败", zap.Error(err))
 	}
 	defer executor.Stop()
 
 	fmt.Println("✅ 执行器启动成功")
+	fmt.Printf("   📡 gRPC 端口: %d\n", cfg.Worker.Executor.GRPCPort)
 
 	// 启动心跳
 	fmt.Println("\n💓 启动心跳机制...")

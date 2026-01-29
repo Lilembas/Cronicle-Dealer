@@ -3,7 +3,7 @@
 # Worker启动脚本
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/worker"
 
 echo "🚀 启动 Worker 节点..."
 echo "========================================"

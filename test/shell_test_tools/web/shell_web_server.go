@@ -62,7 +62,7 @@ func main() {
 	router := gin.Default()
 
 	// 提供静态文件
-	router.StaticFile("/", "../shell_test.html")
+	router.StaticFile("/", "./shell_test.html")
 	router.Static("/static", "./static")
 
 	// API路由
