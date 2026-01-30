@@ -410,7 +410,7 @@ func (s *APIServer) executeShell(c *gin.Context) {
 	taskKey := fmt.Sprintf("%s:%s", jobID, eventID)
 
 	// 创建 Job 记录（Dispatcher 需要从 jobs 表查询任务配置）
-	now := time.Now()
+	// 注意：必须使用Select显式指定字段，否则GORM会忽略零值（如Enabled=false）
 	job := &models.Job{
 		ID:          jobID,
 		Name:        "Ad-hoc Shell 命令",
@@ -422,11 +422,9 @@ func (s *APIServer) executeShell(c *gin.Context) {
 		Command:     req.Command,
 		TargetType:  "any",
 		Timeout:     req.Timeout,
-		CreatedAt:   now,
-		UpdatedAt:   now,
 	}
 
-	if err := storage.DB.Create(job).Error; err != nil {
+	if err := storage.DB.Select("*").Create(job).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "创建任务失败: " + err.Error(),
 		})
@@ -434,6 +432,7 @@ func (s *APIServer) executeShell(c *gin.Context) {
 	}
 
 	// 创建事件
+	now := time.Now()
 	event := &models.Event{
 		ID:        eventID,
 		JobID:     jobID,
