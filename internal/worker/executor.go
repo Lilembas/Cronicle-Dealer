@@ -16,6 +16,7 @@ import (
 
 	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-next/internal/config"
+	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
@@ -352,12 +353,39 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 	// 存储到Redis供Master查询
 	storage.SetTaskResult(ctx, taskKey, result)
 
+	// 保存日志到 task_logs:{event_id} 供前端API查询
+	logKey := fmt.Sprintf("task_logs:%s", req.EventId)
+	storage.RedisClient.Set(ctx, logKey, output, 15*time.Minute) // 保存15分钟
+
+	logger.Debug("日志已保存到Redis",
+		zap.String("event_id", req.EventId),
+		zap.String("log_key", logKey),
+		zap.Int("output_length", len(output)))
+
 	// 更新任务状态
-	status := "completed"
+	status := "success"
 	if exitCode != 0 || execErr != nil {
 		status = "failed"
 	}
 	storage.SetTaskStatus(ctx, taskKey, status)
+
+	// 更新数据库中的Event记录，使前端API能正确判断任务完成状态
+	updates := map[string]interface{}{
+		"status":    status,
+		"exit_code": exitCode,
+	}
+	if execErr != nil {
+		updates["error_message"] = execErr.Error()
+	}
+	if err := storage.DB.Model(&models.Event{}).Where("id = ?", req.EventId).Updates(updates).Error; err != nil {
+		logger.Warn("更新Event记录失败",
+			zap.String("event_id", req.EventId),
+			zap.Error(err))
+	} else {
+		logger.Debug("Event记录已更新",
+			zap.String("event_id", req.EventId),
+			zap.String("status", status))
+	}
 
 	// 向Master报告任务结果
 	if e.masterClient != nil {
