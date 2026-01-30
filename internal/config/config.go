@@ -53,6 +53,7 @@ type WorkerConfig struct {
 
 // NodeConfig 节点配置
 type NodeConfig struct {
+	NodeID   string   `mapstructure:"node_id"`   // 节点唯一标识，可选
 	Hostname string   `mapstructure:"hostname"`
 	Tags     []string `mapstructure:"tags"`
 }

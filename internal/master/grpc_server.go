@@ -77,20 +77,52 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 		zap.String("hostname", req.Hostname),
 		zap.String("ip", req.Ip))
 
-	nodeID := utils.GenerateID("node")
+	// 检查是否已存在相同hostname的节点
+	var existingNode models.Node
+	err := storage.DB.Where("hostname = ?", req.Hostname).First(&existingNode).Error
+
+	var nodeID string
+	var isNewNode bool
+
+	if err == nil {
+		// 节点已存在，更新记录（节点重连）
+		nodeID = existingNode.ID
+		isNewNode = false
+		logger.Info("节点重新上线", zap.String("hostname", req.Hostname), zap.String("existing_node_id", nodeID))
+	} else {
+		// 新节点，生成新ID
+		nodeID = utils.GenerateID("node")
+		isNewNode = true
+		logger.Info("新节点注册", zap.String("hostname", req.Hostname))
+	}
+
 	node := s.buildNode(nodeID, req)
 
-	if err := storage.DB.Create(node).Error; err != nil {
-		logger.Error("保存节点信息失败", zap.Error(err))
-		return &pb.RegisterNodeResponse{
-			Success: false,
-			Message: "保存节点信息失败",
-		}, nil
+	if isNewNode {
+		// 创建新节点记录
+		if err := storage.DB.Create(node).Error; err != nil {
+			logger.Error("保存节点信息失败", zap.Error(err))
+			return &pb.RegisterNodeResponse{
+				Success: false,
+				Message: "保存节点信息失败",
+			}, nil
+		}
+	} else {
+		// 更新现有节点记录
+		if err := storage.DB.Model(&existingNode).Updates(node).Error; err != nil {
+			logger.Error("更新节点信息失败", zap.Error(err))
+			return &pb.RegisterNodeResponse{
+				Success: false,
+				Message: "更新节点信息失败",
+			}, nil
+		}
 	}
 
 	s.nodes.Store(nodeID, node)
 
-	logger.Info("节点注册成功", zap.String("node_id", nodeID))
+	logger.Info("节点注册成功",
+		zap.String("node_id", nodeID),
+		zap.Bool("is_new", isNewNode))
 
 	return &pb.RegisterNodeResponse{
 		NodeId:        nodeID,
