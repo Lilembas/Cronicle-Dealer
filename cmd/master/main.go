@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	version = "0.1.0"
+	version  = "0.1.0"
 	nodeType = "Master"
 )
 
@@ -29,12 +29,12 @@ func main() {
 	fmt.Printf("Cronicle-Next %s 节点 v%s\n", nodeType, version)
 	fmt.Printf("加载配置文件: %s\n", *configPath)
 
-	cfg, err := loadConfig(*configPath)
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		exitWithError("加载配置失败", err)
 	}
 
-	if err := initLogger(&cfg.Logging); err != nil {
+	if err := logger.InitLogger(&cfg.Logging); err != nil {
 		exitWithError("初始化日志失败", err)
 	}
 	defer logger.Sync()
@@ -44,17 +44,35 @@ func main() {
 		zap.String("version", version),
 		zap.String("mode", cfg.Server.Mode))
 
-	if err := initStorage(cfg); err != nil {
-		logger.Fatal("存储初始化失败", zap.Error(err))
+	// 初始化存储
+	logger.Info("连接数据库...")
+	if err := storage.InitDB(&cfg.Database); err != nil {
+		logger.Fatal("数据库连接失败", zap.Error(err))
 	}
-	defer closeStorage()
 
+	logger.Info("执行数据库迁移...")
+	if err := storage.AutoMigrate(); err != nil {
+		logger.Fatal("数据库迁移失败", zap.Error(err))
+	}
+
+	logger.Info("连接 Redis...")
+	if err := storage.InitRedis(&cfg.Redis); err != nil {
+		logger.Fatal("Redis 连接失败", zap.Error(err))
+	}
+	defer func() {
+		storage.CloseDB()
+		storage.CloseRedis()
+	}()
+
+	// 重置 Worker 节点状态（防止僵尸节点）
 	if err := resetWorkerNodes(); err != nil {
 		logger.Warn("重置 Worker 节点状态失败", zap.Error(err))
 	}
 
-	m, err := startMaster(cfg)
-	if err != nil {
+	// 启动 Master
+	logger.Info("启动核心服务...")
+	m := master.NewMaster(cfg)
+	if err := m.Start(); err != nil {
 		logger.Fatal("启动失败", zap.Error(err))
 	}
 	defer m.Stop()
@@ -63,55 +81,19 @@ func main() {
 		zap.Int("http_port", cfg.Server.HTTPPort),
 		zap.Int("grpc_port", cfg.Server.GRPCPort))
 
-	waitForShutdown()
-
-	logger.Info("节点已关闭")
-}
-
-func loadConfig(path string) (*config.Config, error) {
-	return config.Load(path)
-}
-
-func initLogger(cfg *config.LoggingConfig) error {
-	return logger.InitLogger(cfg)
-}
-
-func initStorage(cfg *config.Config) error {
-	logger.Info("连接数据库...")
-	if err := storage.InitDB(&cfg.Database); err != nil {
-		return err
-	}
-
-	logger.Info("执行数据库迁移...")
-	if err := storage.AutoMigrate(); err != nil {
-		return err
-	}
-
-	logger.Info("连接 Redis...")
-	return storage.InitRedis(&cfg.Redis)
-}
-
-func closeStorage() {
-	storage.CloseDB()
-	storage.CloseRedis()
-}
-
-func startMaster(cfg *config.Config) (*master.Master, error) {
-	logger.Info("启动核心服务...")
-	m := master.NewMaster(cfg)
-	return m, m.Start()
-}
-
-func exitWithError(msg string, err error) {
-	fmt.Printf("错误: %s: %v\n", msg, err)
-	os.Exit(1)
-}
-
-func waitForShutdown() {
+	// 等待退出信号
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigChan
 	logger.Info("收到退出信号，正在关闭...", zap.String("signal", sig.String()))
+
+	logger.Info("节点已关闭")
+}
+
+// exitWithError 输出错误并退出
+func exitWithError(msg string, err error) {
+	fmt.Printf("错误: %s: %v\n", msg, err)
+	os.Exit(1)
 }
 
 // resetWorkerNodes 将所有在线的 Worker 节点状态重置为离线

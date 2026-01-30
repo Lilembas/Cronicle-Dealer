@@ -353,11 +353,11 @@ func (s *APIServer) getStats(c *gin.Context) {
 	storage.DB.Model(&models.Job{}).Count(&stats.TotalJobs)
 	storage.DB.Model(&models.Job{}).Where("enabled = ?", true).Count(&stats.EnabledJobs)
 	storage.DB.Model(&models.Event{}).Count(&stats.TotalEvents)
-	storage.DB.Model(&models.Event{}).Where("status = ?", "running").Count(&stats.RunningEvents)
-	storage.DB.Model(&models.Event{}).Where("status = ?", "success").Count(&stats.SuccessEvents)
-	storage.DB.Model(&models.Event{}).Where("status = ?", "failed").Count(&stats.FailedEvents)
-	storage.DB.Model(&models.Node{}).Where("status = ?", "online").Count(&stats.OnlineNodes)
-	storage.DB.Model(&models.Node{}).Where("status = ?", "offline").Count(&stats.OfflineNodes)
+	storage.DB.Model(&models.Event{}).Where("status = ?", eventStatusRunning).Count(&stats.RunningEvents)
+	storage.DB.Model(&models.Event{}).Where("status = ?", eventStatusSuccess).Count(&stats.SuccessEvents)
+	storage.DB.Model(&models.Event{}).Where("status = ?", eventStatusFailed).Count(&stats.FailedEvents)
+	storage.DB.Model(&models.Node{}).Where("status = ?", nodeStatusOnline).Count(&stats.OnlineNodes)
+	storage.DB.Model(&models.Node{}).Where("status = ?", nodeStatusOffline).Count(&stats.OfflineNodes)
 	
 	c.JSON(http.StatusOK, stats)
 }
@@ -388,7 +388,7 @@ func (s *APIServer) executeShell(c *gin.Context) {
 	heartbeatTimeout := time.Now().Add(-60 * time.Second)
 	var nodes []models.Node
 
-	query := storage.DB.Where("status = ? AND last_heartbeat > ?", "online", heartbeatTimeout)
+	query := storage.DB.Where("status = ? AND last_heartbeat > ?", nodeStatusOnline, heartbeatTimeout)
 
 	// 如果指定了节点 ID，只查询该节点
 	if req.NodeID != "" {
@@ -437,7 +437,7 @@ func (s *APIServer) executeShell(c *gin.Context) {
 		ID:        eventID,
 		JobID:     jobID,
 		JobName:   "Ad-hoc Shell 命令",
-		Status:    "pending",
+		Status:    eventStatusPending,
 		NodeID:    nodes[0].ID, // 分配给第一个可用节点
 		CreatedAt: now,
 	}
@@ -513,7 +513,7 @@ func (s *APIServer) getShellLogs(c *gin.Context) {
 
 	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err == nil {
 		status = event.Status
-		if event.Status == "success" || event.Status == "failed" {
+		if event.Status == eventStatusSuccess || event.Status == eventStatusFailed {
 			complete = true
 			exitCode = event.ExitCode
 		}

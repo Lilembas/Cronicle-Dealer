@@ -22,6 +22,10 @@ import (
 
 const (
 	defaultWorkerPort = 9090
+	// 任务状态常量
+	taskStatusSuccess = "success"
+	taskStatusFailed  = "failed"
+	taskStatusRunning = "running"
 )
 
 // Executor 任务执行器
@@ -144,7 +148,7 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 	taskKey := fmt.Sprintf("%s:%s", req.JobId, req.EventId)
 	ctx := context.Background()
 
-	storage.SetTaskStatus(ctx, taskKey, "running")
+	storage.SetTaskStatus(ctx, taskKey, taskStatusRunning)
 
 	defer func() {
 		e.decrementJobCount()
@@ -155,9 +159,9 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 	exitCode, output, err := e.executeByType(req)
 	endTime := time.Now()
 
-	status := "success"
+	status := taskStatusSuccess
 	if exitCode != 0 {
-		status = "failed"
+		status = taskStatusFailed
 	}
 
 	storage.SetTaskStatus(ctx, taskKey, status)
@@ -362,9 +366,9 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 		zap.Int("output_length", len(output)))
 
 	// 更新任务状态
-	status := "success"
+	status := taskStatusSuccess
 	if exitCode != 0 || execErr != nil {
-		status = "failed"
+		status = taskStatusFailed
 	}
 	storage.SetTaskStatus(ctx, taskKey, status)
 

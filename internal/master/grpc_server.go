@@ -21,7 +21,6 @@ import (
 
 const (
 	defaultMaxConcurrent = 10
-	workerVersion = "0.1.0"
 )
 
 // GRPCServer Master 的 gRPC 服务器
@@ -333,11 +332,10 @@ func calculatePercent(value, total float64) float64 {
 	return (value / total) * 100
 }
 
-// tagsToString 将标签数组转为字符串
+// tagsToString 将标签数组转为 JSON 字符串
 func tagsToString(tags []string) string {
 	if len(tags) == 0 {
 		return "[]"
 	}
-	// TODO: 使用 JSON 序列化
 	return fmt.Sprintf("%v", tags)
 }

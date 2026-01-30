@@ -37,12 +37,12 @@ func main() {
 	fmt.Printf("Cronicle-Next %s 节点 v%s\n", nodeType, version)
 	fmt.Printf("加载配置文件: %s\n", *configPath)
 
-	cfg, err := loadConfig(*configPath)
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		exitWithError("加载配置失败", err)
 	}
 
-	if err := initLogger(&cfg.Logging); err != nil {
+	if err := logger.InitLogger(&cfg.Logging); err != nil {
 		exitWithError("初始化日志失败", err)
 	}
 	defer logger.Sync()
@@ -52,16 +52,32 @@ func main() {
 		zap.String("version", version),
 		zap.String("master_address", cfg.Worker.MasterAddress))
 
-	if err := initRedis(cfg); err != nil {
+	logger.Info("连接 Redis...")
+	if err := storage.InitRedis(&cfg.Redis); err != nil {
 		logger.Fatal("Redis 连接失败", zap.Error(err))
 	}
 	defer storage.CloseRedis()
 
-	client, executor, err := startWorker(cfg)
-	if err != nil {
-		logger.Fatal("启动失败", zap.Error(err))
+	logger.Info("连接 Master...")
+	client := worker.NewClient(&cfg.Worker)
+	if err := client.Connect(); err != nil {
+		logger.Fatal("连接 Master 失败", zap.Error(err))
 	}
-	defer cleanupWorker(client, executor)
+
+	if err := client.Register(); err != nil {
+		client.Close()
+		logger.Fatal("注册失败", zap.Error(err))
+	}
+
+	logger.Info("启动执行器...")
+	executor := worker.NewExecutor(&cfg.Worker.Executor)
+	if err := executor.Start(0); err != nil {
+		client.Close()
+		logger.Fatal("启动执行器失败", zap.Error(err))
+	}
+
+	executor.SetMasterClient(client.GetMasterClient())
+	logger.Info("已设置Master客户端")
 
 	go client.StartHeartbeat()
 
@@ -69,64 +85,19 @@ func main() {
 		zap.String("master_address", cfg.Worker.MasterAddress),
 		zap.Strings("tags", cfg.Worker.Node.Tags))
 
-	waitForShutdown()
+	// 等待退出信号
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigChan
+	logger.Info("收到退出信号，正在关闭...", zap.String("signal", sig.String()))
 
-	logger.Info("节点已关闭")
-}
-
-func loadConfig(path string) (*config.Config, error) {
-	return config.Load(path)
-}
-
-func initLogger(cfg *config.LoggingConfig) error {
-	return logger.InitLogger(cfg)
-}
-
-func initRedis(cfg *config.Config) error {
-	logger.Info("连接 Redis...")
-	return storage.InitRedis(&cfg.Redis)
-}
-
-func startWorker(cfg *config.Config) (*worker.Client, *worker.Executor, error) {
-	logger.Info("连接 Master...")
-
-	client := worker.NewClient(&cfg.Worker)
-	if err := client.Connect(); err != nil {
-		return nil, nil, err
-	}
-
-	if err := client.Register(); err != nil {
-		client.Close()
-		return nil, nil, err
-	}
-
-	logger.Info("启动执行器...")
-	executor := worker.NewExecutor(&cfg.Worker.Executor)
-	if err := executor.Start(0); err != nil {
-		client.Close()
-		return nil, nil, err
-	}
-
-	// 设置Master客户端，用于报告任务结果
-	executor.SetMasterClient(client.GetMasterClient())
-	logger.Info("已设置Master客户端")
-
-	return client, executor, nil
-}
-
-func cleanupWorker(client *worker.Client, executor *worker.Executor) {
 	executor.Stop()
 	client.Close()
+
+	logger.Info("节点已关闭")
 }
 
 func exitWithError(msg string, err error) {
 	fmt.Printf("错误: %s: %v\n", msg, err)
 	os.Exit(1)
-}
-
-func waitForShutdown() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigChan
-	logger.Info("收到退出信号，正在关闭...", zap.String("signal", sig.String()))
 }
