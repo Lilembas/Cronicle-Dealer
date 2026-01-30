@@ -16,7 +16,6 @@ import (
 
 	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-next/internal/config"
-	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
@@ -369,25 +368,7 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 	}
 	storage.SetTaskStatus(ctx, taskKey, status)
 
-	// 更新数据库中的Event记录，使前端API能正确判断任务完成状态
-	updates := map[string]interface{}{
-		"status":    status,
-		"exit_code": exitCode,
-	}
-	if execErr != nil {
-		updates["error_message"] = execErr.Error()
-	}
-	if err := storage.DB.Model(&models.Event{}).Where("id = ?", req.EventId).Updates(updates).Error; err != nil {
-		logger.Warn("更新Event记录失败",
-			zap.String("event_id", req.EventId),
-			zap.Error(err))
-	} else {
-		logger.Debug("Event记录已更新",
-			zap.String("event_id", req.EventId),
-			zap.String("status", status))
-	}
-
-	// 向Master报告任务结果
+	// 向Master报告任务结果（Master负责更新数据库中的Event记录）
 	if e.masterClient != nil {
 		go e.reportToMaster(req, startTime, endTime, exitCode, execErr)
 	} else {

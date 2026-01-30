@@ -107,6 +107,10 @@ func startWorker(cfg *config.Config) (*worker.Client, *worker.Executor, error) {
 		return nil, nil, err
 	}
 
+	// 设置Master客户端，用于报告任务结果
+	executor.SetMasterClient(client.GetMasterClient())
+	logger.Info("已设置Master客户端")
+
 	return client, executor, nil
 }
 
