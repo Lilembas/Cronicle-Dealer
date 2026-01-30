@@ -77,18 +77,21 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 		zap.String("hostname", req.Hostname),
 		zap.String("ip", req.Ip))
 
-	// 检查是否已存在相同hostname的节点
+	// 检查是否已存在相同hostname的节点（不管状态）
 	var existingNode models.Node
-	err := storage.DB.Where("hostname = ?", req.Hostname).First(&existingNode).Error
+	err := storage.DB.Where("hostname = ?", req.Hostname).Order("created_at DESC").First(&existingNode).Error
 
 	var nodeID string
 	var isNewNode bool
 
 	if err == nil {
-		// 节点已存在，更新记录（节点重连）
+		// 节点已存在，复用该节点ID（节点重连）
 		nodeID = existingNode.ID
 		isNewNode = false
-		logger.Info("节点重新上线", zap.String("hostname", req.Hostname), zap.String("existing_node_id", nodeID))
+		logger.Info("节点重新上线",
+			zap.String("hostname", req.Hostname),
+			zap.String("existing_node_id", nodeID),
+			zap.String("old_status", existingNode.Status))
 	} else {
 		// 新节点，生成新ID
 		nodeID = utils.GenerateID("node")
@@ -109,7 +112,7 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 		}
 	} else {
 		// 更新现有节点记录
-		if err := storage.DB.Model(&existingNode).Updates(node).Error; err != nil {
+		if err := storage.DB.Model(&models.Node{}).Where("id = ?", nodeID).Updates(node).Error; err != nil {
 			logger.Error("更新节点信息失败", zap.Error(err))
 			return &pb.RegisterNodeResponse{
 				Success: false,
