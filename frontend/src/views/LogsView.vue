@@ -3,7 +3,7 @@
 </script>
 
 <template>
-  <div class="logs">
+  <div class="page">
     <el-card>
       <h2>日志查看</h2>
       <p>功能开发中...</p>
@@ -12,7 +12,7 @@
 </template>
 
 <style scoped>
-.logs {
+.page {
   padding: 20px;
 }
 </style>

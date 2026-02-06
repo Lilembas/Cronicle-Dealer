@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { AxiosInstance, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 
 // 创建 axios 实例
@@ -11,7 +11,6 @@ const service: AxiosInstance = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
     (config) => {
-        // 添加认证 token
         const token = localStorage.getItem('auth_token')
         if (token) {
             config.headers.Authorization = `Bearer ${token}`
@@ -26,33 +25,26 @@ service.interceptors.request.use(
 
 // 响应拦截器
 service.interceptors.response.use(
-    (response: AxiosResponse) => {
-        return response.data
-    },
+    (response: AxiosResponse) => response.data,
     (error) => {
-        if (error.response) {
-            const { status, data } = error.response
+        const { response } = error
+        const errorMessage = response?.data?.message
 
-            switch (status) {
-                case 401:
-                    ElMessage.error('未授权，请重新登录')
-                    localStorage.removeItem('auth_token')
-                    window.location.href = '/login'
-                    break
-                case 403:
-                    ElMessage.error('拒绝访问')
-                    break
-                case 404:
-                    ElMessage.error('请求的资源不存在')
-                    break
-                case 500:
-                    ElMessage.error('服务器内部错误')
-                    break
-                default:
-                    ElMessage.error(data?.message || '请求失败')
-            }
-        } else {
-            ElMessage.error('网络错误，请检查连接')
+        // 错误状态码映射
+        const errorMessages: Record<number, string> = {
+            401: '未授权，请重新登录',
+            403: '拒绝访问',
+            404: '请求的资源不存在',
+            500: '服务器内部错误',
+        }
+
+        const message = errorMessage || errorMessages[response?.status] || '请求失败'
+        ElMessage.error(message)
+
+        // 401 时清除 token 并跳转登录
+        if (response?.status === 401) {
+            localStorage.removeItem('auth_token')
+            window.location.href = '/login'
         }
 
         return Promise.reject(error)

@@ -13,10 +13,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/LayoutView.vue'),
         meta: { requiresAuth: true },
         children: [
-            {
-                path: '',
-                redirect: '/dashboard'
-            },
+            { path: '', redirect: '/dashboard' },
             {
                 path: 'dashboard',
                 name: 'Dashboard',
@@ -69,12 +66,13 @@ const router = createRouter({
 })
 
 // 路由守卫：检查认证状态
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
     const token = localStorage.getItem('auth_token')
+    const requiresAuth = to.meta.requiresAuth !== false
 
-    if (to.meta.requiresAuth && !token) {
+    if (!token && requiresAuth) {
         next({ name: 'Login' })
-    } else if (to.name === 'Login' && token) {
+    } else if (token && to.name === 'Login') {
         next({ name: 'Dashboard' })
     } else {
         next()
