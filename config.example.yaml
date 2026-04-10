@@ -4,6 +4,7 @@ server:
   host: "0.0.0.0"
   http_port: 8080
   grpc_port: 9090
+  websocket_port: 8081  # WebSocket服务端口
   
 # Master 配置
 master:

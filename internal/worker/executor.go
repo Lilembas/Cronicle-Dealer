@@ -356,14 +356,9 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 	// 存储到Redis供Master查询
 	storage.SetTaskResult(ctx, taskKey, result)
 
-	// 保存日志到 task_logs:{event_id} 供前端API查询
-	logKey := fmt.Sprintf("task_logs:%s", req.EventId)
-	storage.RedisClient.Set(ctx, logKey, output, 15*time.Minute) // 保存15分钟
-
-	logger.Debug("日志已保存到Redis",
-		zap.String("event_id", req.EventId),
-		zap.String("log_key", logKey),
-		zap.Int("output_length", len(output)))
+	// 注意：日志已经通过gRPC StreamLogs实时发送到Master
+	// Master负责将日志存储到Redis+文件
+	// 这里不再需要存储日志
 
 	// 更新任务状态
 	status := taskStatusSuccess

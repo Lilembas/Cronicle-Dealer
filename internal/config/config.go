@@ -19,10 +19,11 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Mode     string `mapstructure:"mode"` // master 或 worker
-	Host     string `mapstructure:"host"`
-	HTTPPort int    `mapstructure:"http_port"`
-	GRPCPort int    `mapstructure:"grpc_port"`
+	Mode         string `mapstructure:"mode"` // master 或 worker
+	Host         string `mapstructure:"host"`
+	HTTPPort     int    `mapstructure:"http_port"`
+	GRPCPort     int    `mapstructure:"grpc_port"`
+	WebSocketPort int   `mapstructure:"websocket_port"`
 }
 
 // MasterConfig Master 配置

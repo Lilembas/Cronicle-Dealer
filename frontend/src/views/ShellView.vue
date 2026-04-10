@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { shellApi, type ShellLogsResponse } from '@/api'
 import { VideoPlay, CircleClose, Delete, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { getWebSocketClient, type ServerMessage } from '@/utils/websocket'
 
 // 状态管理
 const command = ref('')
@@ -10,7 +11,7 @@ const isExecuting = ref(false)
 const currentEventId = ref('')
 const logs = ref('')
 const exitCode = ref<number>(0)
-const pollTimer = ref<number>()
+const wsClient = getWebSocketClient()
 
 // 快速命令示例
 const quickCommands = [
@@ -23,6 +24,81 @@ const quickCommands = [
   { name: '内存使用', cmd: 'free -h' },
   { name: 'CPU 信息', cmd: 'cat /proc/cpuinfo | grep "model name" | head -1' },
 ]
+
+// 组件挂载时连接WebSocket
+onMounted(async () => {
+  try {
+    // 确保WebSocket已连接
+    if (!wsClient['ws'] || wsClient['ws'].readyState !== WebSocket.OPEN) {
+      await wsClient.connect()
+    }
+
+    // 注册消息处理器
+    wsClient.onMessage('log', handleLogMessage)
+    wsClient.onMessage('history_log', handleHistoryLog)
+    wsClient.onMessage('task_status', handleTaskStatus)
+    wsClient.onMessage('error', handleErrorMessage)
+  } catch (error) {
+    console.error('WebSocket连接失败:', error)
+    ElMessage.warning('WebSocket连接失败，将使用轮询模式')
+  }
+})
+
+// 组件卸载时清理
+onUnmounted(() => {
+  // 取消订阅当前任务
+  if (currentEventId.value) {
+    wsClient.unsubscribeEventLogs(currentEventId.value)
+  }
+
+  // 移除消息处理器
+  wsClient.offMessage('log', handleLogMessage)
+  wsClient.offMessage('history_log', handleHistoryLog)
+  wsClient.offMessage('task_status', handleTaskStatus)
+  wsClient.offMessage('error', handleErrorMessage)
+})
+
+// 处理实时日志消息
+const handleLogMessage = (data: any) => {
+  if (data.event_id === currentEventId.value) {
+    // 追加新日志内容
+    logs.value += data.content
+  }
+}
+
+// 处理历史日志消息
+const handleHistoryLog = (data: any) => {
+  if (data.event_id === currentEventId.value) {
+    // 加载完整历史日志
+    if (data.logs) {
+      logs.value = data.logs
+    }
+  }
+}
+
+// 处理任务状态变化
+const handleTaskStatus = (data: any) => {
+  if (data.event_id === currentEventId.value && data.status !== 'running') {
+    // 任务完成
+    isExecuting.value = false
+    exitCode.value = data.exit_code
+
+    // 取消订阅
+    wsClient.unsubscribeEventLogs(currentEventId.value)
+
+    // 显示完成消息
+    if (data.exit_code === 0) {
+      ElMessage.success('命令执行成功')
+    } else {
+      ElMessage.warning(`命令执行完成，退出码: ${data.exit_code}`)
+    }
+  }
+}
+
+// 处理错误消息
+const handleErrorMessage = (data: any) => {
+  ElMessage.error('WebSocket错误: ' + data.message)
+}
 
 // 执行命令
 const executeCommand = async () => {
@@ -44,49 +120,11 @@ const executeCommand = async () => {
 
     currentEventId.value = response.event_id
 
-    // 开始轮询日志
-    startPolling(response.event_id)
+    // 订阅任务日志
+    wsClient.subscribeEventLogs(response.event_id)
   } catch (error: any) {
     ElMessage.error('执行命令失败: ' + (error.response?.data?.error || error.message))
     isExecuting.value = false
-  }
-}
-
-// 轮询获取日志
-const startPolling = (eventId: string) => {
-  pollTimer.value = window.setInterval(async () => {
-    try {
-      const result: ShellLogsResponse = await shellApi.getLogs(eventId)
-
-      // 更新日志
-      if (result.logs && result.logs !== logs.value) {
-        logs.value = result.logs
-      }
-
-      // 检查是否完成
-      if (result.complete) {
-        stopPolling()
-        exitCode.value = result.exit_code
-        isExecuting.value = false
-
-        if (result.exit_code === 0) {
-          ElMessage.success('命令执行成功')
-        } else {
-          ElMessage.warning(`命令执行完成，退出码: ${result.exit_code}`)
-        }
-      }
-    } catch (error: any) {
-      console.error('获取日志失败:', error)
-      // 不中断轮询，可能是临时网络问题
-    }
-  }, 500) // 每 500ms 轮询一次
-}
-
-// 停止轮询
-const stopPolling = () => {
-  if (pollTimer.value) {
-    clearInterval(pollTimer.value)
-    pollTimer.value = undefined
   }
 }
 
@@ -101,11 +139,6 @@ const clearOutput = () => {
 const useQuickCommand = (cmd: string) => {
   command.value = cmd
 }
-
-// 组件卸载时清理
-onUnmounted(() => {
-  stopPolling()
-})
 </script>
 
 <template>

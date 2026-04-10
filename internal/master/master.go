@@ -7,11 +7,12 @@ import (
 
 // Master Master 节点管理器
 type Master struct {
-	cfg        *config.Config
-	grpcServer *GRPCServer
-	apiServer  *APIServer
-	scheduler  *Scheduler
-	dispatcher *Dispatcher
+	cfg         *config.Config
+	grpcServer  *GRPCServer
+	wsServer    *WebSocketServer // WebSocket服务器
+	apiServer   *APIServer
+	scheduler   *Scheduler
+	dispatcher  *Dispatcher
 	taskConsumer *TaskConsumer
 }
 
@@ -34,8 +35,15 @@ func (m *Master) Start() error {
 func (m *Master) startServices() error {
 	logger.Info("启动 Master 核心服务...")
 
+	// 启动 WebSocket 服务器
+	m.wsServer = NewWebSocketServer(m.cfg.Server.WebSocketPort)
+	if err := m.wsServer.Start(); err != nil {
+		return err
+	}
+
 	// 启动 gRPC 服务器
 	m.grpcServer = NewGRPCServer(m.cfg)
+	m.grpcServer.SetWebSocketServer(m.wsServer) // 设置WebSocket服务器
 	if err := m.grpcServer.Start(); err != nil {
 		return err
 	}
@@ -69,6 +77,10 @@ func (m *Master) Stop() {
 
 	if m.scheduler != nil {
 		m.scheduler.Stop()
+	}
+
+	if m.wsServer != nil {
+		m.wsServer.Stop()
 	}
 
 	if m.grpcServer != nil {

@@ -30,6 +30,7 @@ type GRPCServer struct {
 	cfg        *config.Config
 	grpcServer *grpc.Server
 	nodes      sync.Map
+	wsServer   *WebSocketServer // WebSocket服务器
 }
 
 // NewGRPCServer 创建 gRPC 服务器
@@ -37,6 +38,11 @@ func NewGRPCServer(cfg *config.Config) *GRPCServer {
 	return &GRPCServer{
 		cfg: cfg,
 	}
+}
+
+// SetWebSocketServer 设置WebSocket服务器
+func (s *GRPCServer) SetWebSocketServer(wsServer *WebSocketServer) {
+	s.wsServer = wsServer
 }
 
 // Start 启动 gRPC 服务器
@@ -214,17 +220,19 @@ func (s *GRPCServer) StreamLogs(stream pb.CronicleService_StreamLogsServer) erro
 			zap.String("event_id", chunk.EventId),
 			zap.Int("size", len(chunk.Content)))
 
-		// 将日志存储到Redis供前端查询
+		// 1. 将日志存储到Redis+文件供前端查询
 		ctx := context.Background()
-		logKey := fmt.Sprintf("task_logs:%s", chunk.EventId)
-
-		// 追加日志内容
-		if err := storage.RedisClient.Append(ctx, logKey, string(chunk.Content)).Err(); err != nil {
+		if err := storage.SaveLogChunk(ctx, chunk.EventId, string(chunk.Content)); err != nil {
 			logger.Error("存储日志失败", zap.Error(err))
 		}
 
-		// 设置过期时间（1小时）
-		storage.RedisClient.Expire(ctx, logKey, time.Hour)
+		// 2. 通过WebSocket实时推送到前端
+		if s.wsServer != nil {
+			content := string(chunk.Content)
+			if err := s.wsServer.BroadcastLog(chunk.EventId, content); err != nil {
+				logger.Error("WebSocket推送日志失败", zap.Error(err))
+			}
+		}
 	}
 }
 
@@ -266,6 +274,13 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 	}
 
 	// TODO: 发送通知（Webhook、邮件等）、触发链式任务
+
+	// 通过WebSocket推送任务状态变化
+	if s.wsServer != nil {
+		if err := s.wsServer.BroadcastTaskStatus(req.EventId, req.JobId, status, int(req.ExitCode)); err != nil {
+			logger.Error("WebSocket推送任务状态失败", zap.Error(err))
+		}
+	}
 
 	return &pb.TaskResultAck{Received: true}, nil
 }
