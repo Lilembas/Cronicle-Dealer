@@ -1,21 +1,77 @@
 <script setup lang="ts">
-import { useQuery } from '@tanstack/vue-query'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { statsApi, nodesApi } from '@/api'
 import { RefreshRight, CircleCheck, CircleClose, Monitor, Clock } from '@element-plus/icons-vue'
+import { getWebSocketClient } from '@/utils/websocket'
 
-// 获取统计数据
-const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
-  queryKey: ['stats'],
-  queryFn: statsApi.get,
-  refetchInterval: 5000, // 每 5 秒刷新一次
-})
+// 本地状态管理
+const stats = ref<any>(null)
+const nodes = ref<any[]>([])
+const statsLoading = ref(true)
+const nodesLoading = ref(true)
+const wsClient = getWebSocketClient()
 
-// 获取节点列表
-const { data: nodes, isLoading: nodesLoading } = useQuery({
-  queryKey: ['nodes'],
-  queryFn: () => nodesApi.list(),
-  refetchInterval: 10000, // 每 10 秒刷新一次
-})
+// 初始加载数据
+const loadData = async () => {
+  try {
+    statsLoading.value = true
+    nodesLoading.value = true
+
+    // 并行加载统计数据和节点列表
+    const [statsData, nodesData] = await Promise.all([
+      statsApi.get(),
+      nodesApi.list()
+    ])
+
+    stats.value = statsData
+    nodes.value = nodesData
+  } catch (error) {
+    console.error('加载数据失败:', error)
+  } finally {
+    statsLoading.value = false
+    nodesLoading.value = false
+  }
+}
+
+// 刷新数据
+const refetchStats = async () => {
+  await loadData()
+}
+
+// 更新节点列表中的单个节点
+const updateNode = (nodeData: any) => {
+  const index = nodes.value.findIndex(n => n.id === nodeData.node_id)
+  if (index !== -1) {
+    // 更新现有节点
+    nodes.value[index] = {
+      ...nodes.value[index],
+      status: nodeData.status,
+      cpu_usage: nodeData.cpu_usage,
+      memory_percent: nodeData.memory_percent,
+      running_jobs: nodeData.running_jobs
+    }
+  } else {
+    // 添加新节点（重新加载整个列表）
+    loadData()
+  }
+}
+
+// 处理任务状态变化
+const handleTaskStatus = (data: any) => {
+  // 当任务状态变化时，刷新统计数据
+  statsApi.get().then(statsData => {
+    stats.value = statsData
+  })
+}
+
+// 处理节点状态变化
+const handleNodeStatus = (data: any) => {
+  updateNode(data)
+  // 同时刷新统计数据（在线/离线节点数可能变化）
+  statsApi.get().then(statsData => {
+    stats.value = statsData
+  })
+}
 
 // 进度条颜色
 const getProgressColor = (percentage: number) => {
@@ -23,6 +79,39 @@ const getProgressColor = (percentage: number) => {
   if (percentage < 80) return '#f59e0b'
   return '#ef4444'
 }
+
+// 组件挂载
+onMounted(async () => {
+  // 加载初始数据
+  await loadData()
+
+  try {
+    // 确保WebSocket已连接
+    if (!wsClient['ws'] || wsClient['ws'].readyState !== WebSocket.OPEN) {
+      await wsClient.connect()
+    }
+
+    // 注册消息处理器
+    wsClient.onMessage('task_status', handleTaskStatus)
+    wsClient.onMessage('node_status', handleNodeStatus)
+
+    // 加入全局房间（接收所有状态更新）
+    wsClient.joinRoom('global')
+  } catch (error) {
+    console.error('WebSocket连接失败:', error)
+    // 连接失败时继续使用轮询（降级方案）
+  }
+})
+
+// 组件卸载
+onUnmounted(() => {
+  // 移除消息处理器
+  wsClient.offMessage('task_status', handleTaskStatus)
+  wsClient.offMessage('node_status', handleNodeStatus)
+
+  // 离开全局房间
+  wsClient.leaveRoom('global')
+})
 </script>
 
 <template>

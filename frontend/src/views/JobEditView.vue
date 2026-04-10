@@ -1,0 +1,435 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { jobsApi } from '@/api'
+import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+
+const router = useRouter()
+const route = useRoute()
+
+// 表单数据
+const formData = ref({
+  name: '',
+  description: '',
+  cron_expr: '',
+  command: '',
+  timeout: 3600,
+  enabled: true,
+  env: [] as Array<{ key: string; value: string }>,
+  tags: [] as string[],
+})
+
+// Cron表达式构建器
+const cron = ref({
+  minute: '*',
+  hour: '*',
+  dayOfMonth: '*',
+  month: '*',
+  dayOfWeek: '*',
+})
+
+// 预设Cron表达式
+const cronPresets = [
+  { label: '每分钟', value: '* * * * *' },
+  { label: '每小时', value: '0 * * * *' },
+  { label: '每天0点', value: '0 0 * * *' },
+  { label: '每周一0点', value: '0 0 * * 1' },
+  { label: '每月1号0点', value: '0 0 1 * *' },
+  { label: '每5分钟', value: '*/5 * * * *' },
+  { label: '每30分钟', value: '*/30 * * * *' },
+  { label: '工作日9点', value: '0 9 * * 1-5' },
+]
+
+// 是否为编辑模式
+const isEdit = computed(() => !!route.params.id)
+const title = computed(() => isEdit.value ? '编辑任务' : '新建任务')
+
+// 加载任务数据
+const loadJob = async () => {
+  if (!isEdit.value) return
+
+  try {
+    const job = await jobsApi.get(route.params.id as string)
+    formData.value = {
+      name: job.name,
+      description: job.description || '',
+      cron_expr: job.cron_expr,
+      command: job.command,
+      timeout: job.timeout,
+      enabled: job.enabled,
+      env: job.env ? Object.entries(job.env).map(([key, value]) => ({ key, value })) : [],
+      tags: job.tags || [],
+    }
+
+    // 解析Cron表达式
+    const parts = job.cron_expr.split(' ')
+    if (parts.length === 5) {
+      cron.value = {
+        minute: parts[0],
+        hour: parts[1],
+        dayOfMonth: parts[2],
+        month: parts[3],
+        dayOfWeek: parts[4],
+      }
+    }
+  } catch (error) {
+    ElMessage.error('加载任务失败')
+    router.back()
+  }
+}
+
+// 构建Cron表达式
+const buildCronExpr = () => {
+  formData.value.cron_expr = [
+    cron.value.minute,
+    cron.value.hour,
+    cron.value.dayOfMonth,
+    cron.value.month,
+    cron.value.dayOfWeek,
+  ].join(' ')
+}
+
+// 选择预设Cron
+const selectPreset = (value: string) => {
+  formData.value.cron_expr = value
+  const parts = value.split(' ')
+  if (parts.length === 5) {
+    cron.value = {
+      minute: parts[0],
+      hour: parts[1],
+      dayOfMonth: parts[2],
+      month: parts[3],
+      dayOfWeek: parts[4],
+    }
+  }
+}
+
+// 添加环境变量
+const addEnv = () => {
+  formData.value.env.push({ key: '', value: '' })
+}
+
+// 删除环境变量
+const removeEnv = (index: number) => {
+  formData.value.env.splice(index, 1)
+}
+
+// 保存任务
+const save = async () => {
+  // 验证表单
+  if (!formData.value.name.trim()) {
+    ElMessage.warning('请输入任务名称')
+    return
+  }
+  if (!formData.value.cron_expr.trim()) {
+    ElMessage.warning('请输入Cron表达式')
+    return
+  }
+  if (!formData.value.command.trim()) {
+    ElMessage.warning('请输入命令')
+    return
+  }
+
+  try {
+    // 转换环境变量格式
+    const env: Record<string, string> = {}
+    formData.value.env.forEach(({ key, value }) => {
+      if (key) {
+        env[key] = value
+      }
+    })
+
+    const data = {
+      ...formData.value,
+      env,
+    }
+
+    if (isEdit.value) {
+      await jobsApi.update(route.params.id as string, data)
+      ElMessage.success('更新成功')
+    } else {
+      await jobsApi.create(data)
+      ElMessage.success('创建成功')
+    }
+
+    router.back()
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '保存失败')
+  }
+}
+
+// 取消
+const cancel = () => {
+  router.back()
+}
+
+onMounted(() => {
+  loadJob()
+})
+</script>
+
+<template>
+  <div class="job-edit">
+    <div class="page-header">
+      <el-button :icon="ArrowLeft" @click="cancel" class="back-btn">返回</el-button>
+      <h2 class="page-title">{{ title }}</h2>
+    </div>
+
+    <el-card class="form-card">
+      <el-form label-width="120px" label-position="left">
+        <!-- 基本信息 -->
+        <div class="form-section">
+          <h3 class="section-title">基本信息</h3>
+
+          <el-form-item label="任务名称" required>
+            <el-input
+              v-model="formData.name"
+              placeholder="输入任务名称"
+              maxlength="100"
+              show-word-limit
+            />
+          </el-form-item>
+
+          <el-form-item label="任务描述">
+            <el-input
+              v-model="formData.description"
+              type="textarea"
+              placeholder="输入任务描述"
+              :rows="3"
+              maxlength="500"
+              show-word-limit
+            />
+          </el-form-item>
+
+          <el-form-item label="标签">
+            <el-select
+              v-model="formData.tags"
+              multiple
+              filterable
+              allow-create
+              placeholder="添加标签（按回车确认）"
+              style="width: 100%"
+            >
+            </el-select>
+          </el-form-item>
+        </div>
+
+        <!-- Cron表达式 -->
+        <div class="form-section">
+          <h3 class="section-title">调度规则</h3>
+
+          <el-form-item label="预设" label-width="80px">
+            <el-select
+              placeholder="选择预设Cron表达式"
+              @change="selectPreset"
+              style="width: 300px"
+            >
+              <el-option
+                v-for="preset in cronPresets"
+                :key="preset.value"
+                :label="preset.label"
+                :value="preset.value"
+              >
+                <span style="float: left">{{ preset.label }}</span>
+                <span style="float: right; color: #8492a6; font-size: 12px">
+                  {{ preset.value }}
+                </span>
+              </el-option>
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="Cron表达式" required label-width="120px">
+            <el-input
+              v-model="formData.cron_expr"
+              placeholder="* * * * *"
+              style="width: 300px"
+              @input="buildCronExpr"
+            />
+            <span class="cron-hint">格式：分 时 日 月 周</span>
+          </el-form-item>
+
+          <!-- Cron表达式构建器 -->
+          <el-form-item label="分钟">
+            <el-input v-model="cron.minute" @input="buildCronExpr" placeholder="* 或 0-59" />
+            <span class="field-hint">0-59</span>
+          </el-form-item>
+
+          <el-form-item label="小时">
+            <el-input v-model="cron.hour" @input="buildCronExpr" placeholder="* 或 0-23" />
+            <span class="field-hint">0-23</span>
+          </el-form-item>
+
+          <el-form-item label="日期">
+            <el-input v-model="cron.dayOfMonth" @input="buildCronExpr" placeholder="* 或 1-31" />
+            <span class="field-hint">1-31</span>
+          </el-form-item>
+
+          <el-form-item label="月份">
+            <el-input v-model="cron.month" @input="buildCronExpr" placeholder="* 或 1-12" />
+            <span class="field-hint">1-12</span>
+          </el-form-item>
+
+          <el-form-item label="星期">
+            <el-input v-model="cron.dayOfWeek" @input="buildCronExpr" placeholder="* 或 0-6" />
+            <span class="field-hint">0-6 (0=周日)</span>
+          </el-form-item>
+
+          <el-form-item label="启用任务">
+            <el-switch v-model="formData.enabled" />
+          </el-form-item>
+        </div>
+
+        <!-- 执行配置 -->
+        <div class="form-section">
+          <h3 class="section-title">执行配置</h3>
+
+          <el-form-item label="执行命令" required>
+            <el-input
+              v-model="formData.command"
+              type="textarea"
+              placeholder="输入要执行的Shell命令"
+              :rows="4"
+              spellcheck="false"
+            />
+          </el-form-item>
+
+          <el-form-item label="超时时间（秒）">
+            <el-input-number
+              v-model="formData.timeout"
+              :min="1"
+              :max="86400"
+              :step="60"
+            />
+            <span class="field-hint">默认3600秒（1小时）</span>
+          </el-form-item>
+
+          <el-form-item label="环境变量">
+            <div v-for="(envVar, index) in formData.env" :key="index" class="env-item">
+              <el-input
+                v-model="envVar.key"
+                placeholder="变量名"
+                style="width: 200px"
+              />
+              <span class="env-separator">=</span>
+              <el-input
+                v-model="envVar.value"
+                placeholder="变量值"
+                style="flex: 1"
+              />
+              <el-button
+                :icon="Delete"
+                type="danger"
+                size="small"
+                @click="removeEnv(index)"
+              />
+            </div>
+            <el-button :icon="Plus" size="small" @click="addEnv">添加环境变量</el-button>
+          </el-form-item>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="form-actions">
+          <el-button @click="cancel">取消</el-button>
+          <el-button type="primary" @click="save">保存</el-button>
+        </div>
+      </el-form>
+    </el-card>
+  </div>
+</template>
+
+<style scoped>
+.job-edit {
+  padding: 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.form-card {
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.form-section {
+  padding: 24px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.form-section:last-of-type {
+  border-bottom: none;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 20px 0;
+}
+
+.cron-hint {
+  margin-left: 12px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.field-hint {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.env-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.env-separator {
+  color: #64748b;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .job-edit {
+    padding: 16px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .form-section {
+    padding: 16px 0;
+  }
+
+  .env-item {
+    flex-wrap: wrap;
+  }
+
+  .env-item .el-input {
+    width: 100% !important;
+  }
+}
+</style>

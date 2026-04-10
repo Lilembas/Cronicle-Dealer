@@ -27,10 +27,16 @@ const routes: RouteRecordRaw[] = [
                 meta: { title: '任务管理' }
             },
             {
+                path: 'jobs/new',
+                name: 'JobCreate',
+                component: () => import('@/views/JobEditView.vue'),
+                meta: { title: '新建任务' }
+            },
+            {
                 path: 'jobs/:id',
-                name: 'JobDetail',
-                component: () => import('@/views/JobDetailView.vue'),
-                meta: { title: '任务详情' }
+                name: 'JobEdit',
+                component: () => import('@/views/JobEditView.vue'),
+                meta: { title: '编辑任务' }
             },
             {
                 path: 'events',
