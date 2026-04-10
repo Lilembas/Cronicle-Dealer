@@ -7,7 +7,7 @@
 
 > 一个高性能、可扩展、可视化的分布式任务调度与执行平台，基于 Go + Vue 3 构建
 
-**🎉 项目状态**: 核心功能已完成（**85%**），可用于开发测试
+**🎉 项目状态（2026-04-11）**: 核心链路可用（调度、分发、执行、日志推送、前端主页面），可用于开发测试；关键缺口为 JWT 认证、任务中止、HTTP/Docker 执行器和 3 个占位页面。
 
 ## 📚 快速链接
 
@@ -161,11 +161,11 @@ docker-compose down
 
 ### 用户文档
 - [快速开始指南](docs/GETTING_STARTED.md) - 安装和运行指南
-- [API 文档](docs/api.md) - REST API 接口说明
-- [用户手册](docs/user-guide.md) - 功能使用说明
+- [开发进度报告](docs/progress.md) - 当前实现状态与缺口
+- [前端完成报告](frontend/COMPLETION.md) - 前端页面与能力说明
 
 ### 开发文档
-- [开发指南](docs/development.md) - 开发环境搭建
+- [项目总结](docs/SUMMARY.md) - 高层状态与下一步
 - [测试指南](test/TESTING_GUIDE.md) - 测试相关说明
 - [故障排查](test/TROUBLESHOOTING.md) - 常见问题解决
 
@@ -185,6 +185,7 @@ docker-compose down
 - [ ] 认证系统实现（JWT）
 - [ ] 任务中止功能
 - [ ] 前端剩余页面（JobDetail, Nodes, Logs）
+- [ ] 修复 create/update Job 的 env 字段前后端类型不一致问题
 
 ### 计划中 📋
 - [ ] 任务重试逻辑
