@@ -7,25 +7,40 @@
 
 > 一个高性能、可扩展、可视化的分布式任务调度与执行平台，基于 Go + Vue 3 构建
 
-**🎉 项目状态**: 核心功能已完成（75%），可用于开发测试
+**🎉 项目状态**: 核心功能已完成（**85%**），可用于开发测试
 
 ## 📚 快速链接
 
 - 📖 [快速开始指南](docs/GETTING_STARTED.md) - **推荐首先阅读**
+- 🏗️ [设计文档](DESIGN.md) - 架构设计和技术细节
+- 🤖 [Claude 开发指南](CLAUDE.md) - AI 辅助开发指导
 - 📊 [开发进度报告](docs/progress.md)
 - 🎨 [前端完成报告](frontend/COMPLETION.md)
-- 📋 [任务清单](/.gemini/antigravity/brain/cb448d4b-9346-4b7a-8602-3efabc31c29a/task.md)
+- 📋 [待办事项](TODO.md)
 
 ## ✨ 特性
 
+### 核心功能
 - 🚀 **高性能**：Go 语言实现，原生并发支持
 - 🔄 **分布式架构**：Master-Worker 模式，支持水平扩展
-- 🎯 **智能调度**：支持 Cron 表达式，灵活的任务调度
-- 📊 **实时监控**：实时资源监控和任务执行状态
-- 📝 **日志流式传输**：WebSocket 实时日志推送
-- 🛡️ **高可用**：Master 自动故障转移，保证服务稳定
+- 🎯 **智能调度**：支持 Cron 表达式（6位，秒级精度），灵活的任务调度
+- 📊 **实时监控**：WebSocket 实时推送任务状态和日志
+- 📝 **日志流式传输**：实时日志推送，支持长任务
+- 🛡️ **高可用**：Redis 队列缓冲，任务不丢失
+
+### 前端界面
 - 🎨 **现代化界面**：Vue 3 + TypeScript + Tailwind CSS
-- 🔐 **安全可靠**：JWT 认证、密码加密、通信加密
+- 📱 **响应式设计**：适配各种屏幕尺寸
+- ⚡ **实时更新**：WebSocket 自动刷新数据
+- 🔧 **任务管理**：完整的 CRUD 操作
+- 💻 **Shell 执行**：Ad-hoc 命令执行和实时输出
+
+### 后端服务
+- 🌐 **REST API**：15+ API 端点
+- 📡 **gRPC 通信**：7 个 RPC 接口
+- 🔐 **安全配置**：JWT 和 Worker Token 配置（待实现）
+- 📦 **多数据库**：支持 SQLite 和 PostgreSQL
+- 🗄️ **Redis 集成**：队列、缓存、分布式锁
 
 ## 🏗️ 架构
 
@@ -140,22 +155,46 @@ docker-compose down
 
 ## 📚 文档
 
-- [架构设计](docs/architecture.md)
-- [API 文档](docs/api.md)
-- [用户手册](docs/user-guide.md)
-- [开发指南](docs/development.md)
+### 核心文档
+- [架构设计](DESIGN.md) - 系统架构、数据模型、核心组件
+- [Claude 开发指南](CLAUDE.md) - 开发规范、代码组织、最佳实践
+
+### 用户文档
+- [快速开始指南](docs/GETTING_STARTED.md) - 安装和运行指南
+- [API 文档](docs/api.md) - REST API 接口说明
+- [用户手册](docs/user-guide.md) - 功能使用说明
+
+### 开发文档
+- [开发指南](docs/development.md) - 开发环境搭建
+- [测试指南](test/TESTING_GUIDE.md) - 测试相关说明
+- [故障排查](test/TROUBLESHOOTING.md) - 常见问题解决
 
 ## 🗺️ 路线图
 
+### 已完成 ✅
 - [x] 项目初始化和架构设计
-- [ ] Master 核心功能实现
-- [ ] Worker 核心功能实现
-- [ ] 前端界面开发
-- [ ] 实时日志系统
-- [ ] 安全特性完善
+- [x] Master 核心功能实现（Scheduler, Dispatcher, TaskConsumer）
+- [x] Worker 核心功能实现（Client, Executor）
+- [x] WebSocket 实时通信
+- [x] Redis 任务队列集成
+- [x] 前端主要页面（Dashboard, Jobs, Events, Shell）
+- [x] Shell 命令 Ad-hoc 执行
+- [x] 日志实时推送
+
+### 进行中 🚧
+- [ ] 认证系统实现（JWT）
+- [ ] 任务中止功能
+- [ ] 前端剩余页面（JobDetail, Nodes, Logs）
+
+### 计划中 📋
+- [ ] 任务重试逻辑
+- [ ] HTTP 任务执行器
+- [ ] Docker 任务执行器
+- [ ] Cron 可视化编辑器增强
+- [ ] 用户管理界面
+- [ ] 通知系统（Webhook/邮件）
 - [ ] 性能优化
-- [ ] 文档完善
-- [ ] 生产环境部署
+- [ ] 单元测试和集成测试
 
 ## 🤝 贡献
 
