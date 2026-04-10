@@ -1,12 +1,14 @@
 package master
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 
 	"github.com/olahol/melody"
 	"go.uber.org/zap"
 
+	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
 
@@ -224,19 +226,46 @@ func (h *Hub) BroadcastToAll(msg ServerMessage) error {
 
 // sendHistoryLogs 发送历史日志
 func (h *Hub) sendHistoryLogs(session *melody.Session, eventID, roomName string) {
-	// TODO: 调用storage.GetLogs获取历史日志
-	// 这里先发送一个占位消息
+	ctx := context.Background()
+
+	// 从存储获取历史日志（优先Redis，回退文件）
+	logs, err := storage.GetLogs(ctx, eventID)
+	if err != nil {
+		logger.Error("获取历史日志失败",
+			zap.String("event_id", eventID),
+			zap.Error(err))
+		// 发送错误消息
+		h.sendError(session, "获取历史日志失败")
+		return
+	}
+
+	// 发送历史日志
 	msg := ServerMessage{
 		Type: "history_log",
 		Room: roomName,
 		Data: map[string]interface{}{
 			"event_id": eventID,
-			"logs":     "", // 暂时为空，后续集成storage.GetLogs
-			"complete": false,
+			"logs":     logs,
+			"complete": true,
 		},
 	}
-	data, _ := json.Marshal(msg)
-	session.Write(data)
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		logger.Error("序列化历史日志失败", zap.Error(err))
+		return
+	}
+
+	if err := session.Write(data); err != nil {
+		logger.Error("发送历史日志失败",
+			zap.String("event_id", eventID),
+			zap.Error(err))
+		return
+	}
+
+	logger.Debug("发送历史日志成功",
+		zap.String("event_id", eventID),
+		zap.Int("length", len(logs)))
 }
 
 // sendError 发送错误消息

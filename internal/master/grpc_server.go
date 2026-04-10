@@ -273,6 +273,12 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 		return &pb.TaskResultAck{Received: false}, nil
 	}
 
+	// 设置日志过期时间（任务完成后15分钟自动清理）
+	if err := storage.SetLogExpiration(ctx, req.EventId); err != nil {
+		logger.Warn("设置日志过期时间失败", zap.Error(err))
+		// 不影响任务结果返回
+	}
+
 	// TODO: 发送通知（Webhook、邮件等）、触发链式任务
 
 	// 通过WebSocket推送任务状态变化

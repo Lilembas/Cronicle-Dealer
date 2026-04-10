@@ -37,22 +37,30 @@ func InitLogStorage() error {
 
 // SaveLogChunk 保存日志片段（Redis + 文件）
 func SaveLogChunk(ctx context.Context, eventID, content string) error {
-	// 1. 存储到Redis（快速缓存，15分钟过期）
 	logKey := fmt.Sprintf("task_logs:%s", eventID)
+
+	// 1. 存储到Redis（动态延长TTL）
 	if err := RedisClient.Append(ctx, logKey, content).Err(); err != nil {
 		logger.Error("存储日志到Redis失败",
 			zap.String("event_id", eventID),
 			zap.Error(err))
-		return err
+		// Redis失败不阻塞文件写入
+	} else {
+		// 动态延长TTL：每次写入都延长到当前时间+15分钟
+		// 这样任务运行期间Redis会一直保持日志
+		if err := RedisClient.Expire(ctx, logKey, logExpireTime).Err(); err != nil {
+			logger.Warn("延长日志TTL失败",
+				zap.String("event_id", eventID),
+				zap.Error(err))
+		}
 	}
 
-	// 设置过期时间
-	if err := RedisClient.Expire(ctx, logKey, logExpireTime).Err(); err != nil {
-		logger.Warn("设置日志过期时间失败", zap.Error(err))
+	// 2. 同步写入文件（保证持久化）
+	if err := appendToFileSync(eventID, content); err != nil {
+		logger.Error("写入日志文件失败",
+			zap.String("event_id", eventID),
+			zap.Error(err))
 	}
-
-	// 2. 异步写入文件（持久化）
-	go appendToFileAsync(eventID, content)
 
 	return nil
 }
@@ -88,8 +96,34 @@ func GetLogs(ctx context.Context, eventID string) (string, error) {
 	return string(content), nil
 }
 
+// SetLogExpiration 设置日志过期时间（任务完成时调用）
+func SetLogExpiration(ctx context.Context, eventID string) error {
+	logKey := fmt.Sprintf("task_logs:%s", eventID)
+
+	// 设置15分钟后过期
+	if err := RedisClient.Expire(ctx, logKey, logExpireTime).Err(); err != nil {
+		logger.Error("设置日志过期时间失败",
+			zap.String("event_id", eventID),
+			zap.Error(err))
+		return err
+	}
+
+	logger.Info("设置日志过期时间",
+		zap.String("event_id", eventID),
+		zap.Duration("ttl", logExpireTime))
+
+	return nil
+}
+
 // appendToFileAsync 异步写入文件
+// 注意：此函数已废弃，保留是为了兼容性
+// 实际使用 appendToFileSync 进行同步写入
 func appendToFileAsync(eventID, content string) {
+	appendToFileSync(eventID, content)
+}
+
+// appendToFileSync 同步写入文件并flush到磁盘
+func appendToFileSync(eventID, content string) error {
 	logFilePath := getLogFilePath(eventID)
 
 	// 从缓存获取或打开文件
@@ -102,7 +136,7 @@ func appendToFileAsync(eventID, content string) {
 				zap.String("event_id", eventID),
 				zap.String("path", logFilePath),
 				zap.Error(err))
-			return
+			return err
 		}
 		setCachedFile(logFilePath, file)
 	}
@@ -112,7 +146,18 @@ func appendToFileAsync(eventID, content string) {
 		logger.Error("写入日志文件失败",
 			zap.String("event_id", eventID),
 			zap.Error(err))
+		return err
 	}
+
+	// 立即flush到磁盘（关键：保证数据持久化）
+	if err := file.Sync(); err != nil {
+		logger.Error("刷新日志文件到磁盘失败",
+			zap.String("event_id", eventID),
+			zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 // getLogFilePath 获取日志文件路径
