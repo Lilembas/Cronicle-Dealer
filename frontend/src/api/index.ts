@@ -19,6 +19,7 @@ export interface Job {
     retry_delay: number
     concurrent: boolean
     queue_max_size: number
+    tags?: string[]
     notify_on_success: boolean
     notify_on_failure: boolean
     notify_webhook: string
@@ -184,4 +185,3 @@ export const shellApi = {
     getLogs: (eventId: string) =>
         request.get<ShellLogsResponse>(`/shell/logs/${eventId}`),
 }
-

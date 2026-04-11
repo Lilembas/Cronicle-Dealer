@@ -55,6 +55,10 @@ func main() {
 		logger.Fatal("数据库迁移失败", zap.Error(err))
 	}
 
+	if err := master.EnsureDefaultAdmin(); err != nil {
+		logger.Fatal("初始化默认管理员失败", zap.Error(err))
+	}
+
 	logger.Info("连接 Redis...")
 	if err := storage.InitRedis(&cfg.Redis); err != nil {
 		logger.Fatal("Redis 连接失败", zap.Error(err))

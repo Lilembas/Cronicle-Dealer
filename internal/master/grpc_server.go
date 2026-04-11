@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -250,7 +251,9 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 	}
 
 	status := "success"
-	if req.ExitCode != 0 {
+	if strings.Contains(strings.ToLower(req.ErrorMessage), "abort") {
+		status = eventStatusAborted
+	} else if req.ExitCode != 0 {
 		status = "failed"
 	}
 

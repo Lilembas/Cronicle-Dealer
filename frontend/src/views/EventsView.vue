@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { eventsApi, type Event } from '@/api'
-import { Search, RefreshRight, View, Filter } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { RefreshRight, View, Filter, CircleClose } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 
@@ -60,6 +60,7 @@ const getStatusText = (status: string) => {
     failed: '失败',
     running: '运行中',
     queued: '已排队',
+    aborted: '已中止',
   }
   return map[status] || status
 }
@@ -75,6 +76,26 @@ const formatDuration = (seconds: number) => {
 // 查看详情
 const viewDetail = (event: Event) => {
   router.push(`/logs/${event.id}`)
+}
+
+const canAbort = (status: string) => status === 'running' || status === 'pending' || status === 'queued'
+
+const handleAbort = async (event: Event) => {
+  try {
+    await ElMessageBox.confirm(`确认中止任务 ${event.id} 吗？`, '中止确认', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+
+    await eventsApi.abort(event.id)
+    ElMessage.success('中止请求已提交')
+    refetch()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error('中止失败')
+    }
+  }
 }
 
 // 应用筛选
@@ -196,7 +217,7 @@ const handlePageChange = (page: number) => {
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -205,6 +226,15 @@ const handlePageChange = (page: number) => {
               @click="viewDetail(row)"
             >
               查看日志
+            </el-button>
+            <el-button
+              v-if="canAbort(row.status)"
+              type="danger"
+              size="small"
+              :icon="CircleClose"
+              @click="handleAbort(row)"
+            >
+              中止
             </el-button>
           </template>
         </el-table-column>

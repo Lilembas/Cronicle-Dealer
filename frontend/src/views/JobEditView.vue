@@ -20,6 +20,18 @@ const formData = ref({
   tags: [] as string[],
 })
 
+const parseEnvString = (value: unknown): Array<{ key: string; value: string }> => {
+  if (!value) return []
+  if (typeof value !== 'string') return []
+
+  try {
+    const parsed = JSON.parse(value) as Record<string, string>
+    return Object.entries(parsed).map(([key, v]) => ({ key, value: String(v) }))
+  } catch {
+    return []
+  }
+}
+
 // Cron表达式构建器
 const cron = ref({
   minute: '*',
@@ -58,7 +70,7 @@ const loadJob = async () => {
       command: job.command,
       timeout: job.timeout,
       enabled: job.enabled,
-      env: job.env ? Object.entries(job.env).map(([key, value]) => ({ key, value })) : [],
+      env: parseEnvString(job.env),
       tags: job.tags || [],
     }
 
@@ -142,7 +154,7 @@ const save = async () => {
 
     const data = {
       ...formData.value,
-      env,
+      env: JSON.stringify(env),
     }
 
     if (isEdit.value) {

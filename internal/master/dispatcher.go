@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -58,6 +59,48 @@ func (d *Dispatcher) DispatchEvent(event *models.Event) error {
 		zap.String("event_id", event.ID),
 		zap.String("node_id", node.ID),
 		zap.String("node_name", node.Hostname))
+
+	return nil
+}
+
+// AbortTask 中止正在运行的任务
+func (d *Dispatcher) AbortTask(event *models.Event, reason string) error {
+	if event == nil {
+		return fmt.Errorf("event 不能为空")
+	}
+	if event.NodeID == "" {
+		return fmt.Errorf("任务未分配执行节点")
+	}
+
+	var node models.Node
+	if err := storage.DB.Where("id = ?", event.NodeID).First(&node).Error; err != nil {
+		return fmt.Errorf("查询执行节点失败: %w", err)
+	}
+
+	client, err := d.getGRPCClient(&node)
+	if err != nil {
+		return fmt.Errorf("获取 gRPC 客户端失败: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp, err := client.AbortTask(ctx, &pb.AbortTaskRequest{
+		JobId:   event.JobID,
+		EventId: event.ID,
+		Reason:  reason,
+	})
+	if err != nil {
+		return fmt.Errorf("调用 Worker AbortTask 失败: %w", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("Worker 拒绝中止请求: %s", resp.Message)
+	}
+
+	logger.Info("任务中止请求已下发",
+		zap.String("event_id", event.ID),
+		zap.String("node_id", event.NodeID))
 
 	return nil
 }

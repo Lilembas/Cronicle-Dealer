@@ -1,6 +1,9 @@
 package master
 
 import (
+	"context"
+	"time"
+
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
@@ -14,6 +17,7 @@ type Master struct {
 	scheduler   *Scheduler
 	dispatcher  *Dispatcher
 	taskConsumer *TaskConsumer
+	consumerCancel context.CancelFunc
 }
 
 // NewMaster 创建 Master 节点
@@ -53,7 +57,9 @@ func (m *Master) startServices() error {
 
 	// 启动任务消费者
 	m.taskConsumer = NewTaskConsumer(m.dispatcher)
-	go m.taskConsumer.Start()
+	consumerCtx, cancel := context.WithCancel(context.Background())
+	m.consumerCancel = cancel
+	go m.taskConsumer.Start(consumerCtx)
 
 	// 启动调度器
 	m.scheduler = NewScheduler(&m.cfg.Master.Scheduler)
@@ -74,6 +80,15 @@ func (m *Master) startServices() error {
 // Stop 停止 Master 节点
 func (m *Master) Stop() {
 	logger.Info("停止 Master 节点...")
+
+	if m.consumerCancel != nil {
+		m.consumerCancel()
+	}
+	if m.taskConsumer != nil {
+		if ok := m.taskConsumer.Wait(10 * time.Second); !ok {
+			logger.Warn("任务消费者停止超时")
+		}
+	}
 
 	if m.scheduler != nil {
 		m.scheduler.Stop()

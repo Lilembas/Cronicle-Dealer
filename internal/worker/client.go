@@ -1,10 +1,16 @@
 package worker
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
 	"os"
+	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -21,6 +27,13 @@ const (
 	workerVersion = "0.1.0"
 	requestTimeout = 10 * time.Second
 	heartbeatTimeout = 5 * time.Second
+)
+
+var (
+	cpuStatsMu      sync.Mutex
+	lastCPUTotal    uint64
+	lastCPUIdle     uint64
+	cpuStatsInited  bool
 )
 
 // Client Worker gRPC 客户端
@@ -267,13 +280,163 @@ func getLocalIP() string {
 
 // getResourceInfo 获取资源信息
 func getResourceInfo() (*pb.NodeResources, error) {
-	// TODO: 实现真实的资源监控
+	cpuUsage, err := getCPUUsagePercent()
+	if err != nil {
+		return nil, fmt.Errorf("获取 CPU 使用率失败: %w", err)
+	}
+
+	memUsedGB, memTotalGB, err := getMemoryUsageGB()
+	if err != nil {
+		return nil, fmt.Errorf("获取内存使用失败: %w", err)
+	}
+
+	diskUsedGB, diskTotalGB, err := getDiskUsageGB("/")
+	if err != nil {
+		return nil, fmt.Errorf("获取磁盘使用失败: %w", err)
+	}
+
 	return &pb.NodeResources{
-		CpuUsage:     20.5,
-		MemoryUsage:  4.0,
-		MemoryTotal:  16.0,
-		DiskUsage:    50.0,
-		DiskTotal:    500.0,
-		CpuCores:     8,
+		CpuUsage:     cpuUsage,
+		MemoryUsage:  memUsedGB,
+		MemoryTotal:  memTotalGB,
+		DiskUsage:    diskUsedGB,
+		DiskTotal:    diskTotalGB,
+		CpuCores:     int32(runtime.NumCPU()),
 	}, nil
+}
+
+func getCPUUsagePercent() (float64, error) {
+	total, idle, err := readCPUStat()
+	if err != nil {
+		return 0, err
+	}
+
+	cpuStatsMu.Lock()
+	defer cpuStatsMu.Unlock()
+
+	if !cpuStatsInited {
+		lastCPUTotal = total
+		lastCPUIdle = idle
+		cpuStatsInited = true
+		return 0, nil
+	}
+
+	totalDelta := total - lastCPUTotal
+	idleDelta := idle - lastCPUIdle
+	lastCPUTotal = total
+	lastCPUIdle = idle
+
+	if totalDelta == 0 {
+		return 0, nil
+	}
+
+	usage := (1 - float64(idleDelta)/float64(totalDelta)) * 100
+	if usage < 0 {
+		usage = 0
+	}
+	if usage > 100 {
+		usage = 100
+	}
+	return usage, nil
+}
+
+func readCPUStat() (uint64, uint64, error) {
+	f, err := os.Open("/proc/stat")
+	if err != nil {
+		return 0, 0, err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	if !scanner.Scan() {
+		if scanErr := scanner.Err(); scanErr != nil {
+			return 0, 0, scanErr
+		}
+		return 0, 0, fmt.Errorf("读取 /proc/stat 失败")
+	}
+
+	fields := strings.Fields(scanner.Text())
+	if len(fields) < 5 || fields[0] != "cpu" {
+		return 0, 0, fmt.Errorf("无效的 /proc/stat 格式")
+	}
+
+	var total uint64
+	for i := 1; i < len(fields); i++ {
+		v, parseErr := strconv.ParseUint(fields[i], 10, 64)
+		if parseErr != nil {
+			return 0, 0, parseErr
+		}
+		total += v
+	}
+
+	idle, err := strconv.ParseUint(fields[4], 10, 64)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(fields) > 5 {
+		// iowait 也计入空闲
+		iowait, parseErr := strconv.ParseUint(fields[5], 10, 64)
+		if parseErr == nil {
+			idle += iowait
+		}
+	}
+
+	return total, idle, nil
+}
+
+func getMemoryUsageGB() (usedGB, totalGB float64, err error) {
+	f, err := os.Open("/proc/meminfo")
+	if err != nil {
+		return 0, 0, err
+	}
+	defer f.Close()
+
+	var totalKB, availableKB uint64
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "MemTotal:") {
+			totalKB, _ = parseMemInfoKB(line)
+		} else if strings.HasPrefix(line, "MemAvailable:") {
+			availableKB, _ = parseMemInfoKB(line)
+		}
+	}
+	if scanErr := scanner.Err(); scanErr != nil {
+		return 0, 0, scanErr
+	}
+
+	if totalKB == 0 {
+		return 0, 0, fmt.Errorf("MemTotal 无效")
+	}
+	if availableKB > totalKB {
+		availableKB = 0
+	}
+
+	usedKB := totalKB - availableKB
+	totalGB = float64(totalKB) / 1024.0 / 1024.0
+	usedGB = float64(usedKB) / 1024.0 / 1024.0
+	return usedGB, totalGB, nil
+}
+
+func parseMemInfoKB(line string) (uint64, error) {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return 0, fmt.Errorf("无效 meminfo 行: %s", line)
+	}
+	return strconv.ParseUint(fields[1], 10, 64)
+}
+
+func getDiskUsageGB(path string) (usedGB, totalGB float64, err error) {
+	var fs syscall.Statfs_t
+	if err := syscall.Statfs(path, &fs); err != nil {
+		return 0, 0, err
+	}
+
+	total := fs.Blocks * uint64(fs.Bsize)
+	available := fs.Bfree * uint64(fs.Bsize)
+	used := total - available
+
+	totalGB = float64(total) / 1024.0 / 1024.0 / 1024.0
+	usedGB = float64(used) / 1024.0 / 1024.0 / 1024.0
+	return usedGB, totalGB, nil
 }

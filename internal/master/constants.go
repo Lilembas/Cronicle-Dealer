@@ -10,4 +10,5 @@ const (
 	eventStatusRunning = "running"
 	eventStatusSuccess = "success"
 	eventStatusFailed  = "failed"
+	eventStatusAborted = "aborted"
 )

@@ -54,9 +54,20 @@ func (s *APIServer) setupRoutes() {
 	
 	// 健康检查
 	s.router.GET("/health", s.healthCheck)
+
+	// 认证接口（公开）
+	auth := api.Group("/auth")
+	{
+		auth.POST("/login", s.login)
+		auth.POST("/refresh", s.refreshToken)
+	}
+
+	// 受保护接口
+	protected := api.Group("")
+	protected.Use(s.authMiddleware())
 	
 	// 任务管理
-	jobs := api.Group("/jobs")
+	jobs := protected.Group("/jobs")
 	{
 		jobs.GET("", s.listJobs)           // 获取任务列表
 		jobs.POST("", s.createJob)         // 创建任务
@@ -67,7 +78,7 @@ func (s *APIServer) setupRoutes() {
 	}
 	
 	// 执行记录
-	events := api.Group("/events")
+	events := protected.Group("/events")
 	{
 		events.GET("", s.listEvents)       // 获取执行记录列表
 		events.GET("/:id", s.getEvent)     // 获取执行记录详情
@@ -75,7 +86,7 @@ func (s *APIServer) setupRoutes() {
 	}
 	
 	// 节点管理
-	nodes := api.Group("/nodes")
+	nodes := protected.Group("/nodes")
 	{
 		nodes.GET("", s.listNodes)         // 获取节点列表
 		nodes.GET("/:id", s.getNode)       // 获取节点详情
@@ -83,10 +94,10 @@ func (s *APIServer) setupRoutes() {
 	}
 	
 	// 统计信息
-	api.GET("/stats", s.getStats)
+	protected.GET("/stats", s.getStats)
 
 	// Shell 命令执行（ad-hoc）
-	shell := api.Group("/shell")
+	shell := protected.Group("/shell")
 	{
 		shell.POST("/execute", s.executeShell)       // 执行 Shell 命令
 		shell.GET("/logs/:event_id", s.getShellLogs) // 获取实时日志
@@ -114,7 +125,7 @@ func (s *APIServer) Start() error {
 func (s *APIServer) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "ok",
-		"time":   c.Request.Context().Value("server_time"),
+		"time":   time.Now().Unix(),
 	})
 }
 
@@ -164,7 +175,7 @@ func (s *APIServer) createJob(c *gin.Context) {
 	
 	// 生成 ID
 	if job.ID == "" {
-		job.ID = "job_" + strconv.FormatInt(c.Request.Context().Value("server_time").(int64), 10)
+		job.ID = "job_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	}
 	
 	// 保存到数据库
@@ -294,8 +305,65 @@ func (s *APIServer) getEvent(c *gin.Context) {
 
 // abortEvent 中止执行
 func (s *APIServer) abortEvent(c *gin.Context) {
-	// TODO: 实现任务中止逻辑
-	c.JSON(http.StatusOK, gin.H{"message": "功能开发中"})
+	eventID := c.Param("id")
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = c.ShouldBindJSON(&req) // 请求体可选
+
+	var event models.Event
+	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "执行记录不存在"})
+		return
+	}
+
+	if event.Status == eventStatusSuccess || event.Status == eventStatusFailed || event.Status == eventStatusAborted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "任务已结束，无法中止"})
+		return
+	}
+
+	abortReason := req.Reason
+	if abortReason == "" {
+		abortReason = "aborted by user"
+	}
+
+	// running 状态：下发到 Worker 进行中止
+	if event.Status == eventStatusRunning {
+		if err := s.dispatcher.AbortTask(&event, abortReason); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "中止任务失败: " + err.Error()})
+			return
+		}
+	}
+
+	// pending/queued 状态：从队列中移除，避免后续被执行
+	if event.Status == eventStatusPending || event.Status == "queued" {
+		ctx := context.Background()
+		taskKey := fmt.Sprintf("%s:%s", event.JobID, event.ID)
+		_ = storage.RemoveTaskFromQueue(ctx, taskKey)
+		_ = storage.DeleteTaskDetails(ctx, taskKey)
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"status":        eventStatusAborted,
+		"end_time":      &now,
+		"error_message": abortReason,
+	}
+	if event.StartTime != nil {
+		updates["duration"] = now.Unix() - event.StartTime.Unix()
+	}
+
+	if err := storage.DB.Model(&event).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新任务状态失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "任务已中止",
+		"event_id": eventID,
+		"status":   eventStatusAborted,
+	})
 }
 
 // listNodes 获取节点列表
@@ -513,7 +581,7 @@ func (s *APIServer) getShellLogs(c *gin.Context) {
 
 	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err == nil {
 		status = event.Status
-		if event.Status == eventStatusSuccess || event.Status == eventStatusFailed {
+		if event.Status == eventStatusSuccess || event.Status == eventStatusFailed || event.Status == eventStatusAborted {
 			complete = true
 			exitCode = event.ExitCode
 		}
@@ -527,4 +595,3 @@ func (s *APIServer) getShellLogs(c *gin.Context) {
 		"status":    status,
 	})
 }
-

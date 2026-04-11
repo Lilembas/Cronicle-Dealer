@@ -36,6 +36,7 @@ type Executor struct {
 	grpcServer   *grpc.Server
 	masterClient pb.CronicleServiceClient // Master客户端，用于报告任务结果
 	runningJobs  sync.Map                 // map[eventID]*exec.Cmd
+	abortedJobs  sync.Map                 // map[eventID]string
 	jobCount     int
 	mu           sync.Mutex
 }
@@ -112,12 +113,38 @@ func (e *Executor) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.Tas
 // AbortTask 中止任务
 func (e *Executor) AbortTask(ctx context.Context, req *pb.AbortTaskRequest) (*pb.AbortTaskResponse, error) {
 	logger.Info("收到中止任务请求", zap.String("event_id", req.EventId))
+	val, ok := e.runningJobs.Load(req.EventId)
+	if !ok {
+		return &pb.AbortTaskResponse{
+			Success: false,
+			Message: "任务未运行或已结束",
+		}, nil
+	}
 
-	// TODO: 实现任务中止逻辑
+	cmd, ok := val.(*exec.Cmd)
+	if !ok || cmd == nil || cmd.Process == nil {
+		return &pb.AbortTaskResponse{
+			Success: false,
+			Message: "任务进程不可用",
+		}, nil
+	}
+
+	reason := req.Reason
+	if reason == "" {
+		reason = "aborted by user"
+	}
+	e.abortedJobs.Store(req.EventId, reason)
+
+	if err := cmd.Process.Kill(); err != nil {
+		return &pb.AbortTaskResponse{
+			Success: false,
+			Message: "终止进程失败: " + err.Error(),
+		}, nil
+	}
 
 	return &pb.AbortTaskResponse{
 		Success: true,
-		Message: "任务已中止",
+		Message: "任务中止请求已执行",
 	}, nil
 }
 
@@ -152,6 +179,8 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 
 	defer func() {
 		e.decrementJobCount()
+		e.runningJobs.Delete(req.EventId)
+		e.abortedJobs.Delete(req.EventId)
 	}()
 
 	logger.Info("开始执行任务", zap.String("event_id", req.EventId))
@@ -162,6 +191,9 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 	status := taskStatusSuccess
 	if exitCode != 0 {
 		status = taskStatusFailed
+	}
+	if _, aborted := e.abortedJobs.Load(req.EventId); aborted {
+		status = "aborted"
 	}
 
 	storage.SetTaskStatus(ctx, taskKey, status)
@@ -221,6 +253,7 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	if err := cmd.Start(); err != nil {
 		return 1, "", fmt.Errorf("启动命令失败: %w", err)
 	}
+	e.runningJobs.Store(req.EventId, cmd)
 
 	// 用于收集完整输出
 	var fullOutput bytes.Buffer
@@ -294,6 +327,9 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	}
 
 	exitCode, _ := extractExitCode(err)
+	if reason, aborted := e.abortedJobs.Load(req.EventId); aborted {
+		return 137, fullOutput.String(), fmt.Errorf("task aborted: %v", reason)
+	}
 	return exitCode, fullOutput.String(), err
 }
 
@@ -364,6 +400,9 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 	status := taskStatusSuccess
 	if exitCode != 0 || execErr != nil {
 		status = taskStatusFailed
+	}
+	if _, aborted := e.abortedJobs.Load(req.EventId); aborted {
+		status = "aborted"
 	}
 	storage.SetTaskStatus(ctx, taskKey, status)
 

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -24,17 +25,17 @@ const handleLogin = async () => {
   loading.value = true
 
   try {
-    // TODO: 调用实际的登录 API
-    // 模拟登录
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    // 生成模拟 token
-    const mockToken = 'mock-jwt-token-' + Date.now()
-    authStore.setToken(mockToken)
-    authStore.setUser({
+    const resp = await authApi.login({
       username: loginForm.value.username,
-      role: 'admin',
-      fullName: '系统管理员',
+      password: loginForm.value.password,
+    })
+
+    authStore.setToken(resp.token)
+    authStore.setUser({
+      id: resp.user.id,
+      username: resp.user.username,
+      role: resp.user.role,
+      fullName: resp.user.full_name,
     })
 
     ElMessage.success('登录成功')
@@ -42,7 +43,7 @@ const handleLogin = async () => {
     // 使用 nextTick 确保状态更新后再跳转
     await nextTick()
     await router.push('/dashboard')
-  } catch (error) {
+  } catch {
     ElMessage.error('登录失败，请检查用户名和密码')
   } finally {
     loading.value = false

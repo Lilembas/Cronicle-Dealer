@@ -80,6 +80,11 @@ func AddTaskToQueue(ctx context.Context, taskID string) error {
 	return RedisClient.RPush(ctx, queueTasksReady, taskID).Err()
 }
 
+// RemoveTaskFromQueue 从就绪队列移除任务（用于取消未执行任务）
+func RemoveTaskFromQueue(ctx context.Context, taskID string) error {
+	return RedisClient.LRem(ctx, queueTasksReady, 0, taskID).Err()
+}
+
 // GetTaskFromQueue 从就绪队列获取任务（阻塞）
 func GetTaskFromQueue(ctx context.Context, timeout time.Duration) (string, error) {
 	result, err := RedisClient.BRPop(ctx, timeout, queueTasksReady).Result()
@@ -156,6 +161,11 @@ func GetTaskResult(ctx context.Context, taskKey string) (map[string]string, erro
 // GetTaskDetails 获取任务详情
 func GetTaskDetails(ctx context.Context, taskKey string) (map[string]string, error) {
 	return RedisClient.HGetAll(ctx, keyPrefixTasksDetails+taskKey).Result()
+}
+
+// DeleteTaskDetails 删除任务详情缓存
+func DeleteTaskDetails(ctx context.Context, taskKey string) error {
+	return RedisClient.Del(ctx, keyPrefixTasksDetails+taskKey).Err()
 }
 
 // ========== Worker 注册与发现 ==========

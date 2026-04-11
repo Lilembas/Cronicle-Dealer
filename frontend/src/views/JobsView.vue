@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { jobsApi, type Job } from '@/api'
-import { Plus, Edit, Delete, VideoPlay, RefreshRight } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, VideoPlay, RefreshRight, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -31,6 +31,10 @@ const handleCreate = () => {
 // 编辑任务
 const handleEdit = (id: string) => {
   router.push(`/jobs/${id}`)
+}
+
+const handleDetail = (id: string) => {
+  router.push(`/jobs/${id}/detail`)
 }
 
 // 删除任务
@@ -103,9 +107,12 @@ const handlePageChange = (page: number) => {
             {{ row.next_run_time ? new Date(row.next_run_time).toLocaleString('zh-CN') : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button-group>
+              <el-button size="small" :icon="View" @click="handleDetail(row.id)">
+                详情
+              </el-button>
               <el-button size="small" :icon="VideoPlay" @click="handleTrigger(row.id, row.name)">
                 触发
               </el-button>

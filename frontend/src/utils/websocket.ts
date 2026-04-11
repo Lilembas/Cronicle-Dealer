@@ -273,7 +273,8 @@ let wsClient: WebSocketClient | null = null
  */
 export function getWebSocketClient(): WebSocketClient {
   if (!wsClient) {
-    const wsUrl = `ws://${window.location.hostname}:8082/ws`
+    const wsPort = import.meta.env.VITE_WS_PORT || '8081'
+    const wsUrl = `ws://${window.location.hostname}:${wsPort}/ws`
     wsClient = new WebSocketClient({
       url: wsUrl,
       debug: import.meta.env.DEV,
