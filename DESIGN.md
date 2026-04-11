@@ -1,7 +1,7 @@
 # Cronicle-Next 设计文档
 
-> **版本**: v0.1.0
-> **最后更新**: 2026-04-10
+> **版本**: v0.3.0
+> **最后更新**: 2026-04-11
 > **状态**: Beta
 
 ## 📋 目录
@@ -28,10 +28,10 @@ Cronicle-Next 是一个高性能、可扩展、可视化的分布式任务调度
 ### 1.2 核心特性
 
 - **分布式架构**: Master-Worker 模式，支持水平扩展
-- **高可用性**: Master 自动故障转移，保证服务稳定
+- **单 Master 运行模式**: 当前以单 Master 为主，聚焦功能完整性与稳定性
 - **智能调度**: 支持 Cron 表达式，灵活的任务调度策略
 - **实时监控**: WebSocket 实时推送任务状态和日志
-- **多任务类型**: Shell、HTTP、Docker 容器任务
+- **任务执行能力**: 当前稳定支持 Shell，HTTP/Docker 作为后续扩展
 - **现代化界面**: Vue 3 + TypeScript + Tailwind CSS
 
 ### 1.3 设计原则
@@ -1142,107 +1142,90 @@ func (s *Server) HealthCheck(c *gin.Context) {
 
 ### B. API 文档
 
-参见 [docs/api.md](docs/api.md)
+参见 [README.md](README.md) 与 [docs/progress.md](docs/progress.md)
 
 ### C. 开发指南
 
-参见 [docs/development.md](docs/development.md)
+参见 [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)
 
 ### D. 部署指南
 
-参见 [docs/deployment.md](docs/deployment.md)
+参见 [deployments/docker-compose.yml](deployments/docker-compose.yml)
 
 ---
 
-**文档版本**: v0.1.0
-**最后更新**: 2026-04-10
+**文档版本**: v0.3.0
+**最后更新**: 2026-04-11
 **维护者**: Cronicle-Next Team
 
 ---
 
-## 11. 实现状态
+## 11. 实现状态（2026-04-11）
 
 ### 11.1 总体进度
 
 | 模块 | 完成度 | 状态 |
 |------|--------|------|
-| **后端核心** | 95% | ✅ 基本完成 |
-| **前端界面** | 80% | 🟡 部分完成 |
-| **认证系统** | 10% | ❌ 仅配置 |
-| **总体** | **85%** | 🟢 核心完成 |
+| **后端核心** | 90% | ✅ 调度链路可用 |
+| **前端界面** | 85% | 🟡 主流程可用 |
+| **认证系统** | 75% | 🟡 已接入 JWT 基础闭环 |
+| **总体** | **85%** | 🟢 可开发测试 |
 
-### 11.2 已完成功能
+### 11.2 当前已完成
 
-#### 后端 (19个Go文件, ~3,613行代码)
+#### 后端
 
-- ✅ Cron 调度器（支持6位表达式，秒级精度）
-- ✅ Redis 任务队列（List + BRPOP）
-- ✅ 任务分发器（负载均衡）
-- ✅ 任务消费者（队列消费）
-- ✅ gRPC Server（7个接口）
-- ✅ WebSocket Server（实时推送）
-- ✅ REST API（15+端点）
-- ✅ 数据存储（SQLite/PostgreSQL + Redis）
-- ✅ 日志存储（文件系统）
-- ✅ Worker Client（节点注册、心跳）
-- ✅ Worker Executor（Shell执行）
+- ✅ Scheduler -> Redis Queue -> TaskConsumer -> Dispatcher -> Worker 主链路打通
+- ✅ TaskConsumer 可控生命周期（支持停止等待）与分发失败重试（指数退避）
+- ✅ `abortEvent` / `Dispatcher.AbortTask` / Worker `AbortTask` 任务中止闭环
+- ✅ JWT 基础登录、刷新、鉴权中间件
+- ✅ Worker 真实资源采集（Linux `/proc` + `statfs`）
+- ✅ WebSocket 实时日志和状态推送
 
-#### 前端 (10个Vue组件, ~2,000行代码)
+#### 前端
 
-- ✅ 登录页（渐变设计，模拟登录）
-- ✅ 布局页（侧边栏、顶栏）
-- ✅ 仪表盘（统计卡片、节点列表、实时更新）
-- ✅ 任务列表（CRUD操作、分页、筛选）
-- ✅ 任务编辑（Cron构建器、环境变量）
-- ✅ 执行记录（列表、筛选、状态展示）
-- ✅ Shell执行（命令输入、实时日志）
+- ✅ Login（真实登录 API）
+- ✅ Dashboard / Jobs / JobEdit / Events / Shell
+- ✅ JobDetail / Nodes / Logs 页面已从占位改为可用版本
 
-### 11.3 待完成功能
+### 11.3 当前未完成（按优先级）
 
-#### P0 - 高优先级
+#### P0
 
-1. **JWT 认证系统** (10%)
-   - 后端：JWT生成/验证、登录API、中间件
-   - 前端：真实登录、Token管理
-   - 配置：已定义，无实现
+1. **手动触发任务闭环**
+   - `triggerJob` 仍为占位实现，需要创建 Event + 入队 + 状态返回
 
-2. **任务中止功能** (10%)
-   - 后端：`POST /api/v1/events/:id/abort`
-   - gRPC：AbortTask 调用
-   - 前端：中止按钮
+2. **任务执行可靠性增强**
+   - 分发重试参数配置化（次数、退避、上限）
+   - 重试可观测性（指标/告警）
 
-3. **前端页面** (30%)
-   - 任务详情页（当前占位）
-   - 节点管理页（当前占位）
-   - 日志查看器（需xterm.js）
+#### P1
 
-4. **手动触发完善** (30%)
-   - 创建Event记录
-   - 添加到队列
-   - 分发执行
+3. **HTTP 任务执行器**
+4. **Docker 任务执行器**
+5. **统一队列治理能力**
+   - `queue_max`、队列清理、排队策略
 
-#### P1 - 中优先级
+6. **插件协议能力（可参考 Cronicle）**
+   - STDIN/STDOUT JSON 协议
+   - progress / metrics / chain 等扩展
 
-5. **任务重试逻辑** (0%)
-6. **HTTP任务执行器** (0%)
-7. **Cron可视化编辑器** (50%)
-8. **用户管理界面** (0%)
+#### P2
 
-#### P2 - 低优先级
-
-9. **Docker任务执行器** (0%)
-10. **通知系统** (0%)
-11. **任务依赖/工作流** (0%)
+7. **通知体系**
+   - job webhook + universal webhook
+8. **调度纠偏能力**
+   - reset cursor / 补跑策略
 
 ### 11.4 技术债务
 
-- ⚠️ 认证系统缺失（生产环境必需）
-- ⚠️ 3个前端页面占位
-- ⚠️ 分发失败无重试机制
-- ⚠️ 缺少单元测试和集成测试
+- ⚠️ `triggerJob` 尚未完成，影响控制面完整性
+- ⚠️ 任务重试仍偏“分发层”，执行失败重试链路未完成
+- ⚠️ 缺少系统化单元测试/集成测试
+- ⚠️ Dispatcher gRPC 客户端连接池并发安全性需进一步加固
 
 ---
 
-**文档版本**: v0.2.0
-**最后更新**: 2026-04-10
+**文档版本**: v0.3.0
+**最后更新**: 2026-04-11
 **维护者**: Cronicle-Next Team

@@ -1,520 +1,121 @@
 # Cronicle-Next 待办事项
 
-> 基于代码全面检查后整理的待办清单
+> 基于当前代码实况整理  
 > 最后更新: 2026-04-11
 
 ---
 
-## 📊 总体进度
+## 📊 当前进度
 
 ```
-后端完成度: ~95%
-前端完成度: ~80%
+后端完成度: ~90%
+前端完成度: ~85%
 总体完成度: ~85%
 
-✅ 已完成: 核心调度、任务队列、WebSocket、主要页面
-⚠️  部分完成: 认证配置、部分前端页面
-❌ 未完成: JWT实现、任务中止、3个前端页面
+✅ 已完成: 核心调度链路、JWT基础认证、任务中止、WebSocket、主要页面、Linux资源采集
+⚠️  部分完成: 分发重试（已实现但参数未配置化）
+❌ 未完成: triggerJob闭环、HTTP/Docker执行器、统一队列治理、测试体系
 ```
 
 ---
 
-## 🔴 P0 - 高优先级（必须完成）
+## 🔴 P0 - 高优先级（近期必须完成）
 
-### 1. 认证系统 (10%)
-**状态**: 配置已定义，代码未实现
-**文件**: `internal/config/config.go`, `frontend/src/stores/auth.ts`
+### 1. 手动触发任务闭环
+**状态**: API 已存在，逻辑未完成  
+**文件**: `internal/master/api_server.go`
 
-**后端任务**:
-- [ ] JWT Token 生成和验证
-  - [ ] 实现 `GenerateToken(user *User) (string, error)`
-  - [ ] 实现 `ValidateToken(token string) (*Claims, error)`
-  - [ ] 使用 `golang.org/x/crypto/jwt`
-- [ ] 登录接口
-  - [ ] `POST /api/v1/auth/login`
-  - [ ] 验证用户名密码
-  - [ ] 返回 JWT Token
-- [ ] Token 刷新机制
-  - [ ] `POST /api/v1/auth/refresh`
-  - [ ] Token 过期检测
-- [ ] 中间件验证
-  - [ ] `AuthMiddleware() gin.HandlerFunc`
-  - [ ] Token 解析和验证
-  - [ ] 用户信息注入 Context
-- [ ] 密码加密存储
-  - [ ] 使用 `bcrypt` 加密密码
-  - [ ] 密码验证函数
-
-**前端任务**:
-- [ ] 真实登录集成
-  - [ ] 调用 `/api/v1/auth/login` API
-  - [ ] 移除模拟登录代码 ([LoginView.vue:27](frontend/src/views/LoginView.vue#L27))
-- [ ] Token 管理
-  - [ ] 存储 JWT 到 localStorage
-  - [ ] 自动刷新 Token
-  - [ ] Token 过期处理
-- [ ] 路由守卫完善
-  - [ ] 验证 Token 有效性
-  - [ ] 自动跳转登录
-
-**相关文件**:
-- `internal/master/auth.go` (新建)
-- `internal/middleware/auth.go` (新建)
-- `frontend/src/api/auth.ts` (新建)
-- `frontend/src/stores/auth.ts` (修改)
+- [ ] 完成 `triggerJob` 全流程
+  - [ ] 创建 Event 记录
+  - [ ] 写入 Redis 任务详情
+  - [ ] 推入队列
+  - [ ] 返回统一执行状态（queued / running）
+- [ ] 前端任务详情页展示触发结果与最新状态
 
 ---
 
-### 2. 任务中止功能 (10%)
-**状态**: API 端点已定义，标记为 TODO
-**文件**: [internal/master/api_server.go:297](internal/master/api_server.go#L297)
+### 2. 分发重试配置化与可观测性
+**状态**: 已有固定重试（3次 + 指数退避），待增强  
+**文件**: `internal/master/task_consumer.go`, `internal/config/config.go`
 
-**后端任务**:
-- [ ] 实现 `abortEvent` 处理函数
-  ```go
-  func (s *APIServer) abortEvent(c *gin.Context) {
-      eventID := c.Param("id")
-      // 1. 查询 Event 状态
-      // 2. 调用 Dispatcher.AbortTask(eventID)
-      // 3. 更新 Event 状态为 "aborted"
-      // 4. 返回成功
-  }
-  ```
-- [ ] 实现 `Dispatcher.AbortTask(eventID string) error`
-  - [ ] 查询任务在哪个 Worker
-  - [ ] 通过 gRPC 调用 `AbortTask`
-  - [ ] 更新 Event 状态
-- [ ] 实现 gRPC AbortTask 调用
-  - [ ] 发送中止请求到 Worker
-  - [ ] 处理中止结果
-
-**前端任务**:
-- [ ] EventsView 添加中止按钮
-  - [ ] 仅运行中任务显示
-  - [ ] 确认对话框
-  - [ ] 调用 `eventsApi.abort(eventId)`
-
-**相关文件**:
-- `internal/master/api_server.go:297`
-- `internal/master/dispatcher.go` (添加方法)
-- `frontend/src/views/EventsView.vue`
-
----
-
-### 3. 前端页面完善 (30%)
-**状态**: 3个页面占位
-
-#### 3.1 任务详情页 (JobDetailView.vue)
-**当前**: 占位页面（264字节）
-**文件**: [frontend/src/views/JobDetailView.vue](frontend/src/views/JobDetailView.vue)
-
-**需要实现**:
-- [ ] 显示任务完整信息
-  - [ ] 基本信息：名称、描述、分类
-  - [ ] 调度规则：Cron 表达式、时区
-  - [ ] 执行配置：命令、超时、重试
-  - [ ] 统计信息：总次数、成功、失败
-- [ ] 执行历史图表
-  - [ ] 最近 10 次执行记录
-  - [ ] 成功/失败趋势图
-  - [ ] 平均执行时间
-- [ ] 快速操作
-  - [ ] 编辑按钮
-  - [ ] 启用/禁用开关
-  - [ ] 立即触发按钮
-  - [ ] 删除按钮
-- [ ] 下次执行时间倒计时
-
----
-
-#### 3.2 节点管理页 (NodesView.vue)
-**当前**: 占位页面（264字节）
-**文件**: [frontend/src/views/NodesView.vue](frontend/src/views/NodesView.vue)
-
-**需要实现**:
-- [ ] 节点列表展示
-  - [ ] 表格显示所有节点
-  - [ ] 节点状态标签（online/offline/busy）
-  - [ ] 实时刷新（WebSocket）
-- [ ] 节点详情
-  - [ ] 主机名、IP、端口
-  - [ ] 版本号、注册时间
-  - [ ] 标签列表
-- [ ] 资源监控
-  - [ ] CPU 使用率（进度条）
-  - [ ] 内存使用率（进度条）
-  - [ ] 磁盘使用率（进度条）
-  - [ ] 运行任务数量
-- [ ] 节点操作
-  - [ ] 删除节点（离线状态）
-  - [ ] 查看节点详情
-  - [ ] 编辑节点标签
-
----
-
-#### 3.3 日志查看器 (LogsView.vue)
-**当前**: 占位页面（264字节）
-**文件**: [frontend/src/views/LogsView.vue](frontend/src/views/LogsView.vue)
-
-**需要实现**:
-- [ ] xterm.js 终端集成
-  - [ ] 安装 `xterm` 包
-  - [ ] 创建终端实例
-  - [ ] 配置终端样式
-- [ ] 实时日志流
-  - [ ] WebSocket 订阅日志
-  - [ ] 实时追加到终端
-  - [ ] 自动滚动到底部
-- [ ] 历史日志查看
-  - [ ] 加载完整日志文件
-  - [ ] 分页显示
-  - [ ] 支持大文件
-- [ ] 日志搜索
-  - [ ] 关键字搜索
-  - [ ] 正则表达式
-  - [ ] 高亮匹配
-- [ ] 日志下载
-  - [ ] 下载为文本文件
-  - [ ] 下载为压缩包
-- [ ] 控制功能
-  - [ ] 暂停/继续滚动
-  - [ ] 清空终端
-  - [ ] 调整字体大小
-
-**相关依赖**:
-```bash
-npm install xterm xterm-addon-fit xterm-addon-search
-```
-
----
-
-### 4. 手动触发任务 (30%)
-**状态**: 基础实现，缺少完整流程
-**文件**: [internal/master/api_server.go:235](internal/master/api_server.go#L235)
-
-**需要实现**:
-- [ ] 创建 Event 记录
-- [ ] 保存任务详情到 Redis
-- [ ] 添加到任务队列
-- [ ] 等待执行结果
-- [ ] 返回执行状态
-
-**代码位置**:
-```go
-// internal/master/api_server.go:235
-func (s *APIServer) triggerJob(c *gin.Context) {
-    jobID := c.Param("id")
-    // TODO: 手动创建任务执行记录并分发
-    // 实现完整的触发流程
-}
-```
+- [ ] 将重试参数配置化
+  - [ ] `max_dispatch_retries`
+  - [ ] `dispatch_retry_base_delay`
+  - [ ] `dispatch_retry_max_delay`
+- [ ] 增加重试日志字段（job_id/event_id/retry/delay/error）
+- [ ] 增加重试失败计数指标（后续接 Prometheus）
 
 ---
 
 ## 🟡 P1 - 中优先级（重要功能）
 
-### 5. 任务重试逻辑 (0%)
-**状态**: 数据库字段已定义，代码未实现
+### 3. HTTP 任务执行器
+**文件**: `internal/worker/executor.go`
 
-**需要实现**:
-- [ ] 失败自动重试
-  - [ ] Event 失败时检查 MaxRetries
-  - [ ] 创建新的重试 Event
-  - [ ] 设置 IsRetry=true, ParentEventID
-- [ ] 可配置重试次数和延迟
-  - [ ] 读取 Job.MaxRetries
-  - [ ] 读取 Job.RetryDelay
-  - [ ] 支持指数退避
-- [ ] 重试记录
-  - [ ] 记录重试次数
-  - [ ] 显示重试历史
-- [ ] 重试状态查询
-  - [ ] 显示是否为重试任务
-  - [ ] 链接到原始任务
+- [ ] 支持 GET/POST/PUT/DELETE
+- [ ] 支持 headers/body/timeout
+- [ ] 响应状态码判定和输出落库
 
 ---
 
-### 6. HTTP 任务执行器 (0%)
-**状态**: Proto 定义，Executor 未实现
+### 4. Docker 任务执行器
+**文件**: `internal/worker/executor.go`
 
-**需要实现**:
-- [ ] 定义 TaskType = HTTP
-- [ ] 实现 HTTP 请求
-  - [ ] 支持 GET/POST/PUT/DELETE
-  - [ ] 自定义请求头
-  - [ ] 自定义 Body
-- [ ] 响应处理
-  - [ ] 保存响应内容
-  - [ ] 验证 HTTP 状态码
-  - [ ] 超时控制
-- [ ] 环境变量替换
-  - [ ] 支持 ${VAR} 语法
-  - [ ] 从 Job.Env 读取
+- [ ] 设计最小执行参数（image/cmd/env/timeout）
+- [ ] 容器生命周期管理（创建/执行/清理）
+- [ ] 执行日志采集与退出码映射
 
 ---
 
-### 7. Cron 可视化编辑器 (50%)
-**状态**: 基础构建器已完成，缺少高级功能
-**文件**: [frontend/src/views/JobEditView.vue](frontend/src/views/JobEditView.vue)
+### 5. 队列治理能力（借鉴 Cronicle）
+**文件**: `internal/storage/redis.go`, `internal/master/api_server.go`, `frontend/src/views/JobDetailView.vue`
 
-**已完成**:
-- [x] 分段输入（分、时、日、月、周）
-- [x] 8个预设表达式
-- [x] 手动输入验证
-
-**需要实现**:
-- [ ] 表达式验证
-  - [ ] 实时验证语法
-  - [ ] 显示错误提示
-  - [ ] 提供修复建议
-- [ ] 下次执行时间预览
-  - [ ] 调用后端 API 计算下次执行时间
-  - [ ] 显示未来 5 次执行时间
-  - [ ] 可视化日历选择器
-- [ ] 快捷操作
-  - [ ] 每 N 分钟/小时/天
-  - [ ] 工作日/周末
-  - [ ] 自定义时间范围
-- [ ] 表达式说明
-  - [ ] 字段含义说明
-  - [ ] 特殊字符说明
-  - [ ] 示例集合
+- [ ] 每任务队列上限（`queue_max`）检查
+- [ ] 队列长度查询 API
+- [ ] 队列清理 API（按 job flush）
+- [ ] 前端展示排队长度与清理入口
 
 ---
 
-### 8. 用户管理界面 (0%)
-**状态**: User 模型已定义，无界面
+### 6. 插件协议能力（借鉴 Cronicle）
+**文件**: `internal/worker/executor.go`, `internal/models/event.go`
 
-**需要实现**:
-- [ ] 用户列表页面
-  - [ ] 表格展示所有用户
-  - [ ] 分页和搜索
-  - [ ] 角色标签
-- [ ] 新建/编辑用户
-  - [ ] 用户名（唯一）
-  - [ ] 密码（bcrypt加密）
-  - [ ] 角色：admin/operator/viewer
-  - [ ] 全名和邮箱
-- [ ] 删除用户
-  - [ ] 确认对话框
-  - [ ] 防止删除自己
-- [ ] 修改密码
-  - [ ] 当前用户修改自己的密码
-  - [ ] 管理员重置其他用户密码
-- [ ] 后端 API
-  - [ ] `GET/POST/PUT/DELETE /api/v1/users`
-  - [ ] `POST /api/v1/users/:id/password`
+- [ ] 定义插件输入输出 JSON 协议
+- [ ] 支持 progress/metrics 上报
+- [ ] 支持链式触发（chain/chain_error）基础语义
 
 ---
 
-### 9. 命令编辑器增强 (0%)
-**状态**: 当前使用文本域
+## 🟢 P2 - 低优先级（增强项）
 
-**需要实现**:
-- [ ] Monaco Editor 集成
-  - [ ] 语法高亮
-  - [ ] 代码补全
-  - [ ] 多行编辑
-- [ ] Shell 命令验证
-  - [ ] 基本语法检查
-  - [ ] 危险命令警告
-  - [ ] 命令历史建议
+### 7. 通知系统
+- [ ] job 级 webhook
+- [ ] universal webhook（全局事件流）
 
----
+### 8. 调度纠偏
+- [ ] reset cursor
+- [ ] 补跑策略（指定窗口补调度）
 
-## 🟢 P2 - 低优先级（增强功能）
-
-### 10. Docker 任务执行器 (0%)
-**状态**: Proto 定义，Executor 未实现
-
-**需要实现**:
-- [ ] 定义 TaskType = DOCKER
-- [ ] Docker 容器执行
-  - [ ] 拉取镜像
-  - [ ] 创建容器
-  - [ ] 端口映射
-  - [ ] 环境变量
-  - [ ] 数据卷挂载
-- [ ] 容器日志获取
-  - [ ] `docker logs` 集成
-  - [ ] 实时流式传输
-- [ ] 容器清理
-  - [ ] 自动删除容器
-  - [ ] 镜像清理
+### 9. API Key 与权限矩阵
+- [ ] API Key 模型与鉴权
+- [ ] 按操作粒度授权（run/abort/edit 等）
 
 ---
 
-### 11. 通知系统 (0%)
-**状态**: 数据库字段已定义，无实现
+## 🧪 测试与质量保障
 
-**需要实现**:
-- [ ] Webhook 通知
-  - [ ] HTTP POST 请求
-  - [ ] 任务成功/失败触发
-  - [ ] 自定义 Payload
-  - [ ] 重试机制
-- [ ] 邮件通知 (SMTP)
-  - [ ] SMTP 配置
-  - [ ] 邮件模板
-  - [ ] 收件人列表
-  - [ ] 发送失败重试
-- [ ] 通知模板
-  - [ ] 支持变量替换
-  - [ ] HTML/文本格式
-  - [ ] 自定义模板
+### 10. 测试体系建设
+
+- [ ] `triggerJob` 集成测试
+- [ ] `abortEvent` 端到端测试（含 running/pending 分支）
+- [ ] TaskConsumer 重试流程测试
+- [ ] Linux 资源采集单元测试（解析 `/proc`）
+- [ ] 前端关键页面冒烟测试（Login/Events/Logs/Nodes）
 
 ---
 
-### 12. 任务依赖/工作流 (0%)
-**状态**: 未实现
+## ⚠️ 已知风险
 
-**需要实现**:
-- [ ] 前置依赖定义
-  - [ ] 依赖任务列表
-  - [ ] 依赖类型：全部成功/任意成功
-- [ ] DAG 可视化编辑器
-  - [ ] 节点拖拽
-  - [ ] 连线编辑
-  - [ ] 循环依赖检测
-- [ ] 依赖满足触发
-  - [ ] 监听依赖任务完成
-  - [ ] 自动触发当前任务
-- [ ] 工作流执行记录
-  - [ ] 工作流实例
-  - [ ] 执行追踪
-  - [ ] 可视化展示
-
----
-
-### 13. 性能监控图表 (0%)
-**状态**: Dashboard 有基础卡片
-
-**需要实现**:
-- [ ] 任务执行时间趋势图
-  - [ ] 折线图/面积图
-  - [ ] 时间范围选择
-  - [ ] 平均/最大/最小
-- [ ] 成功率统计
-  - [ ] 饼图/环形图
-  - [ ] 按时间分组
-  - [ ] 趋势对比
-- [ ] 节点资源历史
-  - [ ] CPU/内存历史曲线
-  - [ ] 多节点对比
-  - [ ] 时间范围选择
-- [ ] 图表库选择
-  - [ ] Apache ECharts
-  - [ ] Chart.js
-  - [ ] D3.js
-
----
-
-### 14. 高级功能 (0%)
-
-#### 14.1 任务链式执行
-- [ ] 多个命令串行执行
-- [ ] 前一个任务的输出作为下一个输入
-- [ ] 断点续传
-- [ ] 失败暂停
-
-#### 14.2 任务导入/导出
-- [ ] JSON/YAML 格式导出
-- [ ] 批量导入
-- [ ] 跨环境迁移
-- [ ] 模板库
-
-#### 14.3 API 密钥管理
-- [ ] API Key 生成
-- [ ] Key 权限控制
-- [ ] Key 有效期
-- [ ] 使用日志
-
-#### 14.4 PTY 交互式终端
-- [ ] 支持交互式命令（ssh, top 等）
-- [ ] 终端复用
-- [ ] 会话管理
-
----
-
-## 📋 技术债务
-
-### 高优先级
-- ⚠️ **认证系统缺失** - 生产环境必需
-- ⚠️ **3个前端页面占位** - 影响用户体验
-- ⚠️ **分发失败无重试** - 可能导致任务丢失
-
-### 中优先级
-- ⚠️ **缺少单元测试** - 代码质量保证
-- ⚠️ **缺少集成测试** - 端到端验证
-- ⚠️ **Cron表达式无验证** - 用户可能输入错误
-
-### 低优先级
-- ⚠️ **日志文件无清理** - 可能占满磁盘
-- ⚠️ **缺少性能监控** - 无法定位性能瓶颈
-- ⚠️ **错误处理不统一** - 影响调试
-
----
-
-## 🎯 优先级说明
-
-### P0 - 高优先级
-**定义**: 生产环境必需、功能缺失严重影响使用
-
-**标准**:
-- 阻碍生产部署
-- 安全相关
-- 核心功能缺失
-
-### P1 - 中优先级
-**定义**: 重要功能，不影响基本使用
-
-**标准**:
-- 增强用户体验
-- 提高运维效率
-- 扩展核心功能
-
-### P2 - 低优先级
-**定义**: 锦上添花，长期规划
-
-**标准**:
-- 高级特性
-- 边缘场景
-- 长期优化
-
----
-
-## 📝 开发建议
-
-### 短期目标（1-2周）
-1. ✅ 完成 JWT 认证系统
-2. ✅ 实现任务中止功能
-3. ✅ 完成任务详情页
-4. ✅ 完成节点管理页
-
-### 中期目标（1个月）
-5. ✅ 完成日志查看器（xterm.js）
-6. ✅ 实现任务重试逻辑
-7. ✅ 完成 Cron 可视化编辑器
-8. ✅ 完成用户管理界面
-
-### 长期目标（2-3个月）
-9. ✅ 实现 HTTP 任务执行器
-10. ✅ 实现通知系统
-11. ✅ 完成测试覆盖
-12. ✅ 性能优化
-
----
-
-## 🔗 相关文档
-
-- [DESIGN.md](DESIGN.md) - 架构设计和实现状态
-- [CLAUDE.md](CLAUDE.md) - 开发规范和最佳实践
-- [README.md](README.md) - 项目概述
-
----
-
-**最后更新**: 2026-04-10  
-**总任务数**: 14 大项，100+ 小项  
-**P0 任务**: 4 项（必须完成）  
-**P1 任务**: 5 项（重要功能）  
-**P2 任务**: 5 项（增强功能）
+- [ ] Dispatcher 连接池并发安全性需要进一步加固
+- [ ] 执行失败重试尚未打通（当前主要是分发失败重试）
+- [ ] 缺少生产级告警与可观测看板
