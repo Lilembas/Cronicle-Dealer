@@ -1,7 +1,7 @@
 # Cronicle-Next 设计文档
 
-> **版本**: v0.3.0
-> **最后更新**: 2026-04-11
+> **版本**: v0.3.1
+> **最后更新**: 2026-04-13
 > **状态**: Beta
 
 ## 📋 目录
@@ -1154,22 +1154,22 @@ func (s *Server) HealthCheck(c *gin.Context) {
 
 ---
 
-**文档版本**: v0.3.0
-**最后更新**: 2026-04-11
+**文档版本**: v0.3.1
+**最后更新**: 2026-04-13
 **维护者**: Cronicle-Next Team
 
 ---
 
-## 11. 实现状态（2026-04-11）
+## 11. 实现状态（2026-04-13）
 
 ### 11.1 总体进度
 
 | 模块 | 完成度 | 状态 |
 |------|--------|------|
-| **后端核心** | 90% | ✅ 调度链路可用 |
-| **前端界面** | 85% | 🟡 主流程可用 |
-| **认证系统** | 75% | 🟡 已接入 JWT 基础闭环 |
-| **总体** | **85%** | 🟢 可开发测试 |
+| **后端核心** | 92% | ✅ 调度链路可用 |
+| **前端界面** | 88% | 🟡 主流程可用 |
+| **认证系统** | 80% | 🟢 已完成 JWT 登录闭环 |
+| **总体** | **88%** | 🟢 可开发测试 |
 
 ### 11.2 当前已完成
 
@@ -1178,6 +1178,8 @@ func (s *Server) HealthCheck(c *gin.Context) {
 - ✅ Scheduler -> Redis Queue -> TaskConsumer -> Dispatcher -> Worker 主链路打通
 - ✅ TaskConsumer 可控生命周期（支持停止等待）与分发失败重试（指数退避）
 - ✅ `abortEvent` / `Dispatcher.AbortTask` / Worker `AbortTask` 任务中止闭环
+- ✅ `triggerJob` 手动触发闭环（创建 Event + 入队 + 状态返回）
+- ✅ 分发重试参数配置化（`max_dispatch_retries`、`dispatch_retry_base_delay`、`dispatch_retry_max_delay`）
 - ✅ JWT 基础登录、刷新、鉴权中间件
 - ✅ Worker 真实资源采集（Linux `/proc` + `statfs`）
 - ✅ WebSocket 实时日志和状态推送
@@ -1187,45 +1189,41 @@ func (s *Server) HealthCheck(c *gin.Context) {
 - ✅ Login（真实登录 API）
 - ✅ Dashboard / Jobs / JobEdit / Events / Shell
 - ✅ JobDetail / Nodes / Logs 页面已从占位改为可用版本
+- ✅ 任务触发按钮与事件高亮展示
 
 ### 11.3 当前未完成（按优先级）
 
 #### P0
 
-1. **手动触发任务闭环**
-   - `triggerJob` 仍为占位实现，需要创建 Event + 入队 + 状态返回
-
-2. **任务执行可靠性增强**
-   - 分发重试参数配置化（次数、退避、上限）
+1. **任务执行可靠性增强**
    - 重试可观测性（指标/告警）
 
 #### P1
 
-3. **HTTP 任务执行器**
-4. **Docker 任务执行器**
-5. **统一队列治理能力**
+2. **HTTP 任务执行器**
+3. **Docker 任务执行器**
+4. **统一队列治理能力**
    - `queue_max`、队列清理、排队策略
 
-6. **插件协议能力（可参考 Cronicle）**
+5. **插件协议能力（可参考 Cronicle）**
    - STDIN/STDOUT JSON 协议
    - progress / metrics / chain 等扩展
 
 #### P2
 
-7. **通知体系**
+6. **通知体系**
    - job webhook + universal webhook
-8. **调度纠偏能力**
+7. **调度纠偏能力**
    - reset cursor / 补跑策略
 
 ### 11.4 技术债务
 
-- ⚠️ `triggerJob` 尚未完成，影响控制面完整性
-- ⚠️ 任务重试仍偏“分发层”，执行失败重试链路未完成
+- ⚠️ 任务重试仍偏”分发层”，执行失败重试链路未完成
 - ⚠️ 缺少系统化单元测试/集成测试
 - ⚠️ Dispatcher gRPC 客户端连接池并发安全性需进一步加固
 
 ---
 
-**文档版本**: v0.3.0
-**最后更新**: 2026-04-11
+**文档版本**: v0.3.1
+**最后更新**: 2026-04-13
 **维护者**: Cronicle-Next Team

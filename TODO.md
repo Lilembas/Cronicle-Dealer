@@ -1,48 +1,50 @@
 # Cronicle-Next 待办事项
 
 > 基于当前代码实况整理  
-> 最后更新: 2026-04-11
+> 最后更新: 2026-04-13
 
 ---
 
 ## 📊 当前进度
 
 ```
-后端完成度: ~90%
-前端完成度: ~85%
-总体完成度: ~85%
+后端完成度: ~92%
+前端完成度: ~88%
+总体完成度: ~88%
 
-✅ 已完成: 核心调度链路、JWT基础认证、任务中止、WebSocket、主要页面、Linux资源采集
-⚠️  部分完成: 分发重试（已实现但参数未配置化）
-❌ 未完成: triggerJob闭环、HTTP/Docker执行器、统一队列治理、测试体系
+✅ 已完成: 核心调度链路、JWT基础认证、任务中止、triggerJob闭环、WebSocket、主要页面、Linux资源采集、分发重试配置化
+⚠️  部分完成: 分发重试（已实现且参数已配置化）
+❌ 未完成: HTTP/Docker执行器、统一队列治理、测试体系
 ```
+
+> 最后更新: 2026-04-13
 
 ---
 
 ## 🔴 P0 - 高优先级（近期必须完成）
 
 ### 1. 手动触发任务闭环
-**状态**: API 已存在，逻辑未完成  
+**状态**: ✅ 已完成 (2026-04-13)  
 **文件**: `internal/master/api_server.go`
 
-- [ ] 完成 `triggerJob` 全流程
-  - [ ] 创建 Event 记录
-  - [ ] 写入 Redis 任务详情
-  - [ ] 推入队列
-  - [ ] 返回统一执行状态（queued / running）
-- [ ] 前端任务详情页展示触发结果与最新状态
+- [x] 完成 `triggerJob` 全流程
+  - [x] 创建 Event 记录
+  - [x] 写入 Redis 任务详情
+  - [x] 推入队列
+  - [x] 返回统一执行状态（queued / running）
+- [x] 前端任务详情页展示触发结果与最新状态
 
 ---
 
 ### 2. 分发重试配置化与可观测性
-**状态**: 已有固定重试（3次 + 指数退避），待增强  
+**状态**: ✅ 已完成 (2026-04-13)  
 **文件**: `internal/master/task_consumer.go`, `internal/config/config.go`
 
-- [ ] 将重试参数配置化
-  - [ ] `max_dispatch_retries`
-  - [ ] `dispatch_retry_base_delay`
-  - [ ] `dispatch_retry_max_delay`
-- [ ] 增加重试日志字段（job_id/event_id/retry/delay/error）
+- [x] 将重试参数配置化
+  - [x] `max_dispatch_retries`
+  - [x] `dispatch_retry_base_delay`
+  - [x] `dispatch_retry_max_delay`
+- [x] 增加重试日志字段（job_id/event_id/retry/delay/error）
 - [ ] 增加重试失败计数指标（后续接 Prometheus）
 
 ---

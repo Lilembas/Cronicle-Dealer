@@ -1,13 +1,13 @@
 # Cronicle-Next 分布式任务调度平台
 
-![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)
+![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat&logo=go)
 ![Vue Version](https://img.shields.io/badge/Vue-3.4+-4FC08D?style=flat&logo=vue.js)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status](https://img.shields.io/badge/Status-Beta-yellow.svg)
 
 > 一个高性能、可扩展、可视化的分布式任务调度与执行平台，基于 Go + Vue 3 构建
 
-**🎉 项目状态（2026-04-11）**: 核心链路可用（调度、分发、执行、日志推送、前端主页面），可用于开发测试；关键缺口为 JWT 认证、任务中止、HTTP/Docker 执行器和 3 个占位页面。
+**🎉 项目状态（2026-04-13）**: 核心链路可用（调度、分发、执行、日志推送、JWT 认证、任务中止、triggerJob 手动触发、前端主页面），可用于开发测试；待完成 HTTP/Docker 执行器、统一队列治理、测试体系。
 
 ## 📚 快速链接
 
@@ -67,7 +67,7 @@
 ## 🛠️ 技术栈
 
 ### 后端
-- **语言**：Go 1.22+
+- **语言**：Go 1.25+
 - **Web 框架**：Gin
 - **RPC**：gRPC
 - **调度**：robfig/cron/v3
@@ -87,7 +87,7 @@
 
 ### 前置要求
 
-- Go 1.22+
+- Go 1.25+
 - Node.js 18+
 - Redis 7+ (可选，用于分布式缓存和队列)
 
@@ -180,15 +180,17 @@ docker-compose down
 - [x] 前端主要页面（Dashboard, Jobs, Events, Shell）
 - [x] Shell 命令 Ad-hoc 执行
 - [x] 日志实时推送
+- [x] 认证系统实现（JWT）
+- [x] 任务中止功能
+- [x] 前端剩余页面（JobDetail, Nodes, Logs）
+- [x] triggerJob 手动触发闭环
+- [x] 分发重试参数配置化
 
 ### 进行中 🚧
-- [ ] 认证系统实现（JWT）
-- [ ] 任务中止功能
-- [ ] 前端剩余页面（JobDetail, Nodes, Logs）
-- [ ] 修复 create/update Job 的 env 字段前后端类型不一致问题
+- [ ] 分发重试可观测性（Prometheus 指标）
+- [ ] 统一队列治理能力
 
 ### 计划中 📋
-- [ ] 任务重试逻辑
 - [ ] HTTP 任务执行器
 - [ ] Docker 任务执行器
 - [ ] Cron 可视化编辑器增强
