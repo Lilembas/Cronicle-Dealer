@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
-import { jobsApi, type Job } from '@/api'
+import { jobsApi } from '@/api'
 import { Plus, Edit, Delete, VideoPlay, RefreshRight, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -15,13 +15,14 @@ const pagination = ref({
 })
 
 // 获取任务列表
-const { data: jobsData, isLoading, refetch } = useQuery({
+const { data: jobsDataRaw, isLoading, refetch } = useQuery({
   queryKey: ['jobs', pagination],
   queryFn: () => jobsApi.list({
     page: pagination.value.page,
     page_size: pagination.value.pageSize,
   }),
 })
+const jobsData = jobsDataRaw as unknown as { total: number; page: number; data: any[] } | undefined
 
 // 新建任务
 const handleCreate = () => {
@@ -59,10 +60,15 @@ const handleDelete = async (id: string, name: string) => {
 // 触发任务
 const handleTrigger = async (id: string, name: string) => {
   try {
-    await jobsApi.trigger(id)
-    ElMessage.success(`任务 "${name}" 已触发`)
-  } catch (error) {
-    ElMessage.error('触发失败')
+    const result = await jobsApi.trigger(id) as unknown as import('@/api').TriggerResponse
+    ElMessage({
+      message: `任务 "${name}" 已入队，Event ID: ${result.event_id}`,
+      type: 'success',
+      duration: 5000,
+      showClose: true,
+    })
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '触发失败')
   }
 }
 

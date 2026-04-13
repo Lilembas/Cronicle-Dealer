@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { eventsApi, type Event } from '@/api'
 import { RefreshRight, View, Filter, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
+const route = useRoute()
+
+// 高亮指定的 event_id
+const highlightId = ref(route.query.highlight as string || '')
 
 // 筛选条件
 const filters = ref({
@@ -23,7 +27,7 @@ const pagination = ref({
 })
 
 // 获取执行记录列表
-const { data: eventsData, isLoading, refetch } = useQuery({
+const { data: eventsDataRaw, isLoading, refetch } = useQuery({
   queryKey: ['events', pagination, filters],
   queryFn: () => eventsApi.list({
     page: pagination.value.page,
@@ -31,6 +35,19 @@ const { data: eventsData, isLoading, refetch } = useQuery({
     status: filters.value.status || undefined,
     job_id: filters.value.jobId || undefined,
   }),
+})
+const eventsData = eventsDataRaw as unknown as { total: number; data: Event[] } | undefined
+
+onMounted(() => {
+  // 如果 URL 带了 highlight 参数，自动将对应行高亮
+  if (highlightId.value) {
+    nextTick(() => {
+      const el = document.getElementById(`event-row-${highlightId.value}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    })
+  }
 })
 
 // 状态选项
@@ -166,10 +183,12 @@ const handlePageChange = (page: number) => {
         v-loading="isLoading"
         stripe
         class="events-table"
+        :row-class-name="({ row }: { row: Event }) => row.id === highlightId ? 'row-highlight' : ''"
+        :row-key="(row: Event) => row.id"
       >
         <el-table-column prop="id" label="Event ID" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-text type="primary" class="event-id">{{ row.id }}</el-text>
+            <el-text type="primary" class="event-id" :id="`event-row-${row.id}`">{{ row.id }}</el-text>
           </template>
         </el-table-column>
 
@@ -253,7 +272,7 @@ const handlePageChange = (page: number) => {
       </div>
 
       <el-empty
-        v-if="!isLoading && (!eventsData?.data || eventsData.data.length === 0)"
+        v-if="!isLoading && (!eventsData?.data || (eventsData?.data?.length || 0) === 0)"
         description="暂无执行记录"
       />
     </el-card>
@@ -304,6 +323,12 @@ const handlePageChange = (page: number) => {
 
 .event-id:hover {
   text-decoration: underline;
+}
+
+/* 触发跳转高亮行 */
+:deep(.row-highlight) {
+  background-color: #fef9c3 !important;
+  transition: background-color 2s ease;
 }
 
 .text-sm {

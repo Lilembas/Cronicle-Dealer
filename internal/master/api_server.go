@@ -246,16 +246,75 @@ func (s *APIServer) deleteJob(c *gin.Context) {
 // triggerJob 手动触发任务
 func (s *APIServer) triggerJob(c *gin.Context) {
 	jobID := c.Param("id")
-	
+
 	var job models.Job
 	if err := storage.DB.Where("id = ?", jobID).First(&job).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 		return
 	}
-	
-	// TODO: 手动创建任务执行记录并分发
-	
-	c.JSON(http.StatusOK, gin.H{"message": "任务已触发"})
+
+	now := time.Now()
+
+	// 生成 Event 记录
+	eventID := fmt.Sprintf("event_%d", now.UnixNano())
+	event := &models.Event{
+		ID:            eventID,
+		JobID:         job.ID,
+		JobName:       job.Name,
+		Status:        eventStatusPending,
+		ScheduledTime: now,
+		CreatedAt:     now,
+	}
+
+	if err := storage.DB.Create(event).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建执行记录失败: " + err.Error()})
+		return
+	}
+
+	// 写入 Redis 任务详情
+	ctx := context.Background()
+	taskKey := fmt.Sprintf("%s:%s", job.ID, eventID)
+	taskData := map[string]interface{}{
+		"job_id":          job.ID,
+		"event_id":        eventID,
+		"job_name":        job.Name,
+		"command":         job.Command,
+		"task_type":       job.TaskType,
+		"timeout":         job.Timeout,
+		"working_dir":     job.WorkingDir,
+		"env":             job.Env,
+		"scheduled_time":  now.Unix(),
+		"manual_trigger":  "true",
+	}
+
+	if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
+		// 回滚 DB 记录
+		storage.DB.Delete(event)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "写入任务详情失败: " + err.Error()})
+		return
+	}
+
+	// 推入就绪队列
+	if err := storage.AddTaskToQueue(ctx, taskKey); err != nil {
+		storage.RedisClient.Del(ctx, "tasks:details:"+taskKey)
+		storage.DB.Delete(event)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "任务入队失败: " + err.Error()})
+		return
+	}
+
+	logger.Info("手动触发任务",
+		zap.String("job_id", job.ID),
+		zap.String("job_name", job.Name),
+		zap.String("event_id", eventID))
+
+	c.JSON(http.StatusOK, gin.H{
+		"event_id":  eventID,
+		"job_id":    job.ID,
+		"job_name":  job.Name,
+		"status":    "queued",
+		"queued_at": now.Unix(),
+		"message":   "任务已加入队列，等待执行",
+	})
 }
 
 // listEvents 获取执行记录列表

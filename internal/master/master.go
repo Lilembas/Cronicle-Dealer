@@ -56,7 +56,7 @@ func (m *Master) startServices() error {
 	m.dispatcher = NewDispatcher()
 
 	// 启动任务消费者
-	m.taskConsumer = NewTaskConsumer(m.dispatcher)
+	m.taskConsumer = NewTaskConsumer(m.dispatcher, m.cfg.Master.DispatchRetry)
 	consumerCtx, cancel := context.WithCancel(context.Background())
 	m.consumerCancel = cancel
 	go m.taskConsumer.Start(consumerCtx)

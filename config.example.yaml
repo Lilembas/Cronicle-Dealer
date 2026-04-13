@@ -18,6 +18,12 @@ master:
     timeout: 30  # 秒，超过此时间未收到心跳视为离线
     check_interval: 10  # 秒
 
+  # 分发重试配置
+  dispatch_retry:
+    max_retries: 3          # 最大重试次数
+    base_delay_sec: 2       # 基础退避延迟（秒），指数退避 base * 2^(n-1)
+    max_delay_sec: 30       # 退避上限（秒）
+
 # Worker 配置
 worker:
   # Master 地址

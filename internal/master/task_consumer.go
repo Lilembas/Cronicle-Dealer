@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
@@ -15,21 +16,21 @@ import (
 )
 
 const (
-	taskQueuePollTimeout  = 5 * time.Second
-	maxDispatchRetries    = 3
-	dispatchRetryBaseWait = 2 * time.Second
+	taskQueuePollTimeout = 5 * time.Second
 )
 
 // TaskConsumer 任务消费者
 type TaskConsumer struct {
-	dispatcher *Dispatcher
-	done       chan struct{}
+	dispatcher  *Dispatcher
+	retryCfg    config.DispatchRetryConfig
+	done        chan struct{}
 }
 
 // NewTaskConsumer 创建任务消费者
-func NewTaskConsumer(dispatcher *Dispatcher) *TaskConsumer {
+func NewTaskConsumer(dispatcher *Dispatcher, retryCfg config.DispatchRetryConfig) *TaskConsumer {
 	return &TaskConsumer{
 		dispatcher: dispatcher,
+		retryCfg:   retryCfg,
 		done:       make(chan struct{}),
 	}
 }
@@ -112,9 +113,16 @@ func (tc *TaskConsumer) Wait(timeout time.Duration) bool {
 
 func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey string, taskData map[string]string, event *models.Event, dispatchErr error) {
 	retryCount := parseRetryCount(taskData["dispatch_retry_count"])
-	if retryCount < maxDispatchRetries {
+	maxRetries := tc.retryCfg.MaxRetries
+	baseDelay := time.Duration(tc.retryCfg.BaseDelaySec) * time.Second
+	maxDelay := time.Duration(tc.retryCfg.MaxDelaySec) * time.Second
+
+	if retryCount < maxRetries {
 		nextRetry := retryCount + 1
-		delay := dispatchRetryBaseWait * time.Duration(1<<(nextRetry-1))
+		delay := baseDelay * time.Duration(1<<(nextRetry-1))
+		if delay > maxDelay {
+			delay = maxDelay
+		}
 
 		detailsKey := fmt.Sprintf("tasks:details:%s", taskKey)
 		_ = storage.RedisClient.HSet(ctx, detailsKey, "dispatch_retry_count", strconv.Itoa(nextRetry)).Err()
@@ -132,6 +140,8 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 			if err := storage.AddTaskToQueue(context.Background(), taskKey); err != nil {
 				logger.Error("重试任务重新入队失败",
 					zap.String("task_key", taskKey),
+					zap.String("job_id", event.JobID),
+					zap.String("event_id", event.ID),
 					zap.Int("retry", nextRetry),
 					zap.Error(err))
 			}
@@ -139,8 +149,10 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 
 		logger.Warn("任务分发失败，稍后重试",
 			zap.String("task_key", taskKey),
+			zap.String("job_id", event.JobID),
 			zap.String("event_id", event.ID),
 			zap.Int("retry", nextRetry),
+			zap.Int("max_retries", maxRetries),
 			zap.Duration("delay", delay),
 			zap.Error(dispatchErr))
 		return
@@ -155,13 +167,16 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 	if updateErr != nil {
 		logger.Error("更新分发失败事件状态失败",
 			zap.String("event_id", event.ID),
+			zap.String("job_id", event.JobID),
 			zap.Error(updateErr))
 	}
 
 	logger.Error("任务分发失败，达到最大重试次数",
 		zap.String("task_key", taskKey),
+		zap.String("job_id", event.JobID),
 		zap.String("event_id", event.ID),
 		zap.Int("retry", retryCount),
+		zap.Int("max_retries", maxRetries),
 		zap.Error(dispatchErr))
 }
 

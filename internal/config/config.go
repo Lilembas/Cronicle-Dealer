@@ -28,8 +28,16 @@ type ServerConfig struct {
 
 // MasterConfig Master 配置
 type MasterConfig struct {
-	Scheduler SchedulerConfig `mapstructure:"scheduler"`
-	Heartbeat HeartbeatConfig `mapstructure:"heartbeat"`
+	Scheduler      SchedulerConfig      `mapstructure:"scheduler"`
+	Heartbeat      HeartbeatConfig      `mapstructure:"heartbeat"`
+	DispatchRetry  DispatchRetryConfig  `mapstructure:"dispatch_retry"`
+}
+
+// DispatchRetryConfig 分发重试配置
+type DispatchRetryConfig struct {
+	MaxRetries    int `mapstructure:"max_retries"`    // 最大重试次数，默认 3
+	BaseDelaySec  int `mapstructure:"base_delay_sec"` // 基础退避延迟（秒），默认 2
+	MaxDelaySec   int `mapstructure:"max_delay_sec"`  // 最大退避上限（秒），默认 30
 }
 
 // SchedulerConfig 调度器配置
@@ -182,6 +190,11 @@ func setDefaults() {
 	viper.SetDefault("master.scheduler.tick_interval", 1)
 	viper.SetDefault("master.heartbeat.timeout", 60)
 	viper.SetDefault("master.heartbeat.check_interval", 30)
+
+	// 分发重试默认值
+	viper.SetDefault("master.dispatch_retry.max_retries", 3)
+	viper.SetDefault("master.dispatch_retry.base_delay_sec", 2)
+	viper.SetDefault("master.dispatch_retry.max_delay_sec", 30)
 
 	// Worker 默认值
 	viper.SetDefault("worker.executor.grpc_port", 9090)

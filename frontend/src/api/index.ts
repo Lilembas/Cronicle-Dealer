@@ -103,6 +103,15 @@ export interface Stats {
     offline_nodes: number
 }
 
+export interface TriggerResponse {
+    event_id: string
+    job_id: string
+    job_name: string
+    status: string
+    queued_at: number
+    message: string
+}
+
 // 任务 API
 export const jobsApi = {
     list: (params?: { page?: number; page_size?: number; category?: string; enabled?: boolean }) =>
@@ -121,7 +130,7 @@ export const jobsApi = {
         request.delete(`/jobs/${id}`),
 
     trigger: (id: string) =>
-        request.post(`/jobs/${id}/trigger`),
+        request.post<TriggerResponse>(`/jobs/${id}/trigger`),
 }
 
 // 执行记录 API

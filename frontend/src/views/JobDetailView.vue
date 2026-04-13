@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { jobsApi, eventsApi, type Job, type Event } from '@/api'
+import { jobsApi, eventsApi, type Job, type Event, type TriggerResponse } from '@/api'
 import { ArrowLeft, Edit, VideoPlay, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -11,12 +11,18 @@ const job = ref<Job | null>(null)
 const events = ref<Event[]>([])
 const loading = ref(false)
 
+// 触发结果 Dialog
+const triggerVisible = ref(false)
+const triggerResult = ref<TriggerResponse | null>(null)
+const triggering = ref(false)
+
 const getStatusType = (status: string) => {
   const map: Record<string, any> = {
     success: 'success',
     failed: 'danger',
     running: 'warning',
     queued: 'info',
+    pending: 'info',
     aborted: 'info',
   }
   return map[status] || 'info'
@@ -27,7 +33,7 @@ const getStatusText = (status: string) => {
     success: '成功',
     failed: '失败',
     running: '运行中',
-    queued: '排队中',
+    queued: '已入队',
     pending: '待执行',
     aborted: '已中止',
   }
@@ -45,8 +51,8 @@ const loadData = async () => {
       eventsApi.list({ job_id: id, page: 1, page_size: 20 }),
     ])
 
-    job.value = jobData
-    events.value = eventsData.data || []
+    job.value = jobData as unknown as Job
+    events.value = (eventsData as unknown as { data: Event[] }).data || []
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || '加载任务详情失败')
   } finally {
@@ -55,14 +61,24 @@ const loadData = async () => {
 }
 
 const handleTrigger = async () => {
-  if (!job.value) return
+  if (!job.value || triggering.value) return
   try {
-    await jobsApi.trigger(job.value.id)
-    ElMessage.success('任务触发成功')
+    triggering.value = true
+    const result = await jobsApi.trigger(job.value.id)
+    triggerResult.value = result as unknown as TriggerResponse
+    triggerVisible.value = true
+    // 刷新执行记录列表
     loadData()
-  } catch {
-    ElMessage.error('任务触发失败')
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || '任务触发失败')
+  } finally {
+    triggering.value = false
   }
+}
+
+const goToEvent = (eventId: string) => {
+  triggerVisible.value = false
+  router.push(`/events?highlight=${eventId}`)
 }
 
 const handleEdit = () => {
@@ -87,7 +103,12 @@ onMounted(() => {
       </div>
       <div class="right-actions">
         <el-button :icon="RefreshRight" @click="loadData">刷新</el-button>
-        <el-button type="primary" :icon="VideoPlay" @click="handleTrigger">立即触发</el-button>
+        <el-button
+          type="primary"
+          :icon="VideoPlay"
+          :loading="triggering"
+          @click="handleTrigger"
+        >立即触发</el-button>
         <el-button :icon="Edit" @click="handleEdit">编辑</el-button>
       </div>
     </div>
@@ -150,6 +171,43 @@ onMounted(() => {
         </el-table-column>
       </el-table>
     </el-card>
+
+    <!-- 触发结果 Dialog -->
+    <el-dialog
+      v-model="triggerVisible"
+      title="任务已触发"
+      width="480px"
+      :close-on-click-modal="true"
+    >
+      <div v-if="triggerResult" class="trigger-result">
+        <el-result icon="success" title="任务已成功加入队列">
+          <template #sub-title>
+            <p class="result-sub">任务正在等待 Worker 节点消费执行</p>
+          </template>
+        </el-result>
+        <el-descriptions :column="1" border class="result-desc">
+          <el-descriptions-item label="任务名称">{{ triggerResult.job_name }}</el-descriptions-item>
+          <el-descriptions-item label="执行记录 ID">
+            <span class="mono">{{ triggerResult.event_id }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="当前状态">
+            <el-tag :type="getStatusType(triggerResult.status)" size="small">
+              {{ getStatusText(triggerResult.status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="入队时间">
+            {{ new Date(triggerResult.queued_at * 1000).toLocaleString('zh-CN') }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="triggerVisible = false">关闭</el-button>
+        <el-button
+          type="primary"
+          @click="triggerResult && goToEvent(triggerResult.event_id)"
+        >查看执行记录</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -190,5 +248,24 @@ onMounted(() => {
 .command {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.trigger-result {
+  padding: 0 8px;
+}
+
+.result-sub {
+  color: #666;
+  margin: 4px 0 16px;
+}
+
+.result-desc {
+  margin-top: 8px;
+}
+
+.mono {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  word-break: break-all;
 }
 </style>
