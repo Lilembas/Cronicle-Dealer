@@ -40,6 +40,7 @@ worker:
   
   # 任务执行配置
   executor:
+    grpc_port: 9091
     max_concurrent_jobs: 10
     default_timeout: 3600  # 秒
 
