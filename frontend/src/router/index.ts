@@ -39,6 +39,12 @@ const routes: RouteRecordRaw[] = [
                 meta: { title: '任务详情' }
             },
             {
+                path: 'jobs/:id/history',
+                name: 'JobHistory',
+                component: () => import('@/views/JobHistoryView.vue'),
+                meta: { title: '执行历史' }
+            },
+            {
                 path: 'jobs/:id',
                 name: 'JobEdit',
                 component: () => import('@/views/JobEditView.vue'),
@@ -51,9 +57,9 @@ const routes: RouteRecordRaw[] = [
                 meta: { title: '执行记录' }
             },
             {
-                path: 'nodes',
-                name: 'Nodes',
-                component: () => import('@/views/NodesView.vue'),
+                path: 'workers',
+                name: 'Workers',
+                component: () => import('@/views/WorkersView.vue'),
                 meta: { title: '节点管理' }
             },
             {
@@ -73,7 +79,7 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-    history: createWebHistory(import.meta.env.BASE_URL),
+    history: createWebHistory('/'),
     routes
 })
 

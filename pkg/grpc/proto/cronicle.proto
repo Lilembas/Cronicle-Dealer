@@ -37,6 +37,7 @@ message RegisterNodeRequest {
   NodeResources resources = 4;
   string version = 5;
   string grpc_address = 6; // Worker executor gRPC 服务地址（格式：host:port）
+  int32 pid = 7; // Worker 进程 ID
 }
 
 message RegisterNodeResponse {
@@ -82,6 +83,7 @@ message TaskRequest {
   int32 timeout = 6;
   string working_dir = 7;
   int64 scheduled_time = 8;
+  bool strict_mode = 9; // 严格模式：任何命令失败立即退出
 }
 
 enum TaskType {

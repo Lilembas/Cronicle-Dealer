@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.21.12
-// source: cronicle.proto
+// source: pkg/grpc/proto/cronicle.proto
 
 package pb
 
@@ -54,11 +54,11 @@ func (x TaskType) String() string {
 }
 
 func (TaskType) Descriptor() protoreflect.EnumDescriptor {
-	return file_cronicle_proto_enumTypes[0].Descriptor()
+	return file_pkg_grpc_proto_cronicle_proto_enumTypes[0].Descriptor()
 }
 
 func (TaskType) Type() protoreflect.EnumType {
-	return &file_cronicle_proto_enumTypes[0]
+	return &file_pkg_grpc_proto_cronicle_proto_enumTypes[0]
 }
 
 func (x TaskType) Number() protoreflect.EnumNumber {
@@ -67,7 +67,7 @@ func (x TaskType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TaskType.Descriptor instead.
 func (TaskType) EnumDescriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{0}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{0}
 }
 
 type StreamType int32
@@ -103,11 +103,11 @@ func (x StreamType) String() string {
 }
 
 func (StreamType) Descriptor() protoreflect.EnumDescriptor {
-	return file_cronicle_proto_enumTypes[1].Descriptor()
+	return file_pkg_grpc_proto_cronicle_proto_enumTypes[1].Descriptor()
 }
 
 func (StreamType) Type() protoreflect.EnumType {
-	return &file_cronicle_proto_enumTypes[1]
+	return &file_pkg_grpc_proto_cronicle_proto_enumTypes[1]
 }
 
 func (x StreamType) Number() protoreflect.EnumNumber {
@@ -116,7 +116,7 @@ func (x StreamType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use StreamType.Descriptor instead.
 func (StreamType) EnumDescriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{1}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{1}
 }
 
 type RegisterNodeRequest struct {
@@ -127,13 +127,14 @@ type RegisterNodeRequest struct {
 	Resources     *NodeResources         `protobuf:"bytes,4,opt,name=resources,proto3" json:"resources,omitempty"`
 	Version       string                 `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"`
 	GrpcAddress   string                 `protobuf:"bytes,6,opt,name=grpc_address,json=grpcAddress,proto3" json:"grpc_address,omitempty"` // Worker executor gRPC 服务地址（格式：host:port）
+	Pid           int32                  `protobuf:"varint,7,opt,name=pid,proto3" json:"pid,omitempty"`                                   // Worker 进程 ID
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RegisterNodeRequest) Reset() {
 	*x = RegisterNodeRequest{}
-	mi := &file_cronicle_proto_msgTypes[0]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -145,7 +146,7 @@ func (x *RegisterNodeRequest) String() string {
 func (*RegisterNodeRequest) ProtoMessage() {}
 
 func (x *RegisterNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[0]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -158,7 +159,7 @@ func (x *RegisterNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterNodeRequest.ProtoReflect.Descriptor instead.
 func (*RegisterNodeRequest) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{0}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *RegisterNodeRequest) GetHostname() string {
@@ -203,6 +204,13 @@ func (x *RegisterNodeRequest) GetGrpcAddress() string {
 	return ""
 }
 
+func (x *RegisterNodeRequest) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
 type RegisterNodeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -215,7 +223,7 @@ type RegisterNodeResponse struct {
 
 func (x *RegisterNodeResponse) Reset() {
 	*x = RegisterNodeResponse{}
-	mi := &file_cronicle_proto_msgTypes[1]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -227,7 +235,7 @@ func (x *RegisterNodeResponse) String() string {
 func (*RegisterNodeResponse) ProtoMessage() {}
 
 func (x *RegisterNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[1]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -240,7 +248,7 @@ func (x *RegisterNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterNodeResponse.ProtoReflect.Descriptor instead.
 func (*RegisterNodeResponse) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{1}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RegisterNodeResponse) GetNodeId() string {
@@ -283,7 +291,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_cronicle_proto_msgTypes[2]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -295,7 +303,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[2]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -308,7 +316,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{2}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *HeartbeatRequest) GetNodeId() string {
@@ -349,7 +357,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_cronicle_proto_msgTypes[3]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -361,7 +369,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[3]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -374,7 +382,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{3}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *HeartbeatResponse) GetSuccess() bool {
@@ -400,7 +408,7 @@ type UnregisterNodeRequest struct {
 
 func (x *UnregisterNodeRequest) Reset() {
 	*x = UnregisterNodeRequest{}
-	mi := &file_cronicle_proto_msgTypes[4]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -412,7 +420,7 @@ func (x *UnregisterNodeRequest) String() string {
 func (*UnregisterNodeRequest) ProtoMessage() {}
 
 func (x *UnregisterNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[4]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -425,7 +433,7 @@ func (x *UnregisterNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnregisterNodeRequest.ProtoReflect.Descriptor instead.
 func (*UnregisterNodeRequest) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{4}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *UnregisterNodeRequest) GetNodeId() string {
@@ -445,7 +453,7 @@ type UnregisterNodeResponse struct {
 
 func (x *UnregisterNodeResponse) Reset() {
 	*x = UnregisterNodeResponse{}
-	mi := &file_cronicle_proto_msgTypes[5]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -457,7 +465,7 @@ func (x *UnregisterNodeResponse) String() string {
 func (*UnregisterNodeResponse) ProtoMessage() {}
 
 func (x *UnregisterNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[5]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -470,7 +478,7 @@ func (x *UnregisterNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnregisterNodeResponse.ProtoReflect.Descriptor instead.
 func (*UnregisterNodeResponse) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{5}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *UnregisterNodeResponse) GetSuccess() bool {
@@ -497,13 +505,14 @@ type TaskRequest struct {
 	Timeout       int32                  `protobuf:"varint,6,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	WorkingDir    string                 `protobuf:"bytes,7,opt,name=working_dir,json=workingDir,proto3" json:"working_dir,omitempty"`
 	ScheduledTime int64                  `protobuf:"varint,8,opt,name=scheduled_time,json=scheduledTime,proto3" json:"scheduled_time,omitempty"`
+	StrictMode    bool                   `protobuf:"varint,9,opt,name=strict_mode,json=strictMode,proto3" json:"strict_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TaskRequest) Reset() {
 	*x = TaskRequest{}
-	mi := &file_cronicle_proto_msgTypes[6]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -515,7 +524,7 @@ func (x *TaskRequest) String() string {
 func (*TaskRequest) ProtoMessage() {}
 
 func (x *TaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[6]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -528,7 +537,7 @@ func (x *TaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskRequest.ProtoReflect.Descriptor instead.
 func (*TaskRequest) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{6}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TaskRequest) GetJobId() string {
@@ -597,7 +606,7 @@ type TaskResponse struct {
 
 func (x *TaskResponse) Reset() {
 	*x = TaskResponse{}
-	mi := &file_cronicle_proto_msgTypes[7]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -609,7 +618,7 @@ func (x *TaskResponse) String() string {
 func (*TaskResponse) ProtoMessage() {}
 
 func (x *TaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[7]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -622,7 +631,7 @@ func (x *TaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResponse.ProtoReflect.Descriptor instead.
 func (*TaskResponse) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{7}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TaskResponse) GetAccepted() bool {
@@ -652,7 +661,7 @@ type LogChunk struct {
 
 func (x *LogChunk) Reset() {
 	*x = LogChunk{}
-	mi := &file_cronicle_proto_msgTypes[8]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -664,7 +673,7 @@ func (x *LogChunk) String() string {
 func (*LogChunk) ProtoMessage() {}
 
 func (x *LogChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[8]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -677,7 +686,7 @@ func (x *LogChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogChunk.ProtoReflect.Descriptor instead.
 func (*LogChunk) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{8}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *LogChunk) GetJobId() string {
@@ -724,7 +733,7 @@ type LogAck struct {
 
 func (x *LogAck) Reset() {
 	*x = LogAck{}
-	mi := &file_cronicle_proto_msgTypes[9]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -736,7 +745,7 @@ func (x *LogAck) String() string {
 func (*LogAck) ProtoMessage() {}
 
 func (x *LogAck) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[9]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -749,7 +758,7 @@ func (x *LogAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogAck.ProtoReflect.Descriptor instead.
 func (*LogAck) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{9}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *LogAck) GetReceived() bool {
@@ -774,7 +783,7 @@ type TaskResult struct {
 
 func (x *TaskResult) Reset() {
 	*x = TaskResult{}
-	mi := &file_cronicle_proto_msgTypes[10]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -786,7 +795,7 @@ func (x *TaskResult) String() string {
 func (*TaskResult) ProtoMessage() {}
 
 func (x *TaskResult) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[10]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -799,7 +808,7 @@ func (x *TaskResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResult.ProtoReflect.Descriptor instead.
 func (*TaskResult) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{10}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TaskResult) GetJobId() string {
@@ -860,7 +869,7 @@ type TaskResultAck struct {
 
 func (x *TaskResultAck) Reset() {
 	*x = TaskResultAck{}
-	mi := &file_cronicle_proto_msgTypes[11]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -872,7 +881,7 @@ func (x *TaskResultAck) String() string {
 func (*TaskResultAck) ProtoMessage() {}
 
 func (x *TaskResultAck) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[11]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -885,7 +894,7 @@ func (x *TaskResultAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResultAck.ProtoReflect.Descriptor instead.
 func (*TaskResultAck) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{11}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TaskResultAck) GetReceived() bool {
@@ -906,7 +915,7 @@ type AbortTaskRequest struct {
 
 func (x *AbortTaskRequest) Reset() {
 	*x = AbortTaskRequest{}
-	mi := &file_cronicle_proto_msgTypes[12]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -918,7 +927,7 @@ func (x *AbortTaskRequest) String() string {
 func (*AbortTaskRequest) ProtoMessage() {}
 
 func (x *AbortTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[12]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -931,7 +940,7 @@ func (x *AbortTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbortTaskRequest.ProtoReflect.Descriptor instead.
 func (*AbortTaskRequest) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{12}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AbortTaskRequest) GetJobId() string {
@@ -965,7 +974,7 @@ type AbortTaskResponse struct {
 
 func (x *AbortTaskResponse) Reset() {
 	*x = AbortTaskResponse{}
-	mi := &file_cronicle_proto_msgTypes[13]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -977,7 +986,7 @@ func (x *AbortTaskResponse) String() string {
 func (*AbortTaskResponse) ProtoMessage() {}
 
 func (x *AbortTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[13]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -990,7 +999,7 @@ func (x *AbortTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbortTaskResponse.ProtoReflect.Descriptor instead.
 func (*AbortTaskResponse) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{13}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AbortTaskResponse) GetSuccess() bool {
@@ -1021,7 +1030,7 @@ type NodeResources struct {
 
 func (x *NodeResources) Reset() {
 	*x = NodeResources{}
-	mi := &file_cronicle_proto_msgTypes[14]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1033,7 +1042,7 @@ func (x *NodeResources) String() string {
 func (*NodeResources) ProtoMessage() {}
 
 func (x *NodeResources) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[14]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1046,7 +1055,7 @@ func (x *NodeResources) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeResources.ProtoReflect.Descriptor instead.
 func (*NodeResources) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{14}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *NodeResources) GetCpuUsage() float64 {
@@ -1102,7 +1111,7 @@ type ResourceUsage struct {
 
 func (x *ResourceUsage) Reset() {
 	*x = ResourceUsage{}
-	mi := &file_cronicle_proto_msgTypes[15]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1114,7 +1123,7 @@ func (x *ResourceUsage) String() string {
 func (*ResourceUsage) ProtoMessage() {}
 
 func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_cronicle_proto_msgTypes[15]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1127,7 +1136,7 @@ func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceUsage.ProtoReflect.Descriptor instead.
 func (*ResourceUsage) Descriptor() ([]byte, []int) {
-	return file_cronicle_proto_rawDescGZIP(), []int{15}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResourceUsage) GetCpuPercent() float64 {
@@ -1151,18 +1160,19 @@ func (x *ResourceUsage) GetElapsedSeconds() float64 {
 	return 0
 }
 
-var File_cronicle_proto protoreflect.FileDescriptor
+var File_pkg_grpc_proto_cronicle_proto protoreflect.FileDescriptor
 
-const file_cronicle_proto_rawDesc = "" +
+const file_pkg_grpc_proto_cronicle_proto_rawDesc = "" +
 	"\n" +
-	"\x0ecronicle.proto\x12\bcronicle\"\xc9\x01\n" +
+	"\x1dpkg/grpc/proto/cronicle.proto\x12\bcronicle\"\xdb\x01\n" +
 	"\x13RegisterNodeRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x12\n" +
 	"\x04tags\x18\x03 \x03(\tR\x04tags\x125\n" +
 	"\tresources\x18\x04 \x01(\v2\x17.cronicle.NodeResourcesR\tresources\x12\x18\n" +
 	"\aversion\x18\x05 \x01(\tR\aversion\x12!\n" +
-	"\fgrpc_address\x18\x06 \x01(\tR\vgrpcAddress\"\x8a\x01\n" +
+	"\fgrpc_address\x18\x06 \x01(\tR\vgrpcAddress\x12\x10\n" +
+	"\x03pid\x18\a \x01(\x05R\x03pid\"\x8a\x01\n" +
 	"\x14RegisterNodeResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x18\n" +
@@ -1265,20 +1275,20 @@ const file_cronicle_proto_rawDesc = "" +
 	"\tAbortTask\x12\x1a.cronicle.AbortTaskRequest\x1a\x1b.cronicle.AbortTaskResponseB/Z-github.com/cronicle/cronicle-next/pkg/grpc/pbb\x06proto3"
 
 var (
-	file_cronicle_proto_rawDescOnce sync.Once
-	file_cronicle_proto_rawDescData []byte
+	file_pkg_grpc_proto_cronicle_proto_rawDescOnce sync.Once
+	file_pkg_grpc_proto_cronicle_proto_rawDescData []byte
 )
 
-func file_cronicle_proto_rawDescGZIP() []byte {
-	file_cronicle_proto_rawDescOnce.Do(func() {
-		file_cronicle_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_cronicle_proto_rawDesc), len(file_cronicle_proto_rawDesc)))
+func file_pkg_grpc_proto_cronicle_proto_rawDescGZIP() []byte {
+	file_pkg_grpc_proto_cronicle_proto_rawDescOnce.Do(func() {
+		file_pkg_grpc_proto_cronicle_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pkg_grpc_proto_cronicle_proto_rawDesc), len(file_pkg_grpc_proto_cronicle_proto_rawDesc)))
 	})
-	return file_cronicle_proto_rawDescData
+	return file_pkg_grpc_proto_cronicle_proto_rawDescData
 }
 
-var file_cronicle_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_cronicle_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
-var file_cronicle_proto_goTypes = []any{
+var file_pkg_grpc_proto_cronicle_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_pkg_grpc_proto_cronicle_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_pkg_grpc_proto_cronicle_proto_goTypes = []any{
 	(TaskType)(0),                  // 0: cronicle.TaskType
 	(StreamType)(0),                // 1: cronicle.StreamType
 	(*RegisterNodeRequest)(nil),    // 2: cronicle.RegisterNodeRequest
@@ -1299,7 +1309,7 @@ var file_cronicle_proto_goTypes = []any{
 	(*ResourceUsage)(nil),          // 17: cronicle.ResourceUsage
 	nil,                            // 18: cronicle.TaskRequest.EnvEntry
 }
-var file_cronicle_proto_depIdxs = []int32{
+var file_pkg_grpc_proto_cronicle_proto_depIdxs = []int32{
 	16, // 0: cronicle.RegisterNodeRequest.resources:type_name -> cronicle.NodeResources
 	16, // 1: cronicle.HeartbeatRequest.resources:type_name -> cronicle.NodeResources
 	0,  // 2: cronicle.TaskRequest.type:type_name -> cronicle.TaskType
@@ -1327,27 +1337,27 @@ var file_cronicle_proto_depIdxs = []int32{
 	0,  // [0:6] is the sub-list for field type_name
 }
 
-func init() { file_cronicle_proto_init() }
-func file_cronicle_proto_init() {
-	if File_cronicle_proto != nil {
+func init() { file_pkg_grpc_proto_cronicle_proto_init() }
+func file_pkg_grpc_proto_cronicle_proto_init() {
+	if File_pkg_grpc_proto_cronicle_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cronicle_proto_rawDesc), len(file_cronicle_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_grpc_proto_cronicle_proto_rawDesc), len(file_pkg_grpc_proto_cronicle_proto_rawDesc)),
 			NumEnums:      2,
 			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_cronicle_proto_goTypes,
-		DependencyIndexes: file_cronicle_proto_depIdxs,
-		EnumInfos:         file_cronicle_proto_enumTypes,
-		MessageInfos:      file_cronicle_proto_msgTypes,
+		GoTypes:           file_pkg_grpc_proto_cronicle_proto_goTypes,
+		DependencyIndexes: file_pkg_grpc_proto_cronicle_proto_depIdxs,
+		EnumInfos:         file_pkg_grpc_proto_cronicle_proto_enumTypes,
+		MessageInfos:      file_pkg_grpc_proto_cronicle_proto_msgTypes,
 	}.Build()
-	File_cronicle_proto = out.File
-	file_cronicle_proto_goTypes = nil
-	file_cronicle_proto_depIdxs = nil
+	File_pkg_grpc_proto_cronicle_proto = out.File
+	file_pkg_grpc_proto_cronicle_proto_goTypes = nil
+	file_pkg_grpc_proto_cronicle_proto_depIdxs = nil
 }

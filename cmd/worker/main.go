@@ -58,22 +58,26 @@ func main() {
 	}
 	defer storage.CloseRedis()
 
+	logger.Info("启动执行器...")
+	executor := worker.NewExecutor(&cfg.Worker.Executor)
+	if err := executor.Start(cfg.Worker.Executor.GRPCPort); err != nil {
+		logger.Fatal("启动执行器失败", zap.Error(err))
+	}
+
 	logger.Info("连接 Master...")
 	client := worker.NewClient(&cfg.Worker)
 	if err := client.Connect(); err != nil {
+		executor.Stop()
 		logger.Fatal("连接 Master 失败", zap.Error(err))
 	}
 
+	// 设置 Worker 的 gRPC 地址（必须使用实际 IP，不能用 0.0.0.0）
+	client.SetGRPCAddress("0.0.0.0", cfg.Worker.Executor.GRPCPort)
+
 	if err := client.Register(); err != nil {
 		client.Close()
+		executor.Stop()
 		logger.Fatal("注册失败", zap.Error(err))
-	}
-
-	logger.Info("启动执行器...")
-	executor := worker.NewExecutor(&cfg.Worker.Executor)
-	if err := executor.Start(0); err != nil {
-		client.Close()
-		logger.Fatal("启动执行器失败", zap.Error(err))
 	}
 
 	executor.SetMasterClient(client.GetMasterClient())

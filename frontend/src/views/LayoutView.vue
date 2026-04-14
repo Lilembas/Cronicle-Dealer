@@ -18,21 +18,24 @@ const authStore = useAuthStore()
 
 const timeNow = ref(new Date().toLocaleTimeString())
 let intervalId: number | null = null
+let isMounted = false // 添加挂载状态标志
 
 // Tab 配置 - 使用 lucide-vue-next 图标组件
 const tabs = ref([
   { id: '/dashboard', label: '仪表盘', icon: Home },
   { id: '/jobs', label: '任务管理', icon: Calendar },
   { id: '/events', label: '执行记录', icon: FileText },
-  { id: '/nodes', label: '节点管理', icon: Monitor },
+  { id: '/workers', label: '节点管理', icon: Monitor },
   { id: '/shell', label: 'Shell 执行', icon: Terminal },
 ])
 
 const activeTab = ref('')
 
-// 更新时间
+// 更新时间 - 添加安全检查
 function updateTime() {
-  timeNow.value = new Date().toLocaleTimeString()
+  if (isMounted) { // 只在组件仍然挂载时更新
+    timeNow.value = new Date().toLocaleTimeString()
+  }
 }
 
 // 退出登录
@@ -49,19 +52,24 @@ function switchTab(tabId: string) {
 }
 
 onMounted(() => {
+  isMounted = true // 设置挂载标志
   intervalId = setInterval(updateTime, 500) as unknown as number
   activeTab.value = route.path
 })
 
 onUnmounted(() => {
+  isMounted = false // 清除挂载标志
   if (intervalId !== null) {
     clearInterval(intervalId)
+    intervalId = null
   }
 })
 
 // 监听路由变化
 router.afterEach((to) => {
-  activeTab.value = to.path
+  if (isMounted) { // 只在组件仍然挂载时更新
+    activeTab.value = to.path
+  }
 })
 </script>
 

@@ -200,6 +200,9 @@ func (s *Scheduler) enqueueTask(job *models.Job, event *models.Event) {
 		"timeout":         job.Timeout,
 		"working_dir":     job.WorkingDir,
 		"env":             job.Env,
+		"target_type":     job.TargetType,
+		"target_value":    job.TargetValue,
+		"strict_mode":     job.StrictMode,
 		"scheduled_time":  event.ScheduledTime.Unix(),
 	}
 

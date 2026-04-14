@@ -15,6 +15,7 @@ export interface Job {
     target_type: string
     target_value: string
     timeout: number
+    strict_mode: boolean
     max_retries: number
     retry_delay: number
     concurrent: boolean
@@ -76,10 +77,12 @@ export interface Node {
     ip: string
     tags: string
     status: string
+    pid?: number
     cpu_cores: number
     cpu_usage: number
     memory_total: number
     memory_usage: number
+    memory_bytes?: number
     memory_percent: number
     disk_total: number
     disk_usage: number
@@ -150,8 +153,14 @@ export const nodesApi = {
     list: (params?: { status?: string }) =>
         request.get<Node[]>('/nodes', { params }),
 
+    listTags: () =>
+        request.get<string[]>('/nodes/tags'),
+
     get: (id: string) =>
         request.get<Node>(`/nodes/${id}`),
+
+    update: (id: string, data: { tags?: string }) =>
+        request.put<Node>(`/nodes/${id}`, data),
 
     delete: (id: string) =>
         request.delete(`/nodes/${id}`),

@@ -81,11 +81,14 @@ func (s *GRPCServer) Stop() {
 func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.RegisterNodeResponse, error) {
 	logger.Info("收到节点注册请求",
 		zap.String("hostname", req.Hostname),
-		zap.String("ip", req.Ip))
+		zap.String("ip", req.Ip),
+		zap.Int32("pid", req.Pid))
 
-	// 检查是否已存在相同hostname的节点（不管状态）
+	// 检查是否已存在相同 hostname + ip + tags != "master" 的节点（不更新 Master 节点）
 	var existingNode models.Node
-	err := storage.DB.Where("hostname = ?", req.Hostname).Order("created_at DESC").First(&existingNode).Error
+	err := storage.DB.Where("hostname = ? AND ip = ? AND (tags = '' OR tags != 'master')", req.Hostname, req.Ip).
+		Order("created_at DESC").
+		First(&existingNode).Error
 
 	var nodeID string
 	var isNewNode bool
@@ -94,15 +97,20 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 		// 节点已存在，复用该节点ID（节点重连）
 		nodeID = existingNode.ID
 		isNewNode = false
-		logger.Info("节点重新上线",
+		logger.Info("Worker 节点重新上线",
 			zap.String("hostname", req.Hostname),
+			zap.String("ip", req.Ip),
 			zap.String("existing_node_id", nodeID),
-			zap.String("old_status", existingNode.Status))
+			zap.String("old_status", existingNode.Status),
+			zap.Int32("old_pid", existingNode.PID))
 	} else {
 		// 新节点，生成新ID
 		nodeID = utils.GenerateID("node")
 		isNewNode = true
-		logger.Info("新节点注册", zap.String("hostname", req.Hostname))
+		logger.Info("新 Worker 节点注册",
+			zap.String("hostname", req.Hostname),
+			zap.String("ip", req.Ip),
+			zap.Int32("pid", req.Pid))
 	}
 
 	node := s.buildNode(nodeID, req)
@@ -117,8 +125,25 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 			}, nil
 		}
 	} else {
-		// 更新现有节点记录
-		if err := storage.DB.Model(&models.Node{}).Where("id = ?", nodeID).Updates(node).Error; err != nil {
+		// 更新现有节点记录，但保留创建时间
+		updates := map[string]interface{}{
+			"g_rpc_address": node.GRPCAddress,
+			"tags":           node.Tags,
+			"pid":            node.PID,
+			"status":         "online", // 重新上线时设置为在线
+			"cpu_cores":      node.CPUCores,
+			"cpu_usage":      node.CPUUsage,
+			"memory_total":   node.MemoryTotal,
+			"memory_usage":   node.MemoryUsage,
+			"memory_percent": node.MemoryPercent,
+			"disk_total":     node.DiskTotal,
+			"disk_usage":     node.DiskUsage,
+			"disk_percent":   node.DiskPercent,
+			"version":        node.Version,
+			"last_heartbeat": time.Now(),
+		}
+
+		if err := storage.DB.Model(&models.Node{}).Where("id = ?", nodeID).Updates(updates).Error; err != nil {
 			logger.Error("更新节点信息失败", zap.Error(err))
 			return &pb.RegisterNodeResponse{
 				Success: false,
@@ -129,9 +154,19 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 
 	s.nodes.Store(nodeID, node)
 
-	logger.Info("节点注册成功",
+	logger.Info("Worker 节点注册成功",
 		zap.String("node_id", nodeID),
 		zap.Bool("is_new", isNewNode))
+
+	// 通过 WebSocket 推送 Worker 节点上线
+	if s.wsServer != nil {
+		if err := s.wsServer.BroadcastNodeStatus(nodeID, req.Hostname, "online",
+			float64(node.CPUUsage), float64(node.MemoryPercent), 0); err != nil {
+			logger.Warn("推送 Worker 节点状态失败", zap.Error(err))
+		} else {
+			logger.Info("已推送 Worker 节点上线状态", zap.String("node_id", nodeID))
+		}
+	}
 
 	return &pb.RegisterNodeResponse{
 		NodeId:        nodeID,
@@ -188,6 +223,15 @@ func (s *GRPCServer) UnregisterNode(ctx context.Context, req *pb.UnregisterNodeR
 	s.nodes.Delete(req.NodeId)
 
 	logger.Info("Worker已下线", zap.String("node_id", req.NodeId), zap.String("hostname", node.Hostname))
+
+	// 通过 WebSocket 推送 Worker 节点下线
+	if s.wsServer != nil {
+		if err := s.wsServer.BroadcastNodeStatus(node.ID, node.Hostname, "offline", 0, 0, 0); err != nil {
+			logger.Warn("推送 Worker 下线状态失败", zap.Error(err))
+		} else {
+			logger.Info("已推送 Worker 下线状态", zap.String("node_id", node.ID))
+		}
+	}
 
 	return &pb.UnregisterNodeResponse{
 		Success: true,
@@ -310,6 +354,7 @@ func (s *GRPCServer) buildNode(nodeID string, req *pb.RegisterNodeRequest) *mode
 		IP:            req.Ip,
 		GRPCAddress:   req.GrpcAddress,
 		Tags:          tagsToString(req.Tags),
+		PID:           req.Pid,
 		Status:        "online",
 		CPUCores:      int(req.Resources.CpuCores),
 		CPUUsage:      req.Resources.CpuUsage,
@@ -322,6 +367,7 @@ func (s *GRPCServer) buildNode(nodeID string, req *pb.RegisterNodeRequest) *mode
 		Version:       req.Version,
 		RunningJobs:   0,
 		MaxConcurrent: defaultMaxConcurrent,
+		LastHeartbeat: time.Now(),
 	}
 }
 
@@ -346,6 +392,14 @@ func (s *GRPCServer) updateNodeHeartbeat(node *models.Node, req *pb.HeartbeatReq
 	node.DiskUsage = req.Resources.DiskUsage
 	node.DiskPercent = calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal)
 	node.RunningJobs = len(req.RunningJobs)
+
+	// 通过 WebSocket 推送节点状态更新
+	if s.wsServer != nil {
+		if err := s.wsServer.BroadcastNodeStatus(node.ID, node.Hostname, "online",
+			float64(node.CPUUsage), float64(node.MemoryPercent), node.RunningJobs); err != nil {
+			logger.Warn("推送节点状态失败", zap.String("node_id", node.ID), zap.Error(err))
+		}
+	}
 }
 
 // calculatePercent 计算百分比

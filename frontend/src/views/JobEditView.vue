@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { jobsApi } from '@/api'
+import { jobsApi, nodesApi, type Node } from '@/api'
 import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -18,7 +18,18 @@ const formData = ref({
   enabled: true,
   env: [] as Array<{ key: string; value: string }>,
   tags: [] as string[],
+  target_type: 'any',
+  target_value: '',
+  strict_mode: false,
 })
+
+// 节点列表
+const nodes = ref<Node[]>([])
+const loadingNodes = ref(false)
+
+// 可用标签列表（从节点标签中获取）
+const availableTags = ref<string[]>([])
+const loadingTags = ref(false)
 
 const parseEnvString = (value: unknown): Array<{ key: string; value: string }> => {
   if (!value) return []
@@ -57,12 +68,51 @@ const cronPresets = [
 const isEdit = computed(() => !!route.params.id)
 const title = computed(() => isEdit.value ? '编辑任务' : '新建任务')
 
+// 加载节点列表（过滤掉 master 节点）
+const loadNodes = async () => {
+  try {
+    loadingNodes.value = true
+    const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
+    // 过滤掉 master 节点
+    nodes.value = (allNodes || []).filter((node: Node) => node.tags !== 'master' && !node.tags?.includes('master'))
+  } catch (error) {
+    console.error('加载节点列表失败:', error)
+    ElMessage.warning('加载节点列表失败')
+  } finally {
+    loadingNodes.value = false
+  }
+}
+
+// 加载所有可用标签
+const loadTags = async () => {
+  try {
+    loadingTags.value = true
+    const tags = await nodesApi.listTags() as unknown as string[]
+    availableTags.value = tags || []
+  } catch (error) {
+    console.error('加载标签列表失败:', error)
+  } finally {
+    loadingTags.value = false
+  }
+}
+
 // 加载任务数据
 const loadJob = async () => {
   if (!isEdit.value) return
 
   try {
     const job = await jobsApi.get(route.params.id as string)
+
+    // 处理标签模式的数据加载
+    let tags = job.tags || []
+    let targetValue = job.target_value || ''
+
+    if (job.target_type === 'tags' && targetValue) {
+      // 如果是标签模式，将逗号分隔的字符串转换为数组
+      tags = targetValue.split(',').map(tag => tag.trim()).filter(tag => tag)
+      targetValue = ''
+    }
+
     formData.value = {
       name: job.name,
       description: job.description || '',
@@ -71,7 +121,10 @@ const loadJob = async () => {
       timeout: job.timeout,
       enabled: job.enabled,
       env: parseEnvString(job.env),
-      tags: job.tags || [],
+      tags: tags,
+      target_type: job.target_type || 'any',
+      target_value: targetValue,
+      strict_mode: job.strict_mode || false,
     }
 
     // 解析Cron表达式
@@ -143,6 +196,16 @@ const save = async () => {
     return
   }
 
+  // 验证目标服务器配置
+  if (formData.value.target_type === 'node_id' && !formData.value.target_value) {
+    ElMessage.warning('请选择执行服务器')
+    return
+  }
+  if (formData.value.target_type === 'tags' && formData.value.tags.length === 0) {
+    ElMessage.warning('请至少添加一个标签')
+    return
+  }
+
   try {
     // 转换环境变量格式
     const env: Record<string, string> = {}
@@ -152,10 +215,18 @@ const save = async () => {
       }
     })
 
-    const data = {
+    // 准备提交数据
+    const data: any = {
       ...formData.value,
       env: JSON.stringify(env),
     }
+
+    // 处理目标服务器配置
+    if (formData.value.target_type === 'tags') {
+      // 标签模式：使用逗号分隔的标签字符串
+      data.target_value = formData.value.tags.join(',')
+    }
+    // node_id 模式直接使用 target_value
 
     if (isEdit.value) {
       await jobsApi.update(route.params.id as string, data)
@@ -178,6 +249,8 @@ const cancel = () => {
 
 onMounted(() => {
   loadJob()
+  loadNodes()
+  loadTags()
 })
 </script>
 
@@ -296,6 +369,54 @@ onMounted(() => {
         <div class="form-section">
           <h3 class="section-title">执行配置</h3>
 
+          <el-form-item label="目标服务器" required>
+            <el-radio-group v-model="formData.target_type">
+              <el-radio value="node_id">指定服务器</el-radio>
+              <el-radio value="tags">按标签选择</el-radio>
+            </el-radio-group>
+          </el-form-item>
+
+          <el-form-item v-if="formData.target_type === 'node_id'" label="选择服务器" required>
+            <el-select
+              v-model="formData.target_value"
+              placeholder="选择执行任务的服务器"
+              :loading="loadingNodes"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="node in nodes"
+                :key="node.id"
+                :label="`${node.hostname} (${node.ip})`"
+                :value="node.id"
+              >
+                <div style="display: flex; justify-content: space-between; align-items: center">
+                  <span>{{ node.hostname }}</span>
+                  <span style="color: #8492a6; font-size: 12px">{{ node.ip }}</span>
+                </div>
+              </el-option>
+            </el-select>
+            <span class="field-hint">任务将在选定的服务器上执行</span>
+          </el-form-item>
+
+          <el-form-item v-if="formData.target_type === 'tags'" label="服务器标签" required>
+            <el-select
+              v-model="formData.tags"
+              multiple
+              filterable
+              placeholder="选择服务器标签"
+              style="width: 100%"
+              :loading="loadingTags"
+            >
+              <el-option
+                v-for="tag in availableTags"
+                :key="tag"
+                :label="tag"
+                :value="tag"
+              />
+            </el-select>
+            <span class="field-hint">任务将在包含任一标签的服务器上执行</span>
+          </el-form-item>
+
           <el-form-item label="执行命令" required>
             <el-input
               v-model="formData.command"
@@ -314,6 +435,14 @@ onMounted(() => {
               :step="60"
             />
             <span class="field-hint">默认3600秒（1小时）</span>
+          </el-form-item>
+
+          <el-form-item label="严格模式">
+            <el-switch v-model="formData.strict_mode" />
+            <div class="field-hint" style="margin-top: 8px; line-height: 1.6;">
+              <div style="margin-bottom: 4px;">✓ 启用：任何命令失败立即退出脚本（推荐多行脚本）</div>
+              <div>✗ 禁用：使用 bash 默认行为（单个命令失败不会终止脚本）</div>
+            </div>
           </el-form-item>
 
           <el-form-item label="环境变量">

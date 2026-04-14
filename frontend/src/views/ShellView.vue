@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { shellApi, type ShellLogsResponse } from '@/api'
+import { shellApi, nodesApi, type ShellLogsResponse, type Node } from '@/api'
 import { VideoPlay, CircleClose, Delete, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getWebSocketClient, type ServerMessage } from '@/utils/websocket'
@@ -12,6 +12,11 @@ const currentEventId = ref('')
 const logs = ref('')
 const exitCode = ref<number>(0)
 const wsClient = getWebSocketClient()
+
+// 目标服务器
+const selectedNodeId = ref('')
+const nodes = ref<Node[]>([])
+const loadingNodes = ref(false)
 
 // 快速命令示例
 const quickCommands = [
@@ -28,6 +33,9 @@ const quickCommands = [
 // 组件挂载时连接WebSocket
 onMounted(async () => {
   try {
+    // 加载节点列表
+    await loadNodes()
+
     // 确保WebSocket已连接
     if (!wsClient['ws'] || wsClient['ws'].readyState !== WebSocket.OPEN) {
       await wsClient.connect()
@@ -43,6 +51,28 @@ onMounted(async () => {
     ElMessage.warning('WebSocket连接失败，将使用轮询模式')
   }
 })
+
+// 加载节点列表（过滤掉 master 节点）
+const loadNodes = async () => {
+  try {
+    loadingNodes.value = true
+    const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
+    // 过滤掉 master 节点（tags 为 master 或包含 master）
+    nodes.value = allNodes.filter((node: Node) => node.tags !== 'master' && !node.tags?.includes('master'))
+
+    // 如果只有一个节点，自动选择
+    if (nodes.value.length === 1) {
+      selectedNodeId.value = nodes.value[0].id
+    }
+
+    console.log('加载到在线节点:', nodes.value.length, '个', nodes.value.map(n => ({ id: n.id, tags: n.tags })))
+  } catch (error) {
+    console.error('加载节点列表失败:', error)
+    ElMessage.warning('加载节点列表失败，请检查服务器连接')
+  } finally {
+    loadingNodes.value = false
+  }
+}
 
 // 组件卸载时清理
 onUnmounted(() => {
@@ -107,6 +137,12 @@ const executeCommand = async () => {
     return
   }
 
+  // 检查是否选择了服务器（如果有多个节点）
+  if (nodes.value.length > 1 && !selectedNodeId.value) {
+    ElMessage.warning('请选择执行服务器')
+    return
+  }
+
   try {
     isExecuting.value = true
     logs.value = ''
@@ -115,14 +151,22 @@ const executeCommand = async () => {
     // 提交命令执行请求
     const response = await shellApi.execute({
       command: command.value,
+      node_id: selectedNodeId.value,
       timeout: 30,
     })
 
-    currentEventId.value = response.event_id
+    // 处理API响应 - axios拦截器已经返回了response.data
+    const result = (response as any).data || response
+    currentEventId.value = result.event_id
+
+    console.log('命令已提交，事件ID:', currentEventId.value)
 
     // 订阅任务日志
-    wsClient.subscribeEventLogs(response.event_id)
+    if (wsClient && wsClient.subscribeEventLogs) {
+      wsClient.subscribeEventLogs(currentEventId.value)
+    }
   } catch (error: any) {
+    console.error('执行命令失败:', error)
     ElMessage.error('执行命令失败: ' + (error.response?.data?.error || error.message))
     isExecuting.value = false
   }
@@ -139,21 +183,33 @@ const clearOutput = () => {
 const useQuickCommand = (cmd: string) => {
   command.value = cmd
 }
+
+// 获取节点名称
+const getNodeName = (nodeId: string) => {
+  const node = nodes.value.find(n => n.id === nodeId)
+  return node ? `${node.hostname} (${node.ip})` : nodeId
+}
 </script>
 
 <template>
   <div class="shell-page">
-    <!-- 页面标题 -->
+    <!-- 页面头部 -->
     <div class="page-header">
-      <div>
-        <h1 class="page-title">Shell 执行</h1>
-        <p class="page-subtitle">在 Worker 节点上执行 Shell 命令并查看实时输出</p>
-      </div>
     </div>
 
     <div class="shell-container">
+      <!-- 无节点提示 -->
+      <el-card v-if="!loadingNodes && nodes.length === 0" class="command-card" shadow="never">
+        <div class="no-nodes">
+          <el-icon :size="48"><CircleClose /></el-icon>
+          <h3>暂无可用服务器</h3>
+          <p>请确保至少有一个 Worker 节点在线</p>
+          <el-button type="primary" @click="loadNodes">重新加载</el-button>
+        </div>
+      </el-card>
+
       <!-- 命令输入区域 -->
-      <el-card class="command-card" shadow="never">
+      <el-card v-else class="command-card" shadow="never">
         <template #header>
           <div class="card-header">
             <h3 class="card-title">命令输入</h3>
@@ -163,6 +219,39 @@ const useQuickCommand = (cmd: string) => {
             </el-tag>
           </div>
         </template>
+
+        <!-- 服务器选择 -->
+        <div v-if="nodes.length > 0" class="server-selector">
+          <div class="server-selector-label">
+            <el-icon><VideoPlay /></el-icon>
+            <span>目标服务器:</span>
+          </div>
+          <el-select
+            v-model="selectedNodeId"
+            placeholder="选择执行命令的服务器"
+            :loading="loadingNodes"
+            :disabled="isExecuting"
+            size="large"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="node in nodes"
+              :key="node.id"
+              :label="`${node.hostname} (${node.ip})`"
+              :value="node.id"
+            >
+              <div style="display: flex; justify-content: space-between; align-items: center">
+                <div>
+                  <span style="font-weight: 500">{{ node.hostname }}</span>
+                  <span style="color: #8492a6; font-size: 12px; margin-left: 8px">{{ node.ip }}</span>
+                </div>
+                <el-tag size="small" :type="node.running_jobs > 0 ? 'warning' : 'success'">
+                  负载: {{ node.running_jobs }}
+                </el-tag>
+              </div>
+            </el-option>
+          </el-select>
+        </div>
 
         <!-- 命令输入框 -->
         <div class="command-input-group">
@@ -240,6 +329,9 @@ const useQuickCommand = (cmd: string) => {
           <span class="status-item">
             <strong>Event ID:</strong> {{ currentEventId }}
           </span>
+          <span v-if="selectedNodeId" class="status-item">
+            <strong>执行节点:</strong> {{ getNodeName(selectedNodeId) }}
+          </span>
           <span v-if="isExecuting" class="status-item status-running">
             <el-icon class="is-loading"><Loading /></el-icon>
             正在执行...
@@ -285,6 +377,34 @@ const useQuickCommand = (cmd: string) => {
   border: 1px solid #e2e8f0;
 }
 
+.no-nodes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: #64748b;
+}
+
+.no-nodes .el-icon {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.no-nodes h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+}
+
+.no-nodes p {
+  font-size: 14px;
+  color: #94a3b8;
+  margin: 0 0 20px 0;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -303,6 +423,24 @@ const useQuickCommand = (cmd: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.server-selector {
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.server-selector-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
 }
 
 .command-input-group {

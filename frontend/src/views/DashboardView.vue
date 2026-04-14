@@ -116,12 +116,8 @@ onUnmounted(() => {
 
 <template>
   <div class="dashboard">
-    <!-- 页面标题 -->
+    <!-- 页面操作 -->
     <div class="page-header">
-      <div>
-        <h1 class="page-title">仪表盘</h1>
-        <p class="page-subtitle">实时监控任务调度和节点状态</p>
-      </div>
       <el-button
         type="primary"
         :icon="RefreshRight"

@@ -11,11 +11,14 @@ type Node struct {
 	IP       string `gorm:"type:varchar(50);not null" json:"ip"`
 
 	// gRPC 执行器地址
-	GRPCAddress string `gorm:"type:varchar(255)" json:"grpc_address"` // Worker executor gRPC 服务地址
+	GRPCAddress string `gorm:"column:g_rpc_address;type:varchar(255)" json:"grpc_address"` // Worker executor gRPC 服务地址
 
 	// 节点标签
 	Tags     string `gorm:"type:varchar(500)" json:"tags"` // JSON 存储标签数组
-	
+
+	// 进程信息
+	PID      int32  `gorm:"column:pid;default:0" json:"pid"` // 进程 ID
+
 	// 状态
 	Status   string `gorm:"type:varchar(20);default:'online'" json:"status"` // online, offline, busy
 	
@@ -40,8 +43,9 @@ type Node struct {
 	LastHeartbeat time.Time `json:"last_heartbeat"`
 	
 	// 元数据
-	RegisteredAt time.Time `gorm:"autoCreateTime" json:"registered_at"`
-	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
+	RegisteredAt  time.Time `gorm:"autoCreateTime" json:"registered_at"`
+	UpdatedAt     time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }
 
 // TableName 表名

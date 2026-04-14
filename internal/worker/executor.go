@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +27,15 @@ const (
 	taskStatusSuccess = "success"
 	taskStatusFailed  = "failed"
 	taskStatusRunning = "running"
+	// STDERR缓冲区大小限制
+	maxStderrBufferSize = 32 * 1024 // 32KB
 )
+
+// outputChunk 输出数据块（包含流类型）
+type outputChunk struct {
+	data       []byte
+	streamType pb.StreamType
+}
 
 // Executor 任务执行器
 type Executor struct {
@@ -185,7 +194,7 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 
 	logger.Info("开始执行任务", zap.String("event_id", req.EventId))
 
-	exitCode, output, err := e.executeByType(req)
+	exitCode, output, stderr, err := e.executeByType(req)
 	endTime := time.Now()
 
 	status := taskStatusSuccess
@@ -197,7 +206,7 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 	}
 
 	storage.SetTaskStatus(ctx, taskKey, status)
-	e.recordTaskResult(ctx, taskKey, req, startTime, endTime, exitCode, output, err)
+	e.recordTaskResult(ctx, taskKey, req, startTime, endTime, exitCode, output, stderr, err)
 
 	logger.Info("任务执行完成",
 		zap.String("event_id", req.EventId),
@@ -206,7 +215,7 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 }
 
 // executeByType 根据任务类型执行
-func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, error) {
+func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, string, error) {
 	switch req.Type {
 	case pb.TaskType_SHELL:
 		return e.executeShell(req)
@@ -215,12 +224,12 @@ func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, error) {
 	case pb.TaskType_DOCKER:
 		return e.executeDocker(req)
 	default:
-		return 1, "", fmt.Errorf("不支持的任务类型: %v", req.Type)
+		return 1, "", "", fmt.Errorf("不支持的任务类型: %v", req.Type)
 	}
 }
 
 // executeShell 执行 Shell 脚本（支持流式输出）
-func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
+func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error) {
 	ctx := context.Background()
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -228,7 +237,30 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", req.Command)
+	// 根据严格模式选择 bash 参数
+	// 严格模式：任何命令失败立即退出（bash -e -c "command"）
+	// 标准模式：使用 bash 默认行为（bash -c "command"）
+
+	// 安全地截取命令预览（最多100字符）
+	commandPreview := req.Command
+	if len(commandPreview) > 100 {
+		commandPreview = commandPreview[:100] + "..."
+	}
+
+	logger.Info("执行任务参数",
+		zap.String("event_id", req.EventId),
+		zap.Bool("strict_mode", req.StrictMode),
+		zap.String("command_preview", commandPreview))
+
+	var cmd *exec.Cmd
+	if req.StrictMode {
+		logger.Info("使用严格模式执行任务", zap.String("event_id", req.EventId))
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-e", "-c", req.Command)
+	} else {
+		logger.Info("使用标准模式执行任务", zap.String("event_id", req.EventId))
+		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", req.Command)
+	}
+
 	if req.WorkingDir != "" {
 		cmd.Dir = req.WorkingDir
 	}
@@ -242,22 +274,24 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	// 创建管道来捕获实时输出
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return 1, "", fmt.Errorf("创建stdout管道失败: %w", err)
+		return 1, "", "", fmt.Errorf("创建stdout管道失败: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return 1, "", fmt.Errorf("创建stderr管道失败: %w", err)
+		return 1, "", "", fmt.Errorf("创建stderr管道失败: %w", err)
 	}
 
 	// 启动命令
 	if err := cmd.Start(); err != nil {
-		return 1, "", fmt.Errorf("启动命令失败: %w", err)
+		return 1, "", "", fmt.Errorf("启动命令失败: %w", err)
 	}
 	e.runningJobs.Store(req.EventId, cmd)
 
 	// 用于收集完整输出
 	var fullOutput bytes.Buffer
-	outputChan := make(chan []byte, 100) // 缓冲通道避免阻塞
+	var stderrBuffer bytes.Buffer // 用于生成错误报告
+
+	outputChan := make(chan outputChunk, 100) // 缓冲通道避免阻塞
 	var wg sync.WaitGroup
 
 	// 创建日志流（如果Master客户端可用）
@@ -278,15 +312,26 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	go func() {
 		defer close(done)
 		for chunk := range outputChan {
-			fullOutput.Write(chunk)
+						// 写入完整输出
+				fullOutput.Write(chunk.data)
+
+				// 如果是 stderr，写入缓冲区（用于错误报告）
+				if chunk.streamType == pb.StreamType_STDERR {
+					if stderrBuffer.Len() < maxStderrBufferSize {
+						stderrBuffer.Write(chunk.data)
+					} else if stderrBuffer.Len() == maxStderrBufferSize {
+						// 第一次超出，添加省略标记
+						stderrBuffer.WriteString("...")
+					}
+				}
 
 			// 实时发送到Master
 			if logStream != nil {
 				chunk := &pb.LogChunk{
 					EventId:    req.EventId,
-					Content:    chunk,
+					Content:    chunk.data,
 					Timestamp:  time.Now().Unix(),
-					StreamType: pb.StreamType_STDOUT,
+					StreamType: chunk.streamType,
 				}
 
 				if err := logStream.Send(chunk); err != nil {
@@ -301,14 +346,14 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		e.readStream(stdout, req.EventId, "stdout", outputChan)
+		e.readStream(stdout, req.EventId, "stdout", outputChan, pb.StreamType_STDOUT)
 	}()
 
 	// 启动goroutine读取stderr
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		e.readStream(stderr, req.EventId, "stderr", outputChan)
+		e.readStream(stderr, req.EventId, "stderr", outputChan, pb.StreamType_STDERR)
 	}()
 
 	// 等待命令执行完成
@@ -328,13 +373,22 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, error) {
 
 	exitCode, _ := extractExitCode(err)
 	if reason, aborted := e.abortedJobs.Load(req.EventId); aborted {
-		return 137, fullOutput.String(), fmt.Errorf("task aborted: %v", reason)
+		return 137, fullOutput.String(), stderrBuffer.String(), fmt.Errorf("task aborted: %v", reason)
 	}
-	return exitCode, fullOutput.String(), err
+
+	// 如果有错误且stderr不为空，增强错误消息
+	if err != nil && stderrBuffer.Len() > 0 {
+		stderrFirstLine := strings.SplitN(stderrBuffer.String(), "\n", 2)[0]
+		if len(stderrFirstLine) > 0 && len(stderrFirstLine) < 256 {
+			err = fmt.Errorf("%s: %s", err.Error(), stderrFirstLine)
+		}
+	}
+
+	return exitCode, fullOutput.String(), stderrBuffer.String(), err
 }
 
 // readStream 读取输出流
-func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outputChan chan<- []byte) {
+func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outputChan chan outputChunk, streamTypePB pb.StreamType) {
 	scanner := bufio.NewScanner(reader)
 	buf := make([]byte, 0, 1024) // 1KB缓冲区
 	scanner.Buffer(buf, 10*1024*1024) // 最大10MB行
@@ -343,7 +397,10 @@ func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outp
 		line := scanner.Bytes()
 		// 添加换行符
 		lineWithNewline := append(line, '\n')
-		outputChan <- lineWithNewline
+		outputChan <- outputChunk{
+			data:       lineWithNewline,
+			streamType: streamTypePB,
+		}
 
 		logger.Debug("实时输出",
 			zap.String("event_id", eventID),
@@ -360,24 +417,25 @@ func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outp
 }
 
 // executeHTTP 执行 HTTP 请求
-func (e *Executor) executeHTTP(req *pb.TaskRequest) (int, string, error) {
+func (e *Executor) executeHTTP(req *pb.TaskRequest) (int, string, string, error) {
 	logger.Warn("HTTP 任务执行器未实现", zap.String("event_id", req.EventId))
-	return 1, "", fmt.Errorf("HTTP 任务执行器未实现")
+	return 1, "", "", fmt.Errorf("HTTP 任务执行器未实现")
 }
 
 // executeDocker 执行 Docker 容器任务
-func (e *Executor) executeDocker(req *pb.TaskRequest) (int, string, error) {
+func (e *Executor) executeDocker(req *pb.TaskRequest) (int, string, string, error) {
 	logger.Warn("Docker 任务执行器未实现", zap.String("event_id", req.EventId))
-	return 1, "", fmt.Errorf("Docker 任务执行器未实现")
+	return 1, "", "", fmt.Errorf("Docker 任务执行器未实现")
 }
 
 // recordTaskResult 记录任务结果
-func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, output string, execErr error) {
+func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, output, stderr string, execErr error) {
 	result := map[string]interface{}{
 		"job_id":       req.JobId,
 		"event_id":     req.EventId,
 		"exit_code":    exitCode,
 		"output":       output,
+		"stderr":       stderr,
 		"start_time":   startTime.Unix(),
 		"end_time":     endTime.Unix(),
 		"duration":     endTime.Sub(startTime).Seconds(),

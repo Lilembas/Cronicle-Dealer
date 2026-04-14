@@ -99,6 +99,9 @@ func (c *Client) Register() error {
 		resources = &pb.NodeResources{}
 	}
 
+	// 获取当前进程 PID
+	pid := int32(os.Getpid())
+
 	req := &pb.RegisterNodeRequest{
 		Hostname:    c.hostname,
 		Ip:          c.localIP,
@@ -106,6 +109,7 @@ func (c *Client) Register() error {
 		Resources:   resources,
 		Version:     workerVersion,
 		GrpcAddress: c.grpcAddress,
+		Pid:         pid,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -125,7 +129,8 @@ func (c *Client) Register() error {
 
 	logger.Info("节点注册成功",
 		zap.String("node_id", c.nodeID),
-		zap.String("hostname", c.hostname))
+		zap.String("hostname", c.hostname),
+		zap.Int32("pid", pid))
 
 	if err := c.updateRedisWorker(ctx, resources); err != nil {
 		logger.Warn("注册到 Redis 失败", zap.Error(err))

@@ -2,9 +2,11 @@ package master
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -89,7 +91,9 @@ func (s *APIServer) setupRoutes() {
 	nodes := protected.Group("/nodes")
 	{
 		nodes.GET("", s.listNodes)         // 获取节点列表
+		nodes.GET("/tags", s.listNodeTags) // 获取所有节点标签
 		nodes.GET("/:id", s.getNode)       // 获取节点详情
+		nodes.PUT("/:id", s.updateNode)    // 更新节点
 		nodes.DELETE("/:id", s.deleteNode) // 删除节点
 	}
 	
@@ -339,7 +343,8 @@ func (s *APIServer) listEvents(c *gin.Context) {
 	var total int64
 	query.Model(&models.Event{}).Count(&total)
 	
-	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&events).Error; err != nil {
+	// 排序：优先按调度时间，其次按开始时间，最后按ID（包含时间戳），都从新往旧
+	if err := query.Offset(offset).Limit(pageSize).Order("COALESCE(scheduled_time, start_time) DESC, id DESC").Find(&events).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -443,6 +448,45 @@ func (s *APIServer) listNodes(c *gin.Context) {
 	c.JSON(http.StatusOK, nodes)
 }
 
+// listNodeTags 获取所有节点标签（排除 master 节点）
+func (s *APIServer) listNodeTags(c *gin.Context) {
+	var nodes []models.Node
+	if err := storage.DB.Select("tags").Find(&nodes).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 解析并合并所有标签，排除 master 节点
+	tagSet := make(map[string]bool)
+	for _, node := range nodes {
+		if node.Tags == "" {
+			continue
+		}
+		// 跳过 master 节点
+		if node.Tags == "master" || strings.Contains(node.Tags, "\"master\"") || strings.Contains(node.Tags, "master") {
+			continue
+		}
+		var tags []string
+		if err := json.Unmarshal([]byte(node.Tags), &tags); err != nil {
+			// 如果解析失败，作为单个标签处理
+			tagSet[node.Tags] = true
+		} else {
+			for _, tag := range tags {
+				if tag != "" && tag != "master" {
+					tagSet[tag] = true
+				}
+			}
+		}
+	}
+
+	tags := make([]string, 0, len(tagSet))
+	for tag := range tagSet {
+		tags = append(tags, tag)
+	}
+
+	c.JSON(http.StatusOK, tags)
+}
+
 // getNode 获取节点详情
 func (s *APIServer) getNode(c *gin.Context) {
 	var node models.Node
@@ -451,6 +495,39 @@ func (s *APIServer) getNode(c *gin.Context) {
 		return
 	}
 	
+	c.JSON(http.StatusOK, node)
+}
+
+// updateNode 更新节点
+func (s *APIServer) updateNode(c *gin.Context) {
+	var node models.Node
+	if err := storage.DB.Where("id = ?", c.Param("id")).First(&node).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "节点不存在"})
+		return
+	}
+
+	var req struct {
+		Tags string `json:"tags"` // JSON 存储标签数组
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updates := make(map[string]interface{})
+	if req.Tags != "" {
+		updates["tags"] = req.Tags
+	}
+
+	if len(updates) > 0 {
+		if err := storage.DB.Model(&node).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// 重新查询返回最新数据
+	storage.DB.Where("id = ?", c.Param("id")).First(&node)
 	c.JSON(http.StatusOK, node)
 }
 
@@ -536,26 +613,12 @@ func (s *APIServer) executeShell(c *gin.Context) {
 	ctx := context.Background()
 	taskKey := fmt.Sprintf("%s:%s", jobID, eventID)
 
-	// 创建 Job 记录（Dispatcher 需要从 jobs 表查询任务配置）
-	// 注意：必须使用Select显式指定字段，否则GORM会忽略零值（如Enabled=false）
-	job := &models.Job{
-		ID:          jobID,
-		Name:        "Ad-hoc Shell 命令",
-		Description: "通过 API 执行的临时 Shell 命令",
-		Category:    "adhoc",
-		CronExpr:    "* * * * * *", // 临时任务，使用假的 cron 表达式
-		Enabled:     false,         // 禁用，避免被调度器重复执行
-		TaskType:    "shell",
-		Command:     req.Command,
-		TargetType:  "any",
-		Timeout:     req.Timeout,
-	}
-
-	if err := storage.DB.Select("*").Create(job).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "创建任务失败: " + err.Error(),
-		})
-		return
+	// 确定目标服务器配置
+	targetType := "any"
+	targetValue := ""
+	if req.NodeID != "" {
+		targetType = "node_id"
+		targetValue = req.NodeID
 	}
 
 	// 创建事件
@@ -576,7 +639,7 @@ func (s *APIServer) executeShell(c *gin.Context) {
 		return
 	}
 
-	// 保存任务详情到 Redis
+	// 保存任务详情到 Redis（包含完整的任务配置，Dispatcher 会直接从这里获取而不是查数据库）
 	taskData := map[string]interface{}{
 		"job_id":         jobID,
 		"event_id":       eventID,
@@ -584,6 +647,8 @@ func (s *APIServer) executeShell(c *gin.Context) {
 		"command":        req.Command,
 		"task_type":      "shell",
 		"timeout":        req.Timeout,
+		"target_type":    targetType,
+		"target_value":   targetValue,
 		"scheduled_time": now.Unix(),
 	}
 
@@ -629,8 +694,13 @@ func (s *APIServer) getShellLogs(c *gin.Context) {
 	}
 
 	ctx := context.Background()
-	logKey := fmt.Sprintf("task_logs:%s", eventID)
-	logs, _ := storage.RedisClient.Get(ctx, logKey).Result()
+
+	// 使用 storage.GetLogs 获取日志（优先 Redis，回退到文件）
+	logs, err := storage.GetLogs(ctx, eventID)
+	if err != nil {
+		// 日志不存在时返回空字符串而不是错误
+		logs = ""
+	}
 
 	// 检查任务是否完成
 	var event models.Event

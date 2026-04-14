@@ -91,8 +91,8 @@ func (tc *TaskConsumer) Start(ctx context.Context) {
 			Status:  "pending",
 		}
 
-		// 分发任务
-		if err := tc.dispatcher.DispatchEvent(event); err != nil {
+		// 分发任务（传递 taskDetails 以支持 ad-hoc 任务）
+		if err := tc.dispatcher.DispatchEvent(event, taskData); err != nil {
 			tc.handleDispatchFailure(ctx, taskKey, taskData, event, err)
 		}
 	}

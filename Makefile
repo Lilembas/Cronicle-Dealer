@@ -85,6 +85,24 @@ integration-test:
 	@echo "运行集成测试..."
 	@cd test && go run integration_test.go
 
+# 清理历史记录
+clean-events:
+	@echo "清理历史记录..."
+	@./scripts/clear_events.sh
+
+clean-events-selective:
+	@echo "选择性清理历史记录..."
+	@./scripts/clear_events_selective.sh
+
+# 查看历史记录统计
+stats-events:
+	@echo "📊 历史记录统计:"
+	@echo ""
+	@sqlite3 cronicle.db "SELECT '总记录数: ' || COUNT(*) FROM events;"
+	@sqlite3 cronicle.db "SELECT '  成功: ' || COUNT(*) FROM events WHERE status='success';"
+	@sqlite3 cronicle.db "SELECT '  失败: ' || COUNT(*) FROM events WHERE status='failed';"
+	@sqlite3 cronicle.db "SELECT '  运行中: ' || COUNT(*) FROM events WHERE status='running';"
+
 # 清理
 clean:
 	@echo "清理构建文件..."
@@ -92,6 +110,9 @@ clean:
 	rm -rf logs/
 	rm -f coverage.out coverage.html
 	@echo "✅ 清理完成"
+
+clean-all: clean clean-events
+	@echo "✅ 清理构建文件和历史记录完成"
 
 # 格式化代码
 fmt:
@@ -112,15 +133,19 @@ dev: deps proto
 # 帮助信息
 help:
 	@echo "可用命令："
-	@echo "  make proto          - 生成 Protobuf 代码"
-	@echo "  make build          - 构建所有二进制文件"
-	@echo "  make run-master     - 运行 Master"
-	@echo "  make run-worker     - 运行 Worker"
-	@echo "  make docker         - 构建 Docker 镜像"
-	@echo "  make docker-up      - 启动 Docker Compose"
-	@echo "  make test           - 运行测试"
-	@echo "  make integration-test - 运行集成测试"
-	@echo "  make clean          - 清理构建文件"
-	@echo "  make fmt            - 格式化代码"
-	@echo "  make lint           - 代码检查"
-	@echo "  make dev            - 准备开发环境"
+	@echo "  make proto                - 生成 Protobuf 代码"
+	@echo "  make build                - 构建所有二进制文件"
+	@echo "  make run-master           - 运行 Master"
+	@echo "  make run-worker           - 运行 Worker"
+	@echo "  make docker               - 构建 Docker 镜像"
+	@echo "  make docker-up            - 启动 Docker Compose"
+	@echo "  make test                 - 运行测试"
+	@echo "  make integration-test    - 运行集成测试"
+	@echo "  make clean                - 清理构建文件"
+	@echo "  make clean-events         - 清理所有历史记录"
+	@echo "  make clean-events-selective - 选择性清理历史记录"
+	@echo "  make stats-events         - 查看历史记录统计"
+	@echo "  make clean-all            - 清理构建文件和历史记录"
+	@echo "  make fmt                  - 格式化代码"
+	@echo "  make lint                 - 代码检查"
+	@echo "  make dev                  - 准备开发环境"

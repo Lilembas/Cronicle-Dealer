@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { jobsApi } from '@/api'
-import { Plus, Edit, Delete, VideoPlay, RefreshRight, View } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, VideoPlay, RefreshRight, View, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -36,6 +36,10 @@ const handleEdit = (id: string) => {
 
 const handleDetail = (id: string) => {
   router.push(`/jobs/${id}/detail`)
+}
+
+const handleHistory = (id: string) => {
+  router.push(`/jobs/${id}/history`)
 }
 
 // 删除任务
@@ -81,7 +85,6 @@ const handlePageChange = (page: number) => {
 <template>
   <div class="jobs">
     <div class="page-header">
-      <h2 class="page-title">任务管理</h2>
       <div class="header-actions">
         <el-button :icon="RefreshRight" @click="refetch">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="handleCreate">新建任务</el-button>
@@ -113,11 +116,14 @@ const handlePageChange = (page: number) => {
             {{ row.next_run_time ? new Date(row.next_run_time).toLocaleString('zh-CN') : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button-group>
               <el-button size="small" :icon="View" @click="handleDetail(row.id)">
                 详情
+              </el-button>
+              <el-button size="small" :icon="Clock" @click="handleHistory(row.id)">
+                历史
               </el-button>
               <el-button size="small" :icon="VideoPlay" @click="handleTrigger(row.id, row.name)">
                 触发

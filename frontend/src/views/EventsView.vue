@@ -142,7 +142,6 @@ const handlePageChange = (page: number) => {
 <template>
   <div class="events">
     <div class="page-header">
-      <h2 class="page-title">执行记录</h2>
       <el-button :icon="RefreshRight" @click="refetch">刷新</el-button>
     </div>
 

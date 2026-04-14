@@ -21,6 +21,7 @@ type Job struct {
 	Command     string    `gorm:"type:text;not null" json:"command"`
 	WorkingDir  string    `gorm:"type:varchar(500)" json:"working_dir"`
 	Env         string    `gorm:"type:text" json:"env"` // JSON 存储环境变量
+	StrictMode  bool      `gorm:"default:false" json:"strict_mode"` // 严格模式：任何命令失败立即退出
 	
 	// 目标节点
 	TargetType  string    `gorm:"type:varchar(20);default:'any'" json:"target_type"` // any, node_id, tags, group

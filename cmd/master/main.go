@@ -73,6 +73,11 @@ func main() {
 		logger.Warn("重置 Worker 节点状态失败", zap.Error(err))
 	}
 
+	// 清理重复的节点记录（相同 hostname + ip 只保留最新的）
+	if err := cleanupDuplicateNodes(); err != nil {
+		logger.Warn("清理重复节点失败", zap.Error(err))
+	}
+
 	// 启动 Master
 	logger.Info("启动核心服务...")
 	m := master.NewMaster(cfg)
@@ -113,5 +118,106 @@ func resetWorkerNodes() error {
 	if result.RowsAffected > 0 {
 		logger.Info("已将在线 Worker 标记为离线", zap.Int64("count", result.RowsAffected))
 	}
+	return nil
+}
+
+// cleanupDuplicateNodes 清理重复的节点记录（相同 hostname + ip 只保留 Master 或最新的）
+func cleanupDuplicateNodes() error {
+	logger.Info("清理重复的节点记录...")
+
+	// 查找所有重复的 hostname + ip 组
+	type NodeGroup struct {
+		Hostname string
+		IP       string
+		Count    int
+	}
+	var groups []NodeGroup
+	if err := storage.DB.Model(&models.Node{}).
+		Select("hostname, ip, count(*) as count").
+		Group("hostname, ip").
+		Having("count > 1").
+		Scan(&groups).Error; err != nil {
+		return err
+	}
+
+	if len(groups) == 0 {
+		logger.Info("没有发现重复节点")
+		return nil
+	}
+
+	logger.Info("发现重复节点组", zap.Int("count", len(groups)))
+
+	// 对每个重复组，优先保留 Master，其次保留最新的
+	totalDeleted := 0
+	for _, group := range groups {
+		logger.Info("处理重复节点",
+			zap.String("hostname", group.Hostname),
+			zap.String("ip", group.IP),
+			zap.Int("count", group.Count))
+
+		var nodes []models.Node
+		if err := storage.DB.Where("hostname = ? AND ip = ?", group.Hostname, group.IP).
+			Order("created_at ASC").
+			Find(&nodes).Error; err != nil {
+			logger.Error("查询重复节点失败", zap.Error(err))
+			continue
+		}
+
+		if len(nodes) <= 1 {
+			continue
+		}
+
+		// 找出 Master 节点（如果有的话）
+		var masterNode *models.Node
+		var workerNodes []*models.Node
+
+		for i := range nodes {
+			if nodes[i].Tags == "master" {
+				masterNode = &nodes[i]
+			} else {
+				workerNodes = append(workerNodes, &nodes[i])
+			}
+		}
+
+		// 删除策略：
+		// 1. 如果有 Master 节点，保留 Master，删除所有 Worker
+		// 2. 如果没有 Master，保留最新的 Worker，删除其他的
+		var nodesToKeep []*models.Node
+		var nodesToDelete []*models.Node
+
+		if masterNode != nil {
+			nodesToKeep = []*models.Node{masterNode}
+			nodesToDelete = workerNodes
+			logger.Info("保留 Master 节点，删除 Worker",
+				zap.String("hostname", group.Hostname),
+				zap.String("master_id", masterNode.ID),
+				zap.Int("worker_count", len(workerNodes)))
+		} else {
+			// 保留最新的 Worker
+			nodesToKeep = []*models.Node{workerNodes[len(workerNodes)-1]}
+			nodesToDelete = workerNodes[:len(workerNodes)-1]
+			logger.Info("保留最新 Worker，删除旧 Worker",
+				zap.String("hostname", group.Hostname),
+				zap.String("kept_id", nodesToKeep[0].ID),
+				zap.Int("deleted_count", len(nodesToDelete)))
+		}
+
+		// 执行删除
+		for _, node := range nodesToDelete {
+			if err := storage.DB.Delete(node).Error; err != nil {
+				logger.Error("删除重复节点失败",
+					zap.String("node_id", node.ID),
+					zap.Error(err))
+			} else {
+				totalDeleted++
+				logger.Info("删除重复节点",
+					zap.String("node_id", node.ID),
+					zap.String("hostname", node.Hostname),
+					zap.String("tags", node.Tags))
+			}
+		}
+	}
+
+	logger.Info("重复节点清理完成", zap.Int("total_deleted", totalDeleted))
 	return nil
 }
