@@ -93,8 +93,18 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 			Timeout:    parseIntDefault(taskDetails["timeout"], 30),
 			TargetType: taskDetails["target_type"],
 			TargetValue: taskDetails["target_value"],
-			StrictMode: parseBoolDefault(taskDetails["strict_mode"], false),
+		StrictMode: parseBoolDefault(taskDetails["strict_mode"], false),
 		}
+		
+		// 诊断日志：打印完整的 Redis 任务详情
+		logger.Info("【核心诊断】Redis 原始详情内容",
+			zap.String("event_id", event.ID),
+			zap.Any("all_details", taskDetails))
+			
+		logger.Info("从 Redis 解析任务详情结果",
+			zap.String("job_id", job.ID),
+			zap.String("raw_from_redis", taskDetails["strict_mode"]),
+			zap.Bool("parsed_value", job.StrictMode))
 	} else {
 		job, err = d.getJob(event.JobID)
 		if err != nil {
@@ -109,10 +119,11 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 		}
 	}
 
-	// 记录任务信息（只记录一次）
-	jobInfoLog := fmt.Sprintf("[%s] [Master] 执行命令: %s\n", time.Now().Format("2006-01-02 15:04:05"), job.Command)
-	jobInfoLog += fmt.Sprintf("[%s] [Master] 目标类型: %s, 目标值: %s\n", time.Now().Format("2006-01-02 15:04:05"), job.TargetType, job.TargetValue)
-	storage.SaveLogChunk(context.Background(), event.ID, jobInfoLog)
+	// 记录任务分发详情
+	logger.Info("任务分发详情",
+		zap.String("event_id", event.ID),
+		zap.String("command", job.Command),
+		zap.Bool("strict_mode", job.StrictMode))
 
 	node, err := d.selectNode(job)
 	if err != nil {
@@ -334,6 +345,19 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		env = make(map[string]string)
 	}
 
+	// 【协议隧道】通过环境变量兜底传输严格模式
+	if job.StrictMode {
+		if env == nil {
+			env = make(map[string]string)
+		}
+		env["CRONICLE_STRICT_MODE"] = "true"
+	}
+
+	scheduledTime := event.ScheduledTime.Unix()
+	if scheduledTime < 0 {
+		scheduledTime = time.Now().Unix()
+	}
+
 	taskReq := &pb.TaskRequest{
 		JobId:         job.ID,
 		EventId:       event.ID,
@@ -342,7 +366,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		Env:           env,
 		Timeout:       int32(job.Timeout),
 		WorkingDir:    job.WorkingDir,
-		ScheduledTime: event.ScheduledTime.Unix(),
+		ScheduledTime: scheduledTime,
 		StrictMode:    job.StrictMode, // 传递严格模式配置
 	}
 

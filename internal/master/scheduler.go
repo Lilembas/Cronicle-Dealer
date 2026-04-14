@@ -3,6 +3,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,7 +75,13 @@ func (s *Scheduler) LoadJobs() error {
 
 // AddJob 添加任务到调度器
 func (s *Scheduler) AddJob(job *models.Job) error {
-	entryID, err := s.cron.AddFunc(job.CronExpr, func() {
+	expr := job.CronExpr
+	// 如果是 5 位表达式，自动在前面加 0 变为 6 位（因为使用了 WithSeconds）
+	if fields := strings.Fields(expr); len(fields) == 5 {
+		expr = "0 " + expr
+	}
+
+	entryID, err := s.cron.AddFunc(expr, func() {
 		s.triggerJob(job.ID)
 	})
 	if err != nil {
@@ -202,7 +209,7 @@ func (s *Scheduler) enqueueTask(job *models.Job, event *models.Event) {
 		"env":             job.Env,
 		"target_type":     job.TargetType,
 		"target_value":    job.TargetValue,
-		"strict_mode":     job.StrictMode,
+		"strict_mode":     fmt.Sprintf("%v", job.StrictMode),
 		"scheduled_time":  event.ScheduledTime.Unix(),
 	}
 

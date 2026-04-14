@@ -11,6 +11,7 @@ const isExecuting = ref(false)
 const currentEventId = ref('')
 const logs = ref('')
 const exitCode = ref<number>(0)
+const strictMode = ref(false)
 const wsClient = getWebSocketClient()
 
 // 目标服务器
@@ -152,7 +153,8 @@ const executeCommand = async () => {
     const response = await shellApi.execute({
       command: command.value,
       node_id: selectedNodeId.value,
-      timeout: 30,
+      timeout: 3600,
+      strict_mode: strictMode.value,
     })
 
     // 处理API响应 - axios拦截器已经返回了response.data
@@ -251,6 +253,12 @@ const getNodeName = (nodeId: string) => {
               </div>
             </el-option>
           </el-select>
+        </div>
+
+        <!-- 执行选项 -->
+        <div class="execution-options">
+          <el-checkbox v-model="strictMode" border>严格模式 (Strict Mode)</el-checkbox>
+          <span class="option-hint">开启后，命令序列中任何一个命令失败都会立即停止执行</span>
         </div>
 
         <!-- 命令输入框 -->
@@ -445,6 +453,18 @@ const getNodeName = (nodeId: string) => {
 
 .command-input-group {
   margin-bottom: 20px;
+}
+
+.execution-options {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.option-hint {
+  font-size: 12px;
+  color: #94a3b8;
 }
 
 .quick-commands {

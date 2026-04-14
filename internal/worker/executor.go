@@ -237,6 +237,13 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 		defer cancel()
 	}
 
+	// 【协议恢复】如果 gRPC 字段丢失，尝试从环境变量隧道恢复
+	if req.Env != nil && req.Env["CRONICLE_STRICT_MODE"] == "true" {
+		if !req.StrictMode {
+			req.StrictMode = true
+		}
+	}
+
 	// 根据严格模式选择 bash 参数
 	// 严格模式：任何命令失败立即退出（bash -e -c "command"）
 	// 标准模式：使用 bash 默认行为（bash -c "command"）

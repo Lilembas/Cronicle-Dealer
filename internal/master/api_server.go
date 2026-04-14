@@ -183,6 +183,10 @@ func (s *APIServer) createJob(c *gin.Context) {
 	}
 	
 	// 保存到数据库
+	logger.Info("[API] 创建任务详情",
+		zap.String("name", job.Name),
+		zap.Bool("strict_mode", job.StrictMode))
+
 	if err := storage.DB.Create(&job).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -219,6 +223,11 @@ func (s *APIServer) updateJob(c *gin.Context) {
 	
 	job.ID = c.Param("id")
 	
+	logger.Info("[API] 更新任务详情",
+		zap.String("id", job.ID),
+		zap.String("name", job.Name),
+		zap.Bool("strict_mode", job.StrictMode))
+
 	if err := storage.DB.Save(&job).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -287,9 +296,18 @@ func (s *APIServer) triggerJob(c *gin.Context) {
 		"timeout":         job.Timeout,
 		"working_dir":     job.WorkingDir,
 		"env":             job.Env,
+		"strict_mode":     fmt.Sprintf("%v", job.StrictMode),
 		"scheduled_time":  now.Unix(),
 		"manual_trigger":  "true",
 	}
+
+	logger.Info("手动触发任务 Redis 详情",
+		zap.String("job_id", job.ID),
+		zap.String("strict_mode", fmt.Sprintf("%v", job.StrictMode)))
+
+	logger.Info("手动触发任务详情",
+		zap.String("job_id", job.ID),
+		zap.Bool("strict_mode", job.StrictMode))
 
 	if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
 		// 回滚 DB 记录
@@ -571,9 +589,10 @@ func (s *APIServer) getStats(c *gin.Context) {
 // executeShell 执行 Shell 命令（ad-hoc）
 func (s *APIServer) executeShell(c *gin.Context) {
 	var req struct {
-		Command string `json:"command" binding:"required"`
-		NodeID  string `json:"node_id"` // 可选：指定执行节点
-		Timeout int    `json:"timeout"`  // 可选：超时时间（秒），默认 30
+		Command    string `json:"command" binding:"required"`
+		NodeID     string `json:"node_id"`    // 可选：指定执行节点
+		Timeout    int    `json:"timeout"`    // 可选：超时时间（秒），默认 30
+		StrictMode bool   `json:"strict_mode"` // 可选：严格模式
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -649,6 +668,7 @@ func (s *APIServer) executeShell(c *gin.Context) {
 		"timeout":        req.Timeout,
 		"target_type":    targetType,
 		"target_value":   targetValue,
+		"strict_mode":    fmt.Sprintf("%v", req.StrictMode),
 		"scheduled_time": now.Unix(),
 	}
 
