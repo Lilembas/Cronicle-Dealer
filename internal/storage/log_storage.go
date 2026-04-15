@@ -12,11 +12,11 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
+var (
 	// Redis日志过期时间
 	logExpireTime = 15 * time.Minute
-	// 日志文件目录
-	logDir = "/var/log/cronicle/events"
+	// 日志文件目录（默认值，会被 InitLogStorage 更新）
+	logDir = "./logs"
 )
 
 // 文件写入缓存（避免频繁打开关闭文件）
@@ -26,7 +26,10 @@ var (
 )
 
 // InitLogStorage 初始化日志存储
-func InitLogStorage() error {
+func InitLogStorage(dir string) error {
+	if dir != "" {
+		logDir = dir
+	}
 	// 创建日志目录
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("创建日志目录失败: %w", err)

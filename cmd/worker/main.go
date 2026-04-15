@@ -58,6 +58,11 @@ func main() {
 	}
 	defer storage.CloseRedis()
 
+	logger.Info("初始化日志存储...")
+	if err := storage.InitLogStorage(cfg.Storage.LogDir); err != nil {
+		logger.Fatal("日志存储初始化失败", zap.Error(err))
+	}
+
 	logger.Info("启动执行器...")
 	executor := worker.NewExecutor(&cfg.Worker.Executor)
 	if err := executor.Start(cfg.Worker.Executor.GRPCPort); err != nil {

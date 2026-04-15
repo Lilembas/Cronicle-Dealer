@@ -59,6 +59,11 @@ func main() {
 		logger.Fatal("初始化默认管理员失败", zap.Error(err))
 	}
 
+	logger.Info("初始化日志存储...")
+	if err := storage.InitLogStorage(cfg.Storage.LogDir); err != nil {
+		logger.Fatal("日志存储初始化失败", zap.Error(err))
+	}
+
 	logger.Info("连接 Redis...")
 	if err := storage.InitRedis(&cfg.Redis); err != nil {
 		logger.Fatal("Redis 连接失败", zap.Error(err))

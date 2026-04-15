@@ -291,8 +291,8 @@ let wsClient: WebSocketClient | null = null
  */
 export function getWebSocketClient(): WebSocketClient {
   if (!wsClient) {
-    const wsPort = '8082' // WebSocket服务器端口
-    const wsUrl = `ws://${window.location.hostname}:${wsPort}/ws`
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${window.location.host}/ws`
     wsClient = new WebSocketClient({
       url: wsUrl,
       debug: false, // 开发模式下调试
