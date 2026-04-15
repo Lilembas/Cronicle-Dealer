@@ -90,6 +90,10 @@ func (tc *TaskConsumer) Start(ctx context.Context) {
 			JobName: taskData["job_name"],
 			Status:  "pending",
 		}
+		// 设置调度时间
+		if scheduledTime, err := strconv.ParseInt(taskData["scheduled_time"], 10, 64); err == nil && scheduledTime > 0 {
+			event.ScheduledTime = time.Unix(scheduledTime, 0)
+		}
 
 		// 分发任务（传递 taskDetails 以支持 ad-hoc 任务）
 		if err := tc.dispatcher.DispatchEvent(event, taskData); err != nil {
@@ -168,17 +172,31 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 	}
 
 	now := time.Now()
-	updateErr := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).Updates(map[string]interface{}{
-		"status":        eventStatusFailed,
-		"end_time":      &now,
-		"error_message": fmt.Sprintf("任务分发失败（重试%d次后放弃）: %v", retryCount, dispatchErr),
-	}).Error
+	// 从数据库查询事件的实际开始时间（CreatedAt 是事件创建时间，即首次调度开始时间）
+	var dbEvent models.Event
+	if err := storage.DB.Select("created_at, scheduled_time").Where("id = ?", event.ID).First(&dbEvent).Error; err == nil {
+		// 使用 CreatedAt 作为开始时间，它代表事件首次进入调度的时间
+		startTime := dbEvent.CreatedAt
+		if !dbEvent.ScheduledTime.IsZero() && dbEvent.ScheduledTime.After(dbEvent.CreatedAt) {
+			// 如果 ScheduledTime 更合理（晚于 CreatedAt），使用它
+			startTime = dbEvent.ScheduledTime
+		}
+		duration := int64(now.Sub(startTime).Seconds())
+		updateErr := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).Updates(map[string]interface{}{
+			"status":        eventStatusFailed,
+			"end_time":      now,
+			"start_time":    startTime,
+			"duration":      duration,
+			"exit_code":     1,
+			"error_message": fmt.Sprintf("任务分发失败（重试%d次后放弃）: %v", retryCount, dispatchErr),
+		}).Error
 	if updateErr != nil {
 		logger.Error("更新分发失败事件状态失败",
 			zap.String("event_id", event.ID),
 			zap.String("job_id", event.JobID),
 			zap.Error(updateErr))
 	}
+		}
 
 	logger.Error("任务分发失败，达到最大重试次数",
 		zap.String("task_key", taskKey),

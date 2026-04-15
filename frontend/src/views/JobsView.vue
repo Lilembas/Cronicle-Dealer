@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { jobsApi } from '@/api'
+import { useWebSocketStore } from '@/stores/websocket'
 import { Plus, Edit, Delete, VideoPlay, RefreshRight, View, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const wsStore = useWebSocketStore()
+const queryClient = useQueryClient()
 
 const router = useRouter()
 
@@ -60,7 +64,7 @@ const filteredGroups = computed(() => {
 
 // 分组颜色映射
 const groupColorMap: Record<string, string> = {}
-const groupColors = ['', 'success', 'warning', 'danger', 'info']
+const groupColors = ['success', 'warning', 'danger', 'info']
 let colorIndex = 0
 
 const getGroupColor = (group: string) => {
@@ -135,6 +139,24 @@ const handleTrigger = async (id: string, name: string) => {
 const handlePageChange = (page: number) => {
   pagination.value.page = page
 }
+
+// WebSocket 任务状态更新处理
+const handleTaskStatus = async () => {
+  // 标记查询为失效状态，Vue Query 会立即重新获取数据
+  queryClient.invalidateQueries({ queryKey: ['jobs'] })
+  // 强制 Vue 立即刷新 DOM
+  await nextTick()
+}
+
+// 组件挂载 - 设置 WebSocket 监听
+onMounted(() => {
+  wsStore.onMessage('task_status', handleTaskStatus)
+})
+
+// 组件卸载 - 移除 WebSocket 监听
+onUnmounted(() => {
+  wsStore.offMessage('task_status', handleTaskStatus)
+})
 </script>
 
 <template>
@@ -174,6 +196,18 @@ const handlePageChange = (page: number) => {
               <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
                 {{ row.enabled ? '启用' : '禁用' }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="最后执行" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag
+                v-if="row.last_status && row.last_status !== '-'"
+                :type="row.last_status === 'success' ? 'success' : row.last_status === 'failed' ? 'danger' : row.last_status === 'running' ? 'warning' : 'info'"
+                size="small"
+              >
+                {{ row.last_status === 'success' ? '成功' : row.last_status === 'failed' ? '失败' : row.last_status === 'running' ? '运行中' : '待执行' }}
+              </el-tag>
+              <span v-else>-</span>
             </template>
           </el-table-column>
           <el-table-column prop="next_run_time" label="下次执行" width="170">

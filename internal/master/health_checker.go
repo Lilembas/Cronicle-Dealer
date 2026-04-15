@@ -10,6 +10,7 @@ import (
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // HealthChecker 节点健康检查器
@@ -172,10 +173,35 @@ func (h *HealthChecker) cleanupOrphanedEvents(node models.Node) {
 	now := time.Now()
 	for _, event := range orphanedEvents {
 		errMsg := fmt.Sprintf("Worker 节点 %s (%s) 离线，任务被迫终止", node.Hostname, node.ID)
+		// 如果事件有实际的开始时间则保留，否则设为结束时间前的一定时间（估算）
+		var startTime time.Time
+		if event.StartTime != nil {
+			startTime = *event.StartTime
+			logger.Info("保留原有开始时间",
+				zap.String("event_id", event.ID),
+				zap.Time("start_time", startTime))
+		} else {
+			// 估算：假设任务至少运行了 1 秒
+			startTime = now.Add(-1 * time.Second)
+			logger.Info("估算开始时间",
+				zap.String("event_id", event.ID),
+				zap.Time("estimated_start_time", startTime))
+		}
+		duration := int64(now.Sub(startTime).Seconds())
+		logger.Info("更新孤儿事件",
+			zap.String("event_id", event.ID),
+			zap.String("job_id", event.JobID),
+			zap.Time("start_time", startTime),
+			zap.Time("end_time", now),
+			zap.Int64("duration", duration),
+			zap.Int("exit_code", 1))
 		if err := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).
 			Updates(map[string]interface{}{
 				"status":        eventStatusFailed,
-				"end_time":      &now,
+				"start_time":    startTime,
+				"end_time":      now,
+				"duration":      duration,
+				"exit_code":     1,
 				"error_message": errMsg,
 			}).Error; err != nil {
 			logger.Error("更新孤儿事件状态失败",
@@ -198,6 +224,14 @@ func (h *HealthChecker) cleanupOrphanedEvents(node models.Node) {
 					zap.String("event_id", event.ID),
 					zap.Error(err))
 			}
+		}
+
+		// 更新 Job 的统计信息
+		if err := storage.DB.Model(&models.Job{}).Where("id = ?", event.JobID).Updates(map[string]interface{}{
+			"last_run_time": now,
+			"failed_runs":   gorm.Expr("failed_runs + 1"),
+		}).Error; err != nil {
+			logger.Warn("更新任务统计信息失败", zap.String("job_id", event.JobID), zap.Error(err))
 		}
 
 		logger.Info("孤儿事件已标记为失败",

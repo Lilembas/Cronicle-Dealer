@@ -99,7 +99,7 @@ func (m *Master) startServices() error {
 	}
 
 	// 创建分发器
-	m.dispatcher = NewDispatcher()
+	m.dispatcher = NewDispatcher(m.wsServer)
 
 	// 启动节点健康检查器（在 TaskConsumer 之前启动，确保分发时节点状态准确）
 	healthCtx, healthCancel := context.WithCancel(context.Background())
@@ -126,6 +126,7 @@ func (m *Master) startServices() error {
 
 	// 启动 API 服务器
 	m.apiServer = NewAPIServer(m.cfg, m.scheduler, m.dispatcher)
+	m.apiServer.SetWebSocketServer(m.wsServer)
 	if err := m.apiServer.Start(); err != nil {
 		return err
 	}

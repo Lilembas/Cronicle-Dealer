@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { shellApi, nodesApi, type ShellLogsResponse, type Node } from '@/api'
+import { useWebSocketStore } from '@/stores/websocket'
 import { VideoPlay, CircleClose, Delete, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getWebSocketClient, type ServerMessage } from '@/utils/websocket'
 
 // 状态管理
 const command = ref('')
@@ -12,7 +12,7 @@ const currentEventId = ref('')
 const logs = ref('')
 const exitCode = ref<number>(0)
 const strictMode = ref(false)
-const wsClient = getWebSocketClient()
+const wsStore = useWebSocketStore()
 
 // 目标服务器
 const selectedNodeId = ref('')
@@ -33,24 +33,14 @@ const quickCommands = [
 
 // 组件挂载时连接WebSocket
 onMounted(async () => {
-  try {
-    // 加载节点列表
-    await loadNodes()
+  // 加载节点列表
+  await loadNodes()
 
-    // 确保WebSocket已连接
-    if (!wsClient['ws'] || wsClient['ws'].readyState !== WebSocket.OPEN) {
-      await wsClient.connect()
-    }
-
-    // 注册消息处理器
-    wsClient.onMessage('log', handleLogMessage)
-    wsClient.onMessage('history_log', handleHistoryLog)
-    wsClient.onMessage('task_status', handleTaskStatus)
-    wsClient.onMessage('error', handleErrorMessage)
-  } catch (error) {
-    console.error('WebSocket连接失败:', error)
-    ElMessage.warning('WebSocket连接失败，将使用轮询模式')
-  }
+  // 注册消息处理器
+  wsStore.onMessage('log', handleLogMessage)
+  wsStore.onMessage('history_log', handleHistoryLog)
+  wsStore.onMessage('task_status', handleTaskStatus)
+  wsStore.onMessage('error', handleErrorMessage)
 })
 
 // 加载节点列表（过滤掉 master 节点）
@@ -79,14 +69,14 @@ const loadNodes = async () => {
 onUnmounted(() => {
   // 取消订阅当前任务
   if (currentEventId.value) {
-    wsClient.unsubscribeEventLogs(currentEventId.value)
+    wsStore.leaveRoom(`event:${currentEventId.value}`)
   }
 
   // 移除消息处理器
-  wsClient.offMessage('log', handleLogMessage)
-  wsClient.offMessage('history_log', handleHistoryLog)
-  wsClient.offMessage('task_status', handleTaskStatus)
-  wsClient.offMessage('error', handleErrorMessage)
+  wsStore.offMessage('log', handleLogMessage)
+  wsStore.offMessage('history_log', handleHistoryLog)
+  wsStore.offMessage('task_status', handleTaskStatus)
+  wsStore.offMessage('error', handleErrorMessage)
 })
 
 // 处理实时日志消息
@@ -115,7 +105,7 @@ const handleTaskStatus = (data: any) => {
     exitCode.value = data.exit_code
 
     // 取消订阅
-    wsClient.unsubscribeEventLogs(currentEventId.value)
+    wsStore.leaveRoom(`event:${currentEventId.value}`)
 
     // 显示完成消息
     if (data.exit_code === 0) {
@@ -164,9 +154,7 @@ const executeCommand = async () => {
     console.log('命令已提交，事件ID:', currentEventId.value)
 
     // 订阅任务日志
-    if (wsClient && wsClient.subscribeEventLogs) {
-      wsClient.subscribeEventLogs(currentEventId.value)
-    }
+    wsStore.joinRoom(`event:${currentEventId.value}`)
   } catch (error: any) {
     console.error('执行命令失败:', error)
     ElMessage.error('执行命令失败: ' + (error.response?.data?.error || error.message))

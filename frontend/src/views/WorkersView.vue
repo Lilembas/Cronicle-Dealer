@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { nodesApi, type Node } from '@/api'
-import { Delete, Edit } from '@element-plus/icons-vue'
+import { useWebSocketStore } from '@/stores/websocket'
+import { Delete, Edit, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getWebSocketClient } from '@/utils/websocket'
 
 const loading = ref(false)
 const nodes = ref<Node[]>([])
 const selectedNodes = ref<string[]>([])
-const wsClient = getWebSocketClient()
+const wsStore = useWebSocketStore()
 
 // 编辑节点
 const editDialogVisible = ref(false)
@@ -211,20 +211,11 @@ const handleNodeStatus = (data: any) => {
 onMounted(async () => {
   await loadNodes()
 
-  try {
-    if (!wsClient['ws'] || wsClient['ws'].readyState !== WebSocket.OPEN) {
-      await wsClient.connect()
-    }
-    wsClient.onMessage('node_status', handleNodeStatus)
-    wsClient.joinRoom('global')
-  } catch {
-    // websocket 失败时使用手动刷新
-  }
+  wsStore.onMessage('node_status', handleNodeStatus)
 })
 
 onUnmounted(() => {
-  wsClient.offMessage('node_status', handleNodeStatus)
-  wsClient.leaveRoom('global')
+  wsStore.offMessage('node_status', handleNodeStatus)
 })
 </script>
 
@@ -296,28 +287,27 @@ onUnmounted(() => {
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="!isMasterNode(row) && row.id !== getMasterNodeId()"
-              type="primary"
-              size="small"
-              plain
-              :icon="Edit"
-              @click="handleEdit(row)"
-            >
-              编辑
-            </el-button>
-            <el-button
-              v-if="!isMasterNode(row) && row.id !== getMasterNodeId()"
-              type="info"
-              size="small"
-              plain
-              :icon="Delete"
-              @click="handleDelete(row)"
-            >
-              删除
-            </el-button>
+            <div class="action-row">
+              <el-tooltip content="编辑" placement="top">
+                <el-button
+                  v-if="!isMasterNode(row) && row.id !== getMasterNodeId()"
+                  size="small"
+                  :icon="Edit"
+                  @click="handleEdit(row)"
+                />
+              </el-tooltip>
+              <el-tooltip content="删除" placement="top">
+                <el-button
+                  v-if="!isMasterNode(row) && row.id !== getMasterNodeId()"
+                  size="small"
+                  type="danger"
+                  :icon="Delete"
+                  @click="handleDelete(row)"
+                />
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -437,5 +427,18 @@ onUnmounted(() => {
   .workers-page {
     padding: 16px;
   }
+}
+
+/* 操作按钮行 */
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.action-row :deep(.el-button) {
+  padding: 4px;
+  margin: 0;
 }
 </style>

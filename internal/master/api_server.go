@@ -24,6 +24,12 @@ type APIServer struct {
 	router     *gin.Engine
 	scheduler  *Scheduler
 	dispatcher *Dispatcher
+	wsServer   *WebSocketServer
+}
+
+// SetWebSocketServer 设置WebSocket服务器
+func (s *APIServer) SetWebSocketServer(wsServer *WebSocketServer) {
+	s.wsServer = wsServer
 }
 
 // NewAPIServer 创建 API 服务器
@@ -136,14 +142,14 @@ func (s *APIServer) healthCheck(c *gin.Context) {
 // listJobs 获取任务列表
 func (s *APIServer) listJobs(c *gin.Context) {
 	var jobs []models.Job
-	
+
 	query := storage.DB
-	
+
 	// 分页
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	offset := (page - 1) * pageSize
-	
+
 	// 过滤条件
 	if category := c.Query("category"); category != "" {
 		query = query.Where("category = ?", category)
@@ -151,21 +157,65 @@ func (s *APIServer) listJobs(c *gin.Context) {
 	if enabled := c.Query("enabled"); enabled != "" {
 		query = query.Where("enabled = ?", enabled == "true")
 	}
-	
+
 	// 查询总数
 	var total int64
 	query.Model(&models.Job{}).Count(&total)
-	
+
 	// 查询数据
 	if err := query.Offset(offset).Limit(pageSize).Order("created_at DESC").Find(&jobs).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
+	// 批量查询每个 Job 最近一次执行记录的 status
+	jobIDs := make([]string, 0, len(jobs))
+	for _, j := range jobs {
+		jobIDs = append(jobIDs, j.ID)
+	}
+
+	type lastEventResult struct {
+		JobID  string
+		Status string
+	}
+	var lastEvents []lastEventResult
+	if len(jobIDs) > 0 {
+		// 使用子查询找到每个 job_id 最近一次执行的 status
+		storage.DB.Raw(`
+			SELECT e.job_id, e.status
+			FROM events e
+			INNER JOIN (
+				SELECT job_id, MAX(start_time) as max_start_time
+				FROM events
+				WHERE job_id IN ?
+				GROUP BY job_id
+			) t ON e.job_id = t.job_id AND e.start_time = t.max_start_time
+			WHERE e.job_id IN ?`, jobIDs, jobIDs).
+			Scan(&lastEvents)
+	}
+
+	lastStatusMap := make(map[string]string)
+	for _, le := range lastEvents {
+		lastStatusMap[le.JobID] = le.Status
+	}
+
+	// 组装返回数据，附加 last_status
+	type jobWithStatus struct {
+		models.Job
+		LastStatus string `json:"last_status"`
+	}
+	result := make([]jobWithStatus, 0, len(jobs))
+	for _, j := range jobs {
+		result = append(result, jobWithStatus{
+			Job:        j,
+			LastStatus: lastStatusMap[j.ID],
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"total": total,
 		"page":  page,
-		"data":  jobs,
+		"data":  result,
 	})
 }
 
@@ -329,6 +379,11 @@ func (s *APIServer) triggerJob(c *gin.Context) {
 		zap.String("job_name", job.Name),
 		zap.String("event_id", eventID))
 
+	// 通过WebSocket推送任务状态变化
+	if s.wsServer != nil {
+		s.wsServer.BroadcastTaskStatus(eventID, job.ID, eventStatusPending, 0)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"event_id":  eventID,
 		"job_id":    job.ID,
@@ -361,8 +416,8 @@ func (s *APIServer) listEvents(c *gin.Context) {
 	var total int64
 	query.Model(&models.Event{}).Count(&total)
 	
-	// 排序：优先按调度时间，其次按开始时间，最后按ID（包含时间戳），都从新往旧
-	if err := query.Offset(offset).Limit(pageSize).Order("COALESCE(scheduled_time, start_time) DESC, id DESC").Find(&events).Error; err != nil {
+	// 排序：按开始时间从新往旧，最后按ID
+	if err := query.Offset(offset).Limit(pageSize).Order("start_time DESC, id DESC").Find(&events).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -439,6 +494,11 @@ func (s *APIServer) abortEvent(c *gin.Context) {
 	if err := storage.DB.Model(&event).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新任务状态失败: " + err.Error()})
 		return
+	}
+
+	// 通过WebSocket推送任务状态变化
+	if s.wsServer != nil {
+		s.wsServer.BroadcastTaskStatus(eventID, event.JobID, eventStatusAborted, -1)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

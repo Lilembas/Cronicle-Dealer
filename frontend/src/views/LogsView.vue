@@ -2,13 +2,13 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { eventsApi, shellApi, type Event } from '@/api'
+import { useWebSocketStore } from '@/stores/websocket'
 import { ArrowLeft, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getWebSocketClient } from '@/utils/websocket'
 
 const route = useRoute()
 const router = useRouter()
-const wsClient = getWebSocketClient()
+const wsStore = useWebSocketStore()
 
 const loading = ref(false)
 const event = ref<Event | null>(null)
@@ -85,25 +85,17 @@ const handleTaskStatus = (data: any) => {
 onMounted(async () => {
   await reloadAll()
 
-  try {
-    if (!wsClient['ws'] || wsClient['ws'].readyState !== WebSocket.OPEN) {
-      await wsClient.connect()
-    }
-
-    wsClient.onMessage('log', handleLog)
-    wsClient.onMessage('history_log', handleHistoryLog)
-    wsClient.onMessage('task_status', handleTaskStatus)
-    wsClient.subscribeEventLogs(eventId())
-  } catch {
-    // ws 失败时可手动刷新
-  }
+  wsStore.onMessage('log', handleLog)
+  wsStore.onMessage('history_log', handleHistoryLog)
+  wsStore.onMessage('task_status', handleTaskStatus)
+  wsStore.joinRoom(`event:${eventId()}`)
 })
 
 onUnmounted(() => {
-  wsClient.offMessage('log', handleLog)
-  wsClient.offMessage('history_log', handleHistoryLog)
-  wsClient.offMessage('task_status', handleTaskStatus)
-  wsClient.unsubscribeEventLogs(eventId())
+  wsStore.offMessage('log', handleLog)
+  wsStore.offMessage('history_log', handleHistoryLog)
+  wsStore.offMessage('task_status', handleTaskStatus)
+  wsStore.leaveRoom(`event:${eventId()}`)
 })
 </script>
 

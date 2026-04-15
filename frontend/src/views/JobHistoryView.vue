@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
+import { useWebSocketStore } from '@/stores/websocket'
 import { RefreshRight, ArrowLeft } from '@element-plus/icons-vue'
+
+const wsStore = useWebSocketStore()
+const queryClient = useQueryClient()
 
 const router = useRouter()
 const route = useRoute()
@@ -78,6 +82,24 @@ const viewLog = (event: Event) => {
 const handlePageChange = (page: number) => {
   pagination.value.page = page
 }
+
+// WebSocket 任务状态更新处理
+const handleTaskStatus = (data: any) => {
+  // 如果是当前任务的执行记录更新，刷新数据
+  if (data.job_id === jobId) {
+    queryClient.invalidateQueries({ queryKey: ['job-events', jobId] })
+  }
+}
+
+// 组件挂载 - 设置 WebSocket 监听
+onMounted(() => {
+  wsStore.onMessage('task_status', handleTaskStatus)
+})
+
+// 组件卸载 - 移除 WebSocket 监听
+onUnmounted(() => {
+  wsStore.offMessage('task_status', handleTaskStatus)
+})
 </script>
 
 <template>

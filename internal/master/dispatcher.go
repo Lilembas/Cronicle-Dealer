@@ -27,13 +27,15 @@ type Dispatcher struct {
 	mu          sync.Mutex
 	grpcClients map[string]pb.CronicleServiceClient
 	conns       map[string]*grpc.ClientConn
+	wsServer    *WebSocketServer
 }
 
 // NewDispatcher 创建分发器
-func NewDispatcher() *Dispatcher {
+func NewDispatcher(wsServer *WebSocketServer) *Dispatcher {
 	return &Dispatcher{
 		grpcClients: make(map[string]pb.CronicleServiceClient),
 		conns:       make(map[string]*grpc.ClientConn),
+		wsServer:    wsServer,
 	}
 }
 
@@ -434,6 +436,11 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 	// 记录任务接受成功日志
 	successLog := fmt.Sprintf("[%s] [Master] ✅ Worker 已接受任务\n", time.Now().Format("2006-01-02 15:04:05"))
 	storage.SaveLogChunk(context.Background(), event.ID, successLog)
+
+	// 通过WebSocket推送任务状态变化（pending → running）
+	if d.wsServer != nil {
+		d.wsServer.BroadcastTaskStatus(event.ID, event.JobID, "running", 0)
+	}
 
 	return nil
 }

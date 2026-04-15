@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 
 	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-next/internal/config"
@@ -324,6 +325,20 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 	if err := storage.SetLogExpiration(ctx, req.EventId); err != nil {
 		logger.Warn("设置日志过期时间失败", zap.Error(err))
 		// 不影响任务结果返回
+	}
+
+	// 更新 Job 的统计信息
+	now := time.Now()
+	jobUpdates := map[string]interface{}{
+		"last_run_time": now,
+	}
+	if status == eventStatusSuccess {
+		jobUpdates["success_runs"] = gorm.Expr("success_runs + 1")
+	} else if status == eventStatusFailed {
+		jobUpdates["failed_runs"] = gorm.Expr("failed_runs + 1")
+	}
+	if err := storage.DB.Model(&models.Job{}).Where("id = ?", req.JobId).Updates(jobUpdates).Error; err != nil {
+		logger.Warn("更新任务统计信息失败", zap.String("job_id", req.JobId), zap.Error(err))
 	}
 
 	// TODO: 发送通知（Webhook、邮件等）、触发链式任务

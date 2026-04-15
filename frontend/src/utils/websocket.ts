@@ -38,6 +38,8 @@ export class WebSocketClient {
   private isManualClose: boolean = false
   private retryCount: number = 0
   private maxRetries: number = 10
+  // 重连成功后的回调，供 Store 层恢复 handler
+  public onReconnect: (() => void) | null = null
 
   constructor(config: WebSocketConfig) {
     this.config = {
@@ -60,6 +62,10 @@ export class WebSocketClient {
         this.ws.onopen = () => {
           this.log('WebSocket 连接成功')
           this.retryCount = 0
+          // 重连时清空旧的处理器，由 Store 层重新注册
+          this.messageHandlers.clear()
+          // 重连后需要重新加入房间
+          this.subscriptions.clear()
           this.startHeartbeat()
           resolve()
         }
@@ -102,6 +108,13 @@ export class WebSocketClient {
 
     // 清空订阅
     this.subscriptions.clear()
+  }
+
+  /**
+   * 检查是否已连接
+   */
+  isConnected(): boolean {
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN
   }
 
   /**
@@ -220,7 +233,12 @@ export class WebSocketClient {
     this.log(`${delay}ms 后尝试重连 (${this.retryCount}/${this.maxRetries})...`)
 
     this.reconnectTimer = window.setTimeout(() => {
-      this.connect().catch(() => {
+      this.connect().then(() => {
+        // 自动重连成功后，通知 Store 恢复 handler
+        if (this.onReconnect) {
+          this.onReconnect()
+        }
+      }).catch(() => {
         // 连接失败会自动触发下一次重连
       })
     }, delay)

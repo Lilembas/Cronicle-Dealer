@@ -2,14 +2,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { statsApi, nodesApi } from '@/api'
 import { RefreshRight, CircleCheck, CircleClose, Monitor, Clock } from '@element-plus/icons-vue'
-import { getWebSocketClient } from '@/utils/websocket'
+import { useWebSocketStore } from '@/stores/websocket'
 
 // 本地状态管理
 const stats = ref<any>(null)
 const nodes = ref<any[]>([])
 const statsLoading = ref(true)
 const nodesLoading = ref(true)
-const wsClient = getWebSocketClient()
+const wsStore = useWebSocketStore()
 
 // 初始加载数据
 const loadData = async () => {
@@ -85,32 +85,16 @@ onMounted(async () => {
   // 加载初始数据
   await loadData()
 
-  try {
-    // 确保WebSocket已连接
-    if (!wsClient['ws'] || wsClient['ws'].readyState !== WebSocket.OPEN) {
-      await wsClient.connect()
-    }
-
-    // 注册消息处理器
-    wsClient.onMessage('task_status', handleTaskStatus)
-    wsClient.onMessage('node_status', handleNodeStatus)
-
-    // 加入全局房间（接收所有状态更新）
-    wsClient.joinRoom('global')
-  } catch (error) {
-    console.error('WebSocket连接失败:', error)
-    // 连接失败时继续使用轮询（降级方案）
-  }
+  // 注册消息处理器
+  wsStore.onMessage('task_status', handleTaskStatus)
+  wsStore.onMessage('node_status', handleNodeStatus)
 })
 
 // 组件卸载
 onUnmounted(() => {
   // 移除消息处理器
-  wsClient.offMessage('task_status', handleTaskStatus)
-  wsClient.offMessage('node_status', handleNodeStatus)
-
-  // 离开全局房间
-  wsClient.leaveRoom('global')
+  wsStore.offMessage('task_status', handleTaskStatus)
+  wsStore.offMessage('node_status', handleNodeStatus)
 })
 </script>
 

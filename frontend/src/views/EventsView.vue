@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useQuery } from '@tanstack/vue-query'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, type Event } from '@/api'
+import { useWebSocketStore } from '@/stores/websocket'
 import { RefreshRight, View, Filter, CircleClose } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const wsStore = useWebSocketStore()
+const queryClient = useQueryClient()
 
 const router = useRouter()
 const route = useRoute()
@@ -137,6 +141,22 @@ const resetFilter = () => {
 const handlePageChange = (page: number) => {
   pagination.value.page = page
 }
+
+// WebSocket 任务状态更新处理
+const handleTaskStatus = () => {
+  // 任何任务状态变化都刷新执行记录列表
+  queryClient.invalidateQueries({ queryKey: ['events'] })
+}
+
+// 组件挂载 - 设置 WebSocket 监听
+onMounted(() => {
+  wsStore.onMessage('task_status', handleTaskStatus)
+})
+
+// 组件卸载 - 移除 WebSocket 监听
+onUnmounted(() => {
+  wsStore.offMessage('task_status', handleTaskStatus)
+})
 </script>
 
 <template>

@@ -1,19 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { jobsApi, eventsApi, type Job, type Event, type TriggerResponse } from '@/api'
+import { jobsApi, eventsApi, type Job, type Event } from '@/api'
+import { useWebSocketStore } from '@/stores/websocket'
 import { ArrowLeft, Edit, VideoPlay, RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+const wsStore = useWebSocketStore()
 
 const route = useRoute()
 const router = useRouter()
 const job = ref<Job | null>(null)
 const events = ref<Event[]>([])
 const loading = ref(false)
-
-// 触发结果 Dialog
-const triggerVisible = ref(false)
-const triggerResult = ref<TriggerResponse | null>(null)
 const triggering = ref(false)
 
 const getStatusType = (status: string) => {
@@ -63,22 +62,25 @@ const loadData = async () => {
 const handleTrigger = async () => {
   if (!job.value || triggering.value) return
   try {
+    await ElMessageBox.confirm(`确定要触发任务 "${job.value.name}" 吗？`, '确认触发', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'info',
+    })
+  } catch {
+    return
+  }
+
+  try {
     triggering.value = true
-    const result = await jobsApi.trigger(job.value.id)
-    triggerResult.value = result as unknown as TriggerResponse
-    triggerVisible.value = true
-    // 刷新执行记录列表
+    const result = await jobsApi.trigger(job.value.id) as unknown as TriggerResponse
+    ElMessage.success(`任务 "${job.value.name}" 已入队，Event ID: ${result.event_id}`)
     loadData()
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || '任务触发失败')
   } finally {
     triggering.value = false
   }
-}
-
-const goToEvent = (eventId: string) => {
-  triggerVisible.value = false
-  router.push(`/events?highlight=${eventId}`)
 }
 
 const handleEdit = () => {
@@ -89,8 +91,22 @@ const handleEdit = () => {
 
 const goBack = () => router.push('/jobs')
 
+// WebSocket 任务状态更新处理
+const handleTaskStatus = (data: any) => {
+  // 如果是当前任务的事件状态更新，重新加载数据
+  if (job.value && data.job_id === job.value.id) {
+    loadData()
+  }
+}
+
 onMounted(() => {
   loadData()
+  // 设置 WebSocket 监听
+  wsStore.onMessage('task_status', handleTaskStatus)
+})
+
+onUnmounted(() => {
+  wsStore.offMessage('task_status', handleTaskStatus)
 })
 </script>
 
@@ -146,7 +162,11 @@ onMounted(() => {
       </template>
 
       <el-table :data="events" stripe>
-        <el-table-column prop="id" label="Event ID" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="id" label="Event ID" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="event-link" @click="router.push(`/logs/${row.id}`)">{{ row.id }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="110" align="center">
           <template #default="{ row }">
             <el-tag size="small" :type="getStatusType(row.status)">
@@ -171,43 +191,6 @@ onMounted(() => {
         </el-table-column>
       </el-table>
     </el-card>
-
-    <!-- 触发结果 Dialog -->
-    <el-dialog
-      v-model="triggerVisible"
-      title="任务已触发"
-      width="480px"
-      :close-on-click-modal="true"
-    >
-      <div v-if="triggerResult" class="trigger-result">
-        <el-result icon="success" title="任务已成功加入队列">
-          <template #sub-title>
-            <p class="result-sub">任务正在等待 Worker 节点消费执行</p>
-          </template>
-        </el-result>
-        <el-descriptions :column="1" border class="result-desc">
-          <el-descriptions-item label="任务名称">{{ triggerResult.job_name }}</el-descriptions-item>
-          <el-descriptions-item label="执行记录 ID">
-            <span class="mono">{{ triggerResult.event_id }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="当前状态">
-            <el-tag :type="getStatusType(triggerResult.status)" size="small">
-              {{ getStatusText(triggerResult.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="入队时间">
-            {{ new Date(triggerResult.queued_at * 1000).toLocaleString('zh-CN') }}
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
-      <template #footer>
-        <el-button @click="triggerVisible = false">关闭</el-button>
-        <el-button
-          type="primary"
-          @click="triggerResult && goToEvent(triggerResult.event_id)"
-        >查看执行记录</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -245,25 +228,16 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.event-link {
+  color: #409eff;
+  cursor: pointer;
+}
+
+.event-link:hover {
+  text-decoration: underline;
+}
+
 .command {
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-.trigger-result {
-  padding: 0 8px;
-}
-
-.result-sub {
-  color: #666;
-  margin: 4px 0 16px;
-}
-
-.result-desc {
-  margin-top: 8px;
-}
-
-.mono {
   font-family: 'Courier New', monospace;
   font-size: 13px;
   word-break: break-all;
