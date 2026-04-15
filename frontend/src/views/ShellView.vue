@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, shallowRef } from 'vue'
 import { shellApi, nodesApi, type ShellLogsResponse, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
 import { VideoPlay, CircleClose, Delete, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
+import 'codemirror/addon/display/placeholder.js'
+import 'codemirror/mode/shell/shell.js'
+import 'codemirror/theme/material-darker.css'
 
 // 状态管理
 const command = ref('')
@@ -18,6 +22,21 @@ const wsStore = useWebSocketStore()
 const selectedNodeId = ref('')
 const nodes = ref<Node[]>([])
 const loadingNodes = ref(false)
+
+// CodeMirror 配置
+const cmOptions = {
+  mode: 'text/x-sh',  // Shell 模式
+  theme: 'material-darker',
+  lineNumbers: false,
+  autofocus: true,
+  lineWrapping: true,
+  tabSize: 2,
+}
+
+// CodeMirror 变化处理
+const onCommandChange = (value: string) => {
+  command.value = value
+}
 
 // 快速命令示例
 const quickCommands = [
@@ -249,28 +268,26 @@ const getNodeName = (nodeId: string) => {
           <span class="option-hint">开启后，命令序列中任何一个命令失败都会立即停止执行</span>
         </div>
 
-        <!-- 命令输入框 -->
+<!-- 命令输入框 -->
         <div class="command-input-group">
-          <el-input
-            v-model="command"
-            placeholder="输入要执行的 Shell 命令，例如: ls -la"
-            size="large"
-            :disabled="isExecuting"
-            @keyup.enter="executeCommand"
-            clearable
-          >
-            <template #append>
-              <el-button
-                type="primary"
-                :icon="VideoPlay"
-                :loading="isExecuting"
-                :disabled="!command.trim()"
-                @click="executeCommand"
-              >
-                执行
-              </el-button>
-            </template>
-          </el-input>
+          <Codemirror
+            v-model:value="command"
+            :options="cmOptions"
+            :placeholder="'输入要执行的 Shell 命令，例如: ls -la'"
+            :height="'120px'"
+            @change="onCommandChange"
+          />
+          <div class="command-actions">
+            <el-button
+              type="primary"
+              :icon="VideoPlay"
+              :loading="isExecuting"
+              :disabled="!command.trim()"
+              @click="executeCommand"
+            >
+              执行
+            </el-button>
+          </div>
         </div>
 
         <!-- 快速命令 -->
@@ -441,6 +458,26 @@ const getNodeName = (nodeId: string) => {
 
 .command-input-group {
   margin-bottom: 20px;
+}
+
+.command-input-group :deep(.codemirror-wrapper) {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.command-input-group :deep(.cm-editor) {
+  font-size: 14px;
+}
+
+.command-input-group :deep(.cm-scroller) {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+}
+
+.command-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .execution-options {
