@@ -109,8 +109,12 @@ const loadNodes = async () => {
   try {
     loadingNodes.value = true
     const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
-    // 过滤掉 master 节点
-    nodes.value = (allNodes || []).filter((node: Node) => node.tags !== 'master' && !node.tags?.includes('master'))
+    nodes.value = (allNodes || []).filter((node: Node) => {
+      // 路由节点不作为执行节点
+      const tagsStr = String(node.tags || '')
+      return !tagsStr.includes('master')
+    })
+    console.log('Nodes loaded:', nodes.value.length)
   } catch (error) {
     console.error('加载节点列表失败:', error)
     ElMessage.warning('加载节点列表失败')
@@ -173,7 +177,7 @@ const loadJob = async () => {
       env: parseEnvString(job.env),
       tags: tags,
       target_type: job.target_type || 'any',
-      target_value: targetValue,
+      target_value: String(targetValue || ''),
       strict_mode: job.strict_mode || false,
     }
 
@@ -453,14 +457,9 @@ onMounted(() => {
                 <el-option
                   v-for="node in nodes"
                   :key="node.id"
-                  :label="node.hostname"
+                  :label="`${node.hostname} (${node.ip})`"
                   :value="node.id"
-                >
-                  <div class="node-option">
-                    <span>{{ node.hostname }}</span>
-                    <span class="node-ip">{{ node.ip }}</span>
-                  </div>
-                </el-option>
+                />
               </el-select>
 
               <el-select

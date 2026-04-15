@@ -86,9 +86,10 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 		zap.String("ip", req.Ip),
 		zap.Int32("pid", req.Pid))
 
-	// 检查是否已存在相同 hostname + ip + tags != "master" 的节点（不更新 Master 节点）
+	// 检查是否已存在相同 hostname + ip 的非 master 节点
 	var existingNode models.Node
-	err := storage.DB.Where("hostname = ? AND ip = ? AND (tags = '' OR tags != 'master')", req.Hostname, req.Ip).
+	err := storage.DB.Where("hostname = ? AND ip = ?", req.Hostname, req.Ip).
+		Where("tags NOT LIKE '%master%'").
 		Order("created_at DESC").
 		First(&existingNode).Error
 
