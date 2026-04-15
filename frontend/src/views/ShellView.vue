@@ -2,12 +2,11 @@
 import { ref, onMounted, onUnmounted, shallowRef } from 'vue'
 import { shellApi, nodesApi, type ShellLogsResponse, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { VideoPlay, CircleClose, Delete, Loading } from '@element-plus/icons-vue'
+import { VideoPlay, CircleClose, Delete, Loading, QuestionFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
 import 'codemirror/mode/shell/shell.js'
-import 'codemirror/theme/material-darker.css'
 
 // 状态管理
 const command = ref('')
@@ -26,7 +25,7 @@ const loadingNodes = ref(false)
 // CodeMirror 配置
 const cmOptions = {
   mode: 'text/x-sh',  // Shell 模式
-  theme: 'material-darker',
+  theme: 'default',
   lineNumbers: false,
   autofocus: true,
   lineWrapping: true,
@@ -264,8 +263,12 @@ const getNodeName = (nodeId: string) => {
 
         <!-- 执行选项 -->
         <div class="execution-options">
-          <el-checkbox v-model="strictMode" border>严格模式 (Strict Mode)</el-checkbox>
-          <span class="option-hint">开启后，命令序列中任何一个命令失败都会立即停止执行</span>
+          <el-checkbox v-model="strictMode" border>
+            严格模式
+            <el-tooltip content="开启后，命令序列中任何一个命令失败都会立即停止执行" placement="top">
+              <el-icon class="help-icon"><QuestionFilled /></el-icon>
+            </el-tooltip>
+          </el-checkbox>
         </div>
 
 <!-- 命令输入框 -->
@@ -273,8 +276,8 @@ const getNodeName = (nodeId: string) => {
           <Codemirror
             v-model:value="command"
             :options="cmOptions"
-            :placeholder="'输入要执行的 Shell 命令，例如: ls -la'"
-            :height="'120px'"
+            :placeholder="'输入要执行的 Shell 命令'"
+            :height="'240px'"
             @change="onCommandChange"
           />
           <div class="command-actions">
@@ -460,18 +463,19 @@ const getNodeName = (nodeId: string) => {
   margin-bottom: 20px;
 }
 
-.command-input-group :deep(.codemirror-wrapper) {
+.command-input-group :deep(.CodeMirror) {
+  border: 1px solid #c0c4cc !important;
   border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid #e2e8f0;
-}
-
-.command-input-group :deep(.cm-editor) {
-  font-size: 14px;
-}
-
-.command-input-group :deep(.cm-scroller) {
+  background-color: #fff !important;
+  width: 100% !important;
+  height: 240px !important;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 14px;
+  padding: 4px;
+}
+
+.command-input-group :deep(.CodeMirror-scroll) {
+  border-radius: 8px;
 }
 
 .command-actions {
@@ -490,6 +494,13 @@ const getNodeName = (nodeId: string) => {
 .option-hint {
   font-size: 12px;
   color: #94a3b8;
+}
+
+.help-icon {
+  margin-left: 4px;
+  vertical-align: middle;
+  color: #94a3b8;
+  cursor: help;
 }
 
 .quick-commands {

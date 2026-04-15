@@ -2,8 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { jobsApi, nodesApi, type Node } from '@/api'
-import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Plus, Delete, QuestionFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
+import 'codemirror/addon/display/placeholder.js'
+import 'codemirror/mode/shell/shell.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -23,6 +26,15 @@ const formData = ref({
   target_value: '',
   strict_mode: false,
 })
+
+// CodeMirror 配置
+const cmOptions = {
+  mode: 'text/x-sh',
+  theme: 'default',
+  lineNumbers: false,
+  lineWrapping: true,
+  tabSize: 2,
+}
 
 // 常用分组列表
 const commonGroups = ['默认分组', '系统任务', '数据同步', '定时清理', '监控告警', '数据备份']
@@ -468,13 +480,14 @@ onMounted(() => {
           </el-form-item>
 
           <el-form-item label="执行命令" required>
-            <el-input
-              v-model="formData.command"
-              type="textarea"
-              placeholder="输入要执行的Shell命令"
-              :rows="4"
-              spellcheck="false"
-            />
+            <div class="command-editor-wrapper">
+              <Codemirror
+                v-model:value="formData.command"
+                :options="cmOptions"
+                :placeholder="'输入要执行的Shell命令'"
+                :height="'240px'"
+              />
+            </div>
           </el-form-item>
 
           <el-form-item label="超时时间（秒）">
@@ -489,10 +502,13 @@ onMounted(() => {
 
           <el-form-item label="严格模式">
             <el-switch v-model="formData.strict_mode" />
-            <div class="field-hint" style="margin-top: 8px; line-height: 1.6;">
-              <div style="margin-bottom: 4px;">✓ 启用：任何命令失败立即退出脚本（推荐多行脚本）</div>
-              <div>✗ 禁用：使用 bash 默认行为（单个命令失败不会终止脚本）</div>
-            </div>
+            <el-tooltip placement="top">
+              <template #content>
+                ✓ 启用：任何命令失败立即退出脚本（推荐多行脚本）<br/>
+                ✗ 禁用：使用 bash 默认行为（单个命令失败不会终止脚本）
+              </template>
+              <el-icon class="help-icon"><QuestionFilled /></el-icon>
+            </el-tooltip>
           </el-form-item>
 
           <el-form-item label="环境变量">
@@ -599,6 +615,42 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
+}
+
+.help-icon {
+  margin-left: 8px;
+  vertical-align: middle;
+  color: #94a3b8;
+  cursor: help;
+  font-size: 16px;
+}
+
+.command-editor-wrapper {
+  width: 100%;
+  display: block;
+}
+
+.command-editor-wrapper :deep(.codemirror-container) {
+  width: 100% !important;
+}
+
+.command-editor-wrapper :deep(.codemirror-wrapper) {
+  width: 100% !important;
+}
+
+.command-editor-wrapper :deep(.CodeMirror) {
+  border: 1px solid #c0c4cc !important;
+  border-radius: 8px;
+  background-color: #fff !important;
+  width: 100% !important;
+  height: 240px !important;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 14px;
+  padding: 4px;
+}
+
+.command-editor-wrapper :deep(.CodeMirror-scroll) {
+  border-radius: 8px;
 }
 
 /* 响应式设计 */

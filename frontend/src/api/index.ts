@@ -177,6 +177,7 @@ export interface ShellExecuteRequest {
     command: string
     node_id?: string
     timeout?: number
+    strict_mode?: boolean
 }
 
 export interface ShellExecuteResponse {
