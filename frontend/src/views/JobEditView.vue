@@ -193,10 +193,9 @@ const buildCronExpr = () => {
   ].join(' ')
 }
 
-// 选择预设Cron
-const selectPreset = (value: string) => {
-  formData.value.cron_expr = value
-  const parts = value.split(' ')
+// 从表达式更新Cron组件
+const updateCronFromExpr = (value: string) => {
+  const parts = value.split(/\s+/)
   if (parts.length === 5) {
     cron.value = {
       minute: parts[0],
@@ -206,6 +205,12 @@ const selectPreset = (value: string) => {
       dayOfWeek: parts[4],
     }
   }
+}
+
+// 选择预设Cron
+const selectPreset = (value: string) => {
+  formData.value.cron_expr = value
+  updateCronFromExpr(value)
 }
 
 // 添加环境变量
@@ -364,66 +369,51 @@ onMounted(() => {
 
         <!-- Cron表达式 -->
         <div class="form-section">
-          <h3 class="section-title">调度规则</h3>
+          <div class="section-header">
+            <h3 class="section-title">调度规则</h3>
+            <el-switch v-model="formData.enabled" active-text="启用任务" />
+          </div>
 
-          <el-form-item label="预设" label-width="80px">
-            <el-select
-              placeholder="选择预设Cron表达式"
-              @change="selectPreset"
-              style="width: 300px"
-            >
-              <el-option
-                v-for="preset in cronPresets"
-                :key="preset.value"
-                :label="preset.label"
-                :value="preset.value"
-              >
-                <span style="float: left">{{ preset.label }}</span>
-                <span style="float: right; color: #8492a6; font-size: 12px">
-                  {{ preset.value }}
-                </span>
-              </el-option>
-            </el-select>
+          <el-form-item label="快速预设">
+            <el-radio-group v-model="formData.cron_expr" @change="selectPreset" size="small">
+              <el-radio-button v-for="preset in cronPresets" :key="preset.value" :value="preset.value">
+                {{ preset.label }}
+              </el-radio-button>
+            </el-radio-group>
           </el-form-item>
 
-          <el-form-item label="Cron表达式" required label-width="120px">
-            <el-input
-              v-model="formData.cron_expr"
-              placeholder="* * * * *"
-              style="width: 300px"
-              @input="buildCronExpr"
-            />
-            <span class="cron-hint">格式：分 时 日 月 周</span>
-          </el-form-item>
-
-          <!-- Cron表达式构建器 -->
-          <el-form-item label="分钟">
-            <el-input v-model="cron.minute" @input="buildCronExpr" placeholder="* 或 0-59" />
-            <span class="field-hint">0-59</span>
-          </el-form-item>
-
-          <el-form-item label="小时">
-            <el-input v-model="cron.hour" @input="buildCronExpr" placeholder="* 或 0-23" />
-            <span class="field-hint">0-23</span>
-          </el-form-item>
-
-          <el-form-item label="日期">
-            <el-input v-model="cron.dayOfMonth" @input="buildCronExpr" placeholder="* 或 1-31" />
-            <span class="field-hint">1-31</span>
-          </el-form-item>
-
-          <el-form-item label="月份">
-            <el-input v-model="cron.month" @input="buildCronExpr" placeholder="* 或 1-12" />
-            <span class="field-hint">1-12</span>
-          </el-form-item>
-
-          <el-form-item label="星期">
-            <el-input v-model="cron.dayOfWeek" @input="buildCronExpr" placeholder="* 或 0-6" />
-            <span class="field-hint">0-6 (0=周日)</span>
-          </el-form-item>
-
-          <el-form-item label="启用任务">
-            <el-switch v-model="formData.enabled" />
+          <el-form-item label="自定义规则">
+            <div class="cron-builder">
+              <div class="cron-grid">
+                <div class="cron-part">
+                  <span class="part-label">分</span>
+                  <el-input v-model="cron.minute" @input="buildCronExpr" placeholder="*" size="small" />
+                </div>
+                <div class="cron-part">
+                  <span class="part-label">时</span>
+                  <el-input v-model="cron.hour" @input="buildCronExpr" placeholder="*" size="small" />
+                </div>
+                <div class="cron-part">
+                  <span class="part-label">日</span>
+                  <el-input v-model="cron.dayOfMonth" @input="buildCronExpr" placeholder="*" size="small" />
+                </div>
+                <div class="cron-part">
+                  <span class="part-label">月</span>
+                  <el-input v-model="cron.month" @input="buildCronExpr" placeholder="*" size="small" />
+                </div>
+                <div class="cron-part">
+                  <span class="part-label">周</span>
+                  <el-input v-model="cron.dayOfWeek" @input="buildCronExpr" placeholder="*" size="small" />
+                </div>
+              </div>
+              <div class="cron-raw">
+                <span class="raw-label">表达式:</span>
+                <el-input v-model="formData.cron_expr" placeholder="* * * * *" @input="updateCronFromExpr" size="small" class="raw-input" />
+              </div>
+            </div>
+            <div class="field-hint" style="margin-top: 8px">
+              格式：分 时 日 月 周 (5位标准版)。使用 * 表示通配，*/N 表示频率。
+            </div>
           </el-form-item>
         </div>
 
@@ -608,6 +598,63 @@ onMounted(() => {
 
 .env-separator {
   color: #64748b;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header .section-title {
+  margin-bottom: 0;
+}
+
+.cron-builder {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  width: 100%;
+}
+
+.cron-grid {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.cron-part {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.part-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cron-raw {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.raw-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.raw-input {
+  width: 200px !important;
 }
 
 .form-actions {
