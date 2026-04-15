@@ -102,7 +102,9 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 			Timeout:    parseIntDefault(taskDetails["timeout"], 30),
 			TargetType: taskDetails["target_type"],
 			TargetValue: taskDetails["target_value"],
-		StrictMode: parseBoolDefault(taskDetails["strict_mode"], false),
+			StrictMode: parseBoolDefault(taskDetails["strict_mode"], false),
+			Env:        taskDetails["env"],
+			WorkingDir: taskDetails["working_dir"],
 		}
 		
 		// 诊断日志：打印完整的 Redis 任务详情

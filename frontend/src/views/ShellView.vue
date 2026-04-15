@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, shallowRef } from 'vue'
-import { shellApi, nodesApi, type ShellLogsResponse, type Node } from '@/api'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { shellApi, nodesApi, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
 import { VideoPlay, CircleClose, Delete, Loading, QuestionFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -69,10 +69,6 @@ const loadNodes = async () => {
     // 过滤掉 master 节点（tags 为 master 或包含 master）
     nodes.value = allNodes.filter((node: Node) => node.tags !== 'master' && !node.tags?.includes('master'))
 
-    // 如果只有一个节点，自动选择
-    if (nodes.value.length === 1) {
-      selectedNodeId.value = nodes.value[0].id
-    }
 
     console.log('加载到在线节点:', nodes.value.length, '个', nodes.value.map(n => ({ id: n.id, tags: n.tags })))
   } catch (error) {

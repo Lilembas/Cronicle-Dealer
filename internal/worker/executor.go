@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -272,10 +273,14 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 		cmd.Dir = req.WorkingDir
 	}
 
+	cmd.Env = os.Environ()
 	if len(req.Env) > 0 {
+		envList := make([]string, 0, len(req.Env))
 		for k, v := range req.Env {
+			envList = append(envList, k+"="+v)
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 		}
+		logger.Info("设置环境变量", zap.String("event_id", req.EventId), zap.Strings("keys", envList))
 	}
 
 	// 创建管道来捕获实时输出

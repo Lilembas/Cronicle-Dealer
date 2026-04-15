@@ -2,6 +2,7 @@ package master
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -427,8 +428,6 @@ func calculatePercent(value, total float64) float64 {
 
 // tagsToString 将标签数组转为 JSON 字符串
 func tagsToString(tags []string) string {
-	if len(tags) == 0 {
-		return "[]"
-	}
-	return fmt.Sprintf("%v", tags)
+	b, _ := json.Marshal(tags)
+	return string(b)
 }

@@ -3,6 +3,7 @@ package worker
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -196,7 +197,7 @@ func (c *Client) updateRedisWorker(ctx context.Context, resources *pb.NodeResour
 	data := map[string]interface{}{
 		"hostname":       c.hostname,
 		"ip":             c.localIP,
-		"tags":           fmt.Sprintf("%v", c.cfg.Node.Tags),
+		"tags":           c.getTagsJSON(),
 		"cpu_cores":      resources.CpuCores,
 		"cpu_usage":      resources.CpuUsage,
 		"memory_total":   resources.MemoryTotal,
@@ -248,6 +249,12 @@ func (c *Client) GetNodeID() string {
 // GetMasterClient 获取Master gRPC客户端
 func (c *Client) GetMasterClient() pb.CronicleServiceClient {
 	return c.client
+}
+
+// getTagsJSON 获取 JSON 格式的标签
+func (c *Client) getTagsJSON() string {
+	b, _ := json.Marshal(c.cfg.Node.Tags)
+	return string(b)
 }
 
 // getHostname 获取主机名
