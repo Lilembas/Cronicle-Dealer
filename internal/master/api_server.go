@@ -737,10 +737,11 @@ func (s *APIServer) getShellLogs(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"event_id":  eventID,
-		"logs":      logs,
-		"complete":  complete,
-		"exit_code": exitCode,
-		"status":    status,
+		"event_id":      eventID,
+		"logs":          logs,
+		"complete":      complete,
+		"exit_code":     exitCode,
+		"status":        status,
+		"error_message": event.ErrorMessage,
 	})
 }

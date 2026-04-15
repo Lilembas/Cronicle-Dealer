@@ -13,7 +13,6 @@ const wsClient = getWebSocketClient()
 const loading = ref(false)
 const event = ref<Event | null>(null)
 const logs = ref('')
-const complete = ref(false)
 const exitCode = ref<number | null>(null)
 
 const eventId = () => route.params.id as string
@@ -42,8 +41,11 @@ const loadLogs = async () => {
 
   const res = await shellApi.getLogs(id)
   logs.value = res.logs || ''
-  complete.value = res.complete
   exitCode.value = res.exit_code
+  // 如果日志内容为空但存在 error_message，将其追加到日志中展示
+  if (!logs.value && res.error_message) {
+    logs.value = `[错误] ${res.error_message}`
+  }
 }
 
 const reloadAll = async () => {
@@ -75,7 +77,6 @@ const handleTaskStatus = (data: any) => {
       event.value = { ...event.value, status: data.status, exit_code: data.exit_code }
     }
     if (data.status !== 'running') {
-      complete.value = true
       exitCode.value = data.exit_code
     }
   }
@@ -129,7 +130,10 @@ onUnmounted(() => {
         </el-descriptions-item>
         <el-descriptions-item label="节点">{{ event.node_name || event.node_id || '-' }}</el-descriptions-item>
         <el-descriptions-item label="退出码">{{ exitCode ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="完成">{{ complete ? '是' : '否' }}</el-descriptions-item>
+        <el-descriptions-item label="结束时间">{{ event.end_time ? new Date(event.end_time).toLocaleString('zh-CN') : '-' }}</el-descriptions-item>
+        <el-descriptions-item v-if="event.error_message" label="错误信息" :span="3">
+          <el-text type="danger">{{ event.error_message }}</el-text>
+        </el-descriptions-item>
       </el-descriptions>
     </el-card>
 

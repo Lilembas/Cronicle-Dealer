@@ -11,4 +11,5 @@ const (
 	eventStatusSuccess = "success"
 	eventStatusFailed  = "failed"
 	eventStatusAborted = "aborted"
+	eventStatusTimeout = "timeout"
 )

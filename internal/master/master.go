@@ -41,15 +41,17 @@ var (
 
 // Master Master 节点管理器
 type Master struct {
-	cfg         *config.Config
-	grpcServer  *GRPCServer
-	wsServer    *WebSocketServer // WebSocket服务器
-	apiServer   *APIServer
-	scheduler   *Scheduler
-	dispatcher  *Dispatcher
-	taskConsumer *TaskConsumer
+	cfg            *config.Config
+	grpcServer     *GRPCServer
+	wsServer       *WebSocketServer // WebSocket服务器
+	apiServer      *APIServer
+	scheduler      *Scheduler
+	dispatcher     *Dispatcher
+	taskConsumer   *TaskConsumer
 	consumerCancel context.CancelFunc
-	masterNodeID string // Master 节点自己的 ID
+	healthChecker  *HealthChecker
+	healthCancel   context.CancelFunc
+	masterNodeID   string // Master 节点自己的 ID
 }
 
 // NewMaster 创建 Master 节点
@@ -99,6 +101,17 @@ func (m *Master) startServices() error {
 	// 创建分发器
 	m.dispatcher = NewDispatcher()
 
+	// 启动节点健康检查器（在 TaskConsumer 之前启动，确保分发时节点状态准确）
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	m.healthCancel = healthCancel
+	m.healthChecker = NewHealthChecker(
+		&m.cfg.Master.Heartbeat,
+		m.dispatcher,
+		m.grpcServer,
+		m.wsServer,
+	)
+	go m.healthChecker.Start(healthCtx)
+
 	// 启动任务消费者
 	m.taskConsumer = NewTaskConsumer(m.dispatcher, m.cfg.Master.DispatchRetry)
 	consumerCtx, cancel := context.WithCancel(context.Background())
@@ -136,6 +149,16 @@ func (m *Master) Stop() {
 	if m.taskConsumer != nil {
 		if ok := m.taskConsumer.Wait(10 * time.Second); !ok {
 			logger.Warn("任务消费者停止超时")
+		}
+	}
+
+	// 停止健康检查器
+	if m.healthCancel != nil {
+		m.healthCancel()
+	}
+	if m.healthChecker != nil {
+		if ok := m.healthChecker.Wait(10 * time.Second); !ok {
+			logger.Warn("健康检查器停止超时")
 		}
 	}
 

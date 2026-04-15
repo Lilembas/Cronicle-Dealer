@@ -380,7 +380,7 @@ func (s *GRPCServer) updateNodeHeartbeat(node *models.Node, req *pb.HeartbeatReq
 		"disk_usage":      req.Resources.DiskUsage,
 		"disk_percent":    calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal),
 		"running_jobs":    len(req.RunningJobs),
-		"last_heartbeat":  "NOW()",
+		"last_heartbeat":  time.Now(),
 		"status":          "online",
 	}
 

@@ -8,6 +8,7 @@ import (
 	"github.com/olahol/melody"
 	"go.uber.org/zap"
 
+	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
@@ -239,6 +240,16 @@ func (h *Hub) sendHistoryLogs(session *melody.Session, eventID, roomName string)
 		return
 	}
 
+	// 根据事件实际状态判断是否完成
+	complete := false
+	var event models.Event
+	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err == nil {
+		if event.Status == eventStatusSuccess || event.Status == eventStatusFailed ||
+			event.Status == eventStatusAborted || event.Status == eventStatusTimeout {
+			complete = true
+		}
+	}
+
 	// 发送历史日志
 	msg := ServerMessage{
 		Type: "history_log",
@@ -246,7 +257,7 @@ func (h *Hub) sendHistoryLogs(session *melody.Session, eventID, roomName string)
 		Data: map[string]interface{}{
 			"event_id": eventID,
 			"logs":     logs,
-			"complete": true,
+			"complete": complete,
 		},
 	}
 

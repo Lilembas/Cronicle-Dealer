@@ -127,6 +127,15 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 		detailsKey := fmt.Sprintf("tasks:details:%s", taskKey)
 		_ = storage.RedisClient.HSet(ctx, detailsKey, "dispatch_retry_count", strconv.Itoa(nextRetry)).Err()
 
+		// 重试前重置事件状态为 pending，避免 DispatchEvent 的状态检查短路
+		if event.ID != "" {
+			storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).
+				Updates(map[string]interface{}{
+					"status":        eventStatusPending,
+					"error_message": "",
+				})
+		}
+
 		go func() {
 			timer := time.NewTimer(delay)
 			defer timer.Stop()

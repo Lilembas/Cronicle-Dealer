@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '@tanstack/vue-query'
 import { jobsApi } from '@/api'
@@ -23,6 +23,53 @@ const { data: jobsDataRaw, isLoading, refetch } = useQuery({
   }),
 })
 const jobsData = jobsDataRaw as unknown as { total: number; page: number; data: any[] } | undefined
+
+// 当前选中分组
+const selectedGroup = ref('')
+
+// 计算所有分组
+const allGroups = computed(() => {
+  const jobs = jobsData.value?.data || []
+  const groups = new Set<string>()
+  jobs.forEach((job: any) => {
+    groups.add(job.category || '未分组')
+  })
+  return Array.from(groups).sort()
+})
+
+// 按分组归类任务
+const groupedJobs = computed(() => {
+  const jobs = jobsData.value?.data || []
+  const map = new Map<string, any[]>()
+  jobs.forEach((job: any) => {
+    const group = job.category || '未分组'
+    if (!map.has(group)) map.set(group, [])
+    map.get(group)!.push(job)
+  })
+  return map
+})
+
+// 过滤后的分组
+const filteredGroups = computed(() => {
+  if (!selectedGroup.value) return groupedJobs.value
+  const map = new Map<string, any[]>()
+  const jobs = groupedJobs.value.get(selectedGroup.value)
+  if (jobs) map.set(selectedGroup.value, jobs)
+  return map
+})
+
+// 分组颜色映射
+const groupColorMap: Record<string, string> = {}
+const groupColors = ['', 'success', 'warning', 'danger', 'info']
+let colorIndex = 0
+
+const getGroupColor = (group: string) => {
+  if (!groupColorMap[group]) {
+    groupColorMap[group] = groupColors[colorIndex % groupColors.length]
+    colorIndex++
+  }
+  return groupColorMap[group]
+}
 
 // 新建任务
 const handleCreate = () => {
@@ -89,55 +136,62 @@ const handlePageChange = (page: number) => {
         <el-button :icon="RefreshRight" @click="refetch">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="handleCreate">新建任务</el-button>
       </div>
+      <el-select v-model="selectedGroup" placeholder="全部分组" clearable style="width: 160px">
+        <el-option label="全部分组" value="" />
+        <el-option
+          v-for="group in allGroups"
+          :key="group"
+          :label="group"
+          :value="group"
+        />
+      </el-select>
     </div>
 
-    <el-card>
-      <el-table :data="jobsData?.data || []" v-loading="isLoading" stripe>
-        <el-table-column prop="name" label="任务名称" min-width="200" />
-        <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="cron_expr" label="Cron 表达式" width="150" />
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'info'">
-              {{ row.enabled ? '已启用' : '已禁用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="执行统计" width="150">
-          <template #default="{ row }">
-            <div class="text-sm">
-              <span class="text-green-600">✓ {{ row.success_runs }}</span> /
-              <span class="text-red-600">✗ {{ row.failed_runs }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="next_run_time" label="下次执行" width="180">
-          <template #default="{ row }">
-            {{ row.next_run_time ? new Date(row.next_run_time).toLocaleString('zh-CN') : '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="320" fixed="right">
-          <template #default="{ row }">
-            <el-button-group>
-              <el-button size="small" :icon="View" @click="handleDetail(row.id)">
-                详情
-              </el-button>
-              <el-button size="small" :icon="Clock" @click="handleHistory(row.id)">
-                历史
-              </el-button>
-              <el-button size="small" :icon="VideoPlay" @click="handleTrigger(row.id, row.name)">
-                触发
-              </el-button>
-              <el-button size="small" :icon="Edit" @click="handleEdit(row.id)">
-                编辑
-              </el-button>
-              <el-button size="small" type="danger" :icon="Delete" @click="handleDelete(row.id, row.name)">
-                删除
-              </el-button>
-            </el-button-group>
-          </template>
-        </el-table-column>
-      </el-table>
+    <el-card v-loading="isLoading">
+      <!-- 按分组渲染 -->
+      <div v-for="[group, jobs] in filteredGroups" :key="group" class="group-section">
+        <div class="group-header">
+          <el-tag :type="getGroupColor(group)" size="small" effect="plain">{{ group }}</el-tag>
+          <span class="group-count">{{ jobs.length }} 个任务</span>
+        </div>
+        <el-table :data="jobs" stripe size="small" style="width: 100%" class="group-table">
+          <el-table-column prop="name" label="任务名称" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="cron_expr" label="Cron 表达式" width="140" />
+          <el-table-column label="状态" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
+                {{ row.enabled ? '启用' : '禁用' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="next_run_time" label="下次执行" width="170">
+            <template #default="{ row }">
+              {{ row.next_run_time ? new Date(row.next_run_time).toLocaleString('zh-CN') : '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="160" fixed="right">
+            <template #default="{ row }">
+              <div class="action-row">
+                <el-tooltip content="详情" placement="top">
+                  <el-button size="small" :icon="View" @click="handleDetail(row.id)" />
+                </el-tooltip>
+                <el-tooltip content="历史" placement="top">
+                  <el-button size="small" :icon="Clock" @click="handleHistory(row.id)" />
+                </el-tooltip>
+                <el-tooltip content="触发" placement="top">
+                  <el-button size="small" type="primary" :icon="VideoPlay" @click="handleTrigger(row.id, row.name)" />
+                </el-tooltip>
+                <el-tooltip content="编辑" placement="top">
+                  <el-button size="small" :icon="Edit" @click="handleEdit(row.id)" />
+                </el-tooltip>
+                <el-tooltip content="删除" placement="top">
+                  <el-button size="small" type="danger" :icon="Delete" @click="handleDelete(row.id, row.name)" />
+                </el-tooltip>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
 
       <!-- 分页 -->
       <div class="pagination">
@@ -165,19 +219,37 @@ const handlePageChange = (page: number) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-}
-
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
+  margin-bottom: 16px;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
+}
+
+.group-section {
+  margin-bottom: 20px;
+}
+
+.group-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+
+.group-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+.group-table :deep(.el-table__header-wrapper th) {
+  background-color: #fafafa;
 }
 
 .pagination {
@@ -186,15 +258,16 @@ const handlePageChange = (page: number) => {
   justify-content: flex-end;
 }
 
-.text-sm {
-  font-size: 12px;
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
-.text-green-600 {
-  color: #67c23a;
+.action-row :deep(.el-button) {
+  padding: 4px;
+  margin: 0;
 }
 
-.text-red-600 {
-  color: #f56c6c;
-}
 </style>

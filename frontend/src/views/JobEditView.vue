@@ -12,6 +12,7 @@ const route = useRoute()
 const formData = ref({
   name: '',
   description: '',
+  category: '',
   cron_expr: '',
   command: '',
   timeout: 3600,
@@ -22,6 +23,30 @@ const formData = ref({
   target_value: '',
   strict_mode: false,
 })
+
+// 常用分组列表
+const commonGroups = ['默认分组', '系统任务', '数据同步', '定时清理', '监控告警', '数据备份']
+
+// 获取可用分组（从已有任务中获取）
+const availableGroups = ref<string[]>([...commonGroups])
+
+const loadGroups = async () => {
+  try {
+    const result = await jobsApi.list({ page: 1, page_size: 100 }) as unknown as { data: any[] }
+    const groups = new Set<string>()
+    if (result?.data) {
+      result.data.forEach((job: any) => {
+        if (job.category) groups.add(job.category)
+      })
+    }
+    // 合并预置分组和已有分组
+    const allGroups = new Set([...commonGroups, ...groups])
+    availableGroups.value = Array.from(allGroups).sort()
+  } catch {
+    // 加载失败使用默认分组
+    availableGroups.value = [...commonGroups]
+  }
+}
 
 // 节点列表
 const nodes = ref<Node[]>([])
@@ -116,6 +141,7 @@ const loadJob = async () => {
     formData.value = {
       name: job.name,
       description: job.description || '',
+      category: job.category || '默认分组',
       cron_expr: job.cron_expr,
       command: job.command,
       timeout: job.timeout,
@@ -251,6 +277,11 @@ onMounted(() => {
   loadJob()
   loadNodes()
   loadTags()
+  loadGroups()
+  // 新建模式设置默认分组
+  if (!isEdit.value) {
+    formData.value.category = '默认分组'
+  }
 })
 </script>
 
@@ -285,6 +316,25 @@ onMounted(() => {
               maxlength="500"
               show-word-limit
             />
+          </el-form-item>
+
+          <el-form-item label="任务分组">
+            <el-select
+              v-model="formData.category"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="选择或输入分组名称"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="group in availableGroups"
+                :key="group"
+                :label="group"
+                :value="group"
+              />
+            </el-select>
+            <div class="field-hint" style="margin-top: 4px;">用于任务列表中的分组筛选和展示</div>
           </el-form-item>
 
           <el-form-item label="标签">

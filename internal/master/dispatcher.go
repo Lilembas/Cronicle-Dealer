@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -23,6 +24,7 @@ const (
 
 // Dispatcher 任务分发器
 type Dispatcher struct {
+	mu          sync.Mutex
 	grpcClients map[string]pb.CronicleServiceClient
 	conns       map[string]*grpc.ClientConn
 }
@@ -61,6 +63,11 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 			return nil
 		}
 		// 如果是 pending 状态，继续处理
+			// 复用 DB 中已有的 StartTime，避免重试时重复初始化日志
+			if existingEvent.StartTime != nil && !existingEvent.StartTime.IsZero() {
+				event.StartTime = existingEvent.StartTime
+				event.LogPath = existingEvent.LogPath
+			}
 	}
 
 	// 只在第一次调度时设置 StartTime 和创建日志文件
@@ -127,7 +134,7 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 
 	node, err := d.selectNode(job)
 	if err != nil {
-		// 记录选择节点失败
+		// 记录选择节点失败（仅写日志，不标记 failed — 临时性错误，可重试）
 		errorLog := fmt.Sprintf("[%s] [Master] ❌ 选择节点失败: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
 		errorLog += fmt.Sprintf("[%s] [Master] 可能原因：\n", time.Now().Format("2006-01-02 15:04:05"))
 		errorLog += fmt.Sprintf("[%s] [Master] - 没有在线的 Worker 节点\n", time.Now().Format("2006-01-02 15:04:05"))
@@ -135,9 +142,6 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 		errorLog += fmt.Sprintf("[%s] [Master] - 没有符合标签条件的节点\n", time.Now().Format("2006-01-02 15:04:05"))
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
-		event.Status = "failed"
-		event.ErrorMessage = fmt.Sprintf("选择节点失败: %v", err)
-		storage.DB.Save(event)
 		return fmt.Errorf("选择节点失败: %w", err)
 	}
 
@@ -238,12 +242,29 @@ func (d *Dispatcher) AbortTask(event *models.Event, reason string) error {
 
 // Close 关闭所有 gRPC 连接
 func (d *Dispatcher) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	for nodeID, conn := range d.conns {
 		logger.Info("关闭 gRPC 客户端", zap.String("node_id", nodeID))
 		conn.Close()
 	}
 	d.grpcClients = make(map[string]pb.CronicleServiceClient)
 	d.conns = make(map[string]*grpc.ClientConn)
+}
+
+// RemoveNodeClient 关闭并移除指定节点的 gRPC 连接
+func (d *Dispatcher) RemoveNodeClient(nodeID string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if conn, ok := d.conns[nodeID]; ok {
+		conn.Close()
+		delete(d.conns, nodeID)
+		delete(d.grpcClients, nodeID)
+		logger.Info("已清理离线节点的 gRPC 连接",
+			zap.String("node_id", nodeID))
+	}
 }
 
 // getJob 获取任务配置
@@ -259,7 +280,11 @@ func (d *Dispatcher) getJob(jobID string) (*models.Job, error) {
 func (d *Dispatcher) selectNode(job *models.Job) (*models.Node, error) {
 	var nodes []models.Node
 
+	// 只选择心跳新鲜的在线节点（排除心跳超时的僵尸节点）
+	heartbeatThreshold := time.Now().Add(-90 * time.Second)
+
 	query := storage.DB.Where("status = ?", "online").
+		Where("last_heartbeat > ?", heartbeatThreshold).
 		// 排除 master 节点（master 节点不执行任务）
 		Where("(tags NOT LIKE '%master%' OR tags IS NULL OR tags = '')")
 
@@ -370,7 +395,8 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		StrictMode:    job.StrictMode, // 传递严格模式配置
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	// 记录任务发送日志
 	sendLog := fmt.Sprintf("[%s] [Master] 发送任务到 Worker...\n", time.Now().Format("2006-01-02 15:04:05"))
@@ -414,6 +440,9 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 
 // getGRPCClient 获取或创建 gRPC 客户端
 func (d *Dispatcher) getGRPCClient(node *models.Node) (pb.CronicleServiceClient, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	if client, ok := d.grpcClients[node.ID]; ok {
 		return client, nil
 	}
