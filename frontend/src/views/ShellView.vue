@@ -201,10 +201,6 @@ const getNodeName = (nodeId: string) => {
 
 <template>
   <div class="shell-page">
-    <!-- 页面头部 -->
-    <div class="page-header">
-    </div>
-
     <div class="shell-container">
       <!-- 无节点提示 -->
       <el-card v-if="!loadingNodes && nodes.length === 0" class="command-card" shadow="never">
@@ -228,50 +224,47 @@ const getNodeName = (nodeId: string) => {
           </div>
         </template>
 
-        <!-- 服务器选择 -->
-        <div v-if="nodes.length > 0" class="server-selector">
-          <div class="server-selector-label">
-            <el-icon><VideoPlay /></el-icon>
-            <span>目标服务器:</span>
-          </div>
-          <el-select
-            v-model="selectedNodeId"
-            placeholder="选择执行命令的服务器"
-            :loading="loadingNodes"
-            :disabled="isExecuting"
-            size="large"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="node in nodes"
-              :key="node.id"
-              :label="`${node.hostname} (${node.ip})`"
-              :value="node.id"
+        <!-- 执行配置行 -->
+        <div class="shell-controls">
+          <div v-if="nodes.length > 0" class="control-item">
+            <span class="control-label">目标服务器:</span>
+            <el-select
+              v-model="selectedNodeId"
+              placeholder="选择服务器"
+              :loading="loadingNodes"
+              :disabled="isExecuting"
+              style="width: 280px"
             >
-              <div style="display: flex; justify-content: space-between; align-items: center">
-                <div>
-                  <span style="font-weight: 500">{{ node.hostname }}</span>
-                  <span style="color: #8492a6; font-size: 12px; margin-left: 8px">{{ node.ip }}</span>
+              <el-option
+                v-for="node in nodes"
+                :key="node.id"
+                :label="`${node.hostname} (${node.ip})`"
+                :value="node.id"
+              >
+                <div style="display: flex; justify-content: space-between; align-items: center">
+                  <div>
+                    <span style="font-weight: 500">{{ node.hostname }}</span>
+                    <span style="color: #8492a6; font-size: 11px; margin-left: 8px">{{ node.ip }}</span>
+                  </div>
+                  <el-tag size="small" :type="node.running_jobs > 0 ? 'warning' : 'success'">
+                    负载: {{ node.running_jobs }}
+                  </el-tag>
                 </div>
-                <el-tag size="small" :type="node.running_jobs > 0 ? 'warning' : 'success'">
-                  负载: {{ node.running_jobs }}
-                </el-tag>
-              </div>
-            </el-option>
-          </el-select>
+              </el-option>
+            </el-select>
+          </div>
+
+          <div class="control-item">
+            <el-checkbox v-model="strictMode">
+              严格模式
+              <el-tooltip content="开启后，命令序列中任何一个命令失败都会立即停止执行" placement="top">
+                <el-icon class="help-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </el-checkbox>
+          </div>
         </div>
 
-        <!-- 执行选项 -->
-        <div class="execution-options">
-          <el-checkbox v-model="strictMode" border>
-            严格模式
-            <el-tooltip content="开启后，命令序列中任何一个命令失败都会立即停止执行" placement="top">
-              <el-icon class="help-icon"><QuestionFilled /></el-icon>
-            </el-tooltip>
-          </el-checkbox>
-        </div>
-
-<!-- 命令输入框 -->
+        <!-- 命令输入框 -->
         <div class="command-input-group">
           <Codemirror
             v-model:value="command"
@@ -365,23 +358,6 @@ const getNodeName = (nodeId: string) => {
   margin: 0 auto;
 }
 
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 4px 0;
-}
-
-.page-subtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-}
-
 .shell-container {
   display: grid;
   gap: 20px;
@@ -441,22 +417,28 @@ const getNodeName = (nodeId: string) => {
   gap: 8px;
 }
 
-.server-selector {
+.shell-controls {
+  display: flex;
+  align-items: center;
+  gap: 24px;
   margin-bottom: 20px;
-  padding: 16px;
+  padding: 12px 16px;
   background: #f8fafc;
-  border-radius: 8px;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
 }
 
-.server-selector-label {
+.control-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.control-label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #475569;
+  white-space: nowrap;
 }
 
 .command-input-group {
@@ -482,18 +464,6 @@ const getNodeName = (nodeId: string) => {
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
-}
-
-.execution-options {
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.option-hint {
-  font-size: 12px;
-  color: #94a3b8;
 }
 
 .help-icon {
@@ -592,10 +562,6 @@ const getNodeName = (nodeId: string) => {
 @media (max-width: 768px) {
   .shell-page {
     padding: 16px;
-  }
-
-  .page-title {
-    font-size: 24px;
   }
 
   .quick-commands {
