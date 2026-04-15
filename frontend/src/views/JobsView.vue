@@ -111,6 +111,12 @@ const handleDelete = async (id: string, name: string) => {
 // 触发任务
 const handleTrigger = async (id: string, name: string) => {
   try {
+    await ElMessageBox.confirm(`确定要触发任务 "${name}" 吗？`, '确认触发', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'info',
+    })
+
     const result = await jobsApi.trigger(id) as unknown as import('@/api').TriggerResponse
     ElMessage({
       message: `任务 "${name}" 已入队，Event ID: ${result.event_id}`,
@@ -119,7 +125,9 @@ const handleTrigger = async (id: string, name: string) => {
       showClose: true,
     })
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || '触发失败')
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.error || '触发失败')
+    }
   }
 }
 
@@ -155,7 +163,11 @@ const handlePageChange = (page: number) => {
           <span class="group-count">{{ jobs.length }} 个任务</span>
         </div>
         <el-table :data="jobs" stripe size="small" style="width: 100%" class="group-table">
-          <el-table-column prop="name" label="任务名称" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="name" label="任务名称" min-width="120" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="job-name-link" @click="handleDetail(row.id)">{{ row.name }}</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="cron_expr" label="Cron 表达式" width="140" />
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">
@@ -256,6 +268,15 @@ const handlePageChange = (page: number) => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.job-name-link {
+  color: #409eff;
+  cursor: pointer;
+}
+
+.job-name-link:hover {
+  text-decoration: underline;
 }
 
 .action-row {

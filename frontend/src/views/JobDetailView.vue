@@ -130,10 +130,10 @@ onMounted(() => {
         <el-descriptions-item label="下次执行">
           {{ job.next_run_time ? new Date(job.next_run_time).toLocaleString('zh-CN') : '-' }}
         </el-descriptions-item>
+        <el-descriptions-item label="描述" :span="2">{{ job.description || '-' }}</el-descriptions-item>
         <el-descriptions-item label="执行命令" :span="2">
           <pre class="command">{{ job.command }}</pre>
         </el-descriptions-item>
-        <el-descriptions-item label="描述" :span="2">{{ job.description || '-' }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
 
