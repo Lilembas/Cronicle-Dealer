@@ -92,6 +92,7 @@ func (s *APIServer) setupRoutes() {
 		events.GET("", s.listEvents)       // 获取执行记录列表
 		events.GET("/:id", s.getEvent)     // 获取执行记录详情
 		events.POST("/:id/abort", s.abortEvent) // 中止执行
+		events.GET("/:id/download", s.downloadLog) // 下载日志
 	}
 	
 	// 节点管理
@@ -835,4 +836,24 @@ func (s *APIServer) getShellLogs(c *gin.Context) {
 		"status":        status,
 		"error_message": event.ErrorMessage,
 	})
+}
+
+// downloadLog 下载执行日志
+func (s *APIServer) downloadLog(c *gin.Context) {
+	eventID := c.Param("id")
+	if eventID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "event_id 参数缺失"})
+		return
+	}
+
+	logs, err := storage.GetLogs(context.Background(), eventID)
+	if err != nil || logs == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "日志不存在"})
+		return
+	}
+
+	filename := fmt.Sprintf("%s.log", eventID)
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.String(http.StatusOK, logs)
 }

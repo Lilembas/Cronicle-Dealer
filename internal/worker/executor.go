@@ -406,11 +406,13 @@ func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outp
 	scanner.Buffer(buf, 10*1024*1024) // 最大10MB行
 
 	for scanner.Scan() {
+		// 复制数据，避免 scanner 内部缓冲区在下次 Scan() 时被覆盖
 		line := scanner.Bytes()
-		// 添加换行符
-		lineWithNewline := append(line, '\n')
+		data := make([]byte, len(line)+1)
+		copy(data, line)
+		data[len(line)] = '\n'
 		outputChan <- outputChunk{
-			data:       lineWithNewline,
+			data:       data,
 			streamType: streamTypePB,
 		}
 
@@ -461,10 +463,6 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 
 	// 存储到Redis供Master查询
 	storage.SetTaskResult(ctx, taskKey, result)
-
-	// 注意：日志已经通过gRPC StreamLogs实时发送到Master
-	// Master负责将日志存储到Redis+文件
-	// 这里不再需要存储日志
 
 	// 更新任务状态
 	status := taskStatusSuccess

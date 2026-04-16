@@ -147,6 +147,9 @@ export const eventsApi = {
 
     abort: (id: string) =>
         request.post(`/events/${id}/abort`),
+
+    download: (id: string) =>
+        request.get(`/events/${id}/download`, { responseType: 'blob' }),
 }
 
 // 节点 API

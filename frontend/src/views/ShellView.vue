@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { shellApi, nodesApi, eventsApi, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { VideoPlay, CircleClose, Delete, Loading, QuestionFilled, SwitchButton } from '@element-plus/icons-vue'
+import { VideoPlay, CircleClose, Delete, Loading, QuestionFilled, SwitchButton, Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
@@ -115,7 +115,7 @@ const handleHistoryLog = (data: any) => {
 }
 
 // 处理任务状态变化
-const handleTaskStatus = (data: any) => {
+const handleTaskStatus = async (data: any) => {
   if (data.event_id === currentEventId.value && data.status !== 'running') {
     // 任务完成
     isExecuting.value = false
@@ -123,6 +123,14 @@ const handleTaskStatus = (data: any) => {
 
     // 取消订阅
     wsStore.leaveRoom(`event:${currentEventId.value}`)
+
+    // 从后端重新加载完整日志（补全 WebSocket 断连期间丢失的日志）
+    try {
+      const res = (await shellApi.getLogs(currentEventId.value)) as any
+      if (res.logs) {
+        logs.value = res.logs
+      }
+    } catch {}
 
     // 显示完成消息
     if (data.exit_code === 0) {
@@ -206,6 +214,56 @@ const useQuickCommand = (cmd: string) => {
 const getNodeName = (nodeId: string) => {
   const node = nodes.value.find(n => n.id === nodeId)
   return node ? `${node.hostname} (${node.ip})` : nodeId
+}
+
+const LOG_LIMIT = 1000
+
+const totalLines = computed(() => {
+  if (!logs.value) return 0
+  // 只计完整行（以 \n 结尾的）
+  const text = logs.value.endsWith('\n') ? logs.value : logs.value.slice(0, logs.value.lastIndexOf('\n') + 1)
+  if (!text) return 0
+  return text.split('\n').length - 1 // 末尾 \n 产生一个空元素
+})
+
+const displayLogs = computed(() => {
+  if (!logs.value) return ''
+  // 截断到上一个完整行（去掉末尾不完整的行）
+  let text = logs.value
+  if (!text.endsWith('\n')) {
+    const lastNL = text.lastIndexOf('\n')
+    if (lastNL < 0) return ''
+    text = text.slice(0, lastNL)
+  }
+  const lines = text.split('\n')
+  lines.pop() // 末尾 \n 产生的空元素
+  if (lines.length <= LOG_LIMIT) return lines.join('\n')
+  return lines.slice(-LOG_LIMIT).join('\n')
+})
+
+
+const logSizeText = computed(() => {
+  const bytes = new Blob([logs.value]).size
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+})
+
+const downloadLog = async () => {
+  const id = currentEventId.value
+  if (!id) return
+  try {
+    const res = await eventsApi.download(id)
+    const blob = new Blob([res as any], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${id}.log`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('下载日志失败')
+  }
 }
 </script>
 
@@ -325,10 +383,22 @@ const getNodeName = (nodeId: string) => {
       <el-card class="output-card" shadow="never">
         <template #header>
           <div class="card-header">
-            <h3 class="card-title">执行输出</h3>
+            <div class="card-header-left">
+              <h3 class="card-title">执行输出</h3>
+              <span v-if="logs" class="logs-stats">{{ totalLines }} 行 · {{ logSizeText }}</span>
+            </div>
             <div class="card-actions">
               <el-tag v-if="exitCode !== 0" type="danger">退出码: {{ exitCode }}</el-tag>
               <el-tag v-else-if="logs" type="success">退出码: 0</el-tag>
+              <el-button
+                v-if="!isExecuting && logs && currentEventId"
+                type="primary"
+                size="small"
+                :icon="Download"
+                @click="downloadLog"
+              >
+                下载
+              </el-button>
               <el-button
                 :icon="Delete"
                 size="small"
@@ -343,7 +413,7 @@ const getNodeName = (nodeId: string) => {
 
         <!-- 日志输出 -->
         <div class="logs-container">
-          <pre v-if="logs" class="logs-content">{{ logs }}</pre>
+          <pre v-if="displayLogs" class="logs-content">{{ displayLogs }}</pre>
           <div v-else class="logs-empty">
             <el-icon :size="48"><CircleClose /></el-icon>
             <p>暂无输出</p>
@@ -420,6 +490,17 @@ const getNodeName = (nodeId: string) => {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logs-stats {
+  font-size: 13px;
+  color: #64748b;
 }
 
 .card-title {

@@ -23,6 +23,7 @@ var (
 var (
 	fileCache      = make(map[string]*os.File)
 	fileCacheMutex sync.RWMutex
+	fileWriteMutex sync.Mutex // 保护并发文件写入
 )
 
 // InitLogStorage 初始化日志存储
@@ -99,6 +100,12 @@ func GetLogs(ctx context.Context, eventID string) (string, error) {
 	return string(content), nil
 }
 
+// SetLogComplete 用完整日志覆盖写入（兜底，防止 StreamLogs 传输丢失）
+func SetLogComplete(ctx context.Context, eventID string, content string) error {
+	logKey := fmt.Sprintf("task_logs:%s", eventID)
+	return RedisClient.Set(ctx, logKey, content, 0).Err()
+}
+
 // SetLogExpiration 设置日志过期时间（任务完成时调用）
 func SetLogExpiration(ctx context.Context, eventID string) error {
 	logKey := fmt.Sprintf("task_logs:%s", eventID)
@@ -127,6 +134,9 @@ func appendToFileAsync(eventID, content string) {
 
 // appendToFileSync 同步写入文件并flush到磁盘
 func appendToFileSync(eventID, content string) error {
+	fileWriteMutex.Lock()
+	defer fileWriteMutex.Unlock()
+
 	logFilePath := getLogFilePath(eventID)
 
 	// 从缓存获取或打开文件

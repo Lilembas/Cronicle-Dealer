@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { eventsApi, shellApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { ArrowLeft, RefreshRight } from '@element-plus/icons-vue'
+import { ArrowLeft, RefreshRight, Download } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
@@ -16,6 +16,8 @@ const logs = ref('')
 const exitCode = ref<number | null>(null)
 
 const eventId = () => route.params.id as string
+
+const LOG_LIMIT = 1000
 
 const getStatusType = (status: string) => {
   const map: Record<string, any> = {
@@ -45,6 +47,58 @@ const loadLogs = async () => {
   // 如果日志内容为空但存在 error_message，将其追加到日志中展示
   if (!logs.value && res.error_message) {
     logs.value = `[错误] ${res.error_message}`
+  }
+}
+
+const totalLines = computed(() => {
+  if (!logs.value) return 0
+  // 只计完整行（以 \n 结尾的）
+  const text = logs.value.endsWith('\n') ? logs.value : logs.value.slice(0, logs.value.lastIndexOf('\n') + 1)
+  if (!text) return 0
+  return text.split('\n').length - 1 // 末尾 \n 产生一个空元素
+})
+
+const displayLogs = computed(() => {
+  if (!logs.value) return ''
+  // 截断到上一个完整行（去掉末尾不完整的行）
+  let text = logs.value
+  if (!text.endsWith('\n')) {
+    const lastNL = text.lastIndexOf('\n')
+    if (lastNL < 0) return ''
+    text = text.slice(0, lastNL)
+  }
+  const lines = text.split('\n')
+  lines.pop() // 末尾 \n 产生的空元素
+  if (lines.length <= LOG_LIMIT) return lines.join('\n')
+  return lines.slice(-LOG_LIMIT).join('\n')
+})
+
+const logSizeText = computed(() => {
+  const bytes = new Blob([logs.value]).size
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+})
+
+const isCompleted = computed(() => {
+  if (!event.value) return false
+  return ['success', 'failed', 'aborted', 'timeout'].includes(event.value.status)
+})
+
+const downloadLog = async () => {
+  const id = eventId()
+  if (!id) return
+  try {
+    const res = await eventsApi.download(id)
+    const blob = new Blob([res as any], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${id}.log`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('下载日志失败')
   }
 }
 
@@ -130,7 +184,23 @@ onUnmounted(() => {
     </el-card>
 
     <el-card class="logs-card" shadow="never">
-      <pre v-if="logs" class="log-content">{{ logs }}</pre>
+      <template #header>
+        <div class="logs-card-header">
+          <span class="logs-stats">
+            {{ totalLines }} 行 · {{ logSizeText }}
+          </span>
+          <el-button
+            v-if="isCompleted && logs"
+            type="primary"
+            size="small"
+            :icon="Download"
+            @click="downloadLog"
+          >
+            下载日志
+          </el-button>
+        </div>
+      </template>
+      <pre v-if="displayLogs" class="log-content">{{ displayLogs }}</pre>
       <el-empty v-else description="暂无日志输出" />
     </el-card>
   </div>
@@ -165,6 +235,17 @@ onUnmounted(() => {
 .logs-card {
   border-radius: 12px;
   margin-bottom: 16px;
+}
+
+.logs-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logs-stats {
+  font-size: 13px;
+  color: #64748b;
 }
 
 .log-content {

@@ -326,7 +326,14 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 	// 设置日志过期时间（任务完成后15分钟自动清理）
 	if err := storage.SetLogExpiration(ctx, req.EventId); err != nil {
 		logger.Warn("设置日志过期时间失败", zap.Error(err))
-		// 不影响任务结果返回
+	}
+
+	// 兜底：从 tasks:result 中取完整日志覆盖 task_logs，防止 StreamLogs 传输丢失
+	taskKey := fmt.Sprintf("%s:%s", req.JobId, req.EventId)
+	if result, err := storage.GetTaskResult(ctx, taskKey); err == nil {
+		if output, ok := result["output"]; ok && output != "" {
+			storage.SetLogComplete(ctx, req.EventId, output)
+		}
 	}
 
 	// 更新 Job 的统计信息
