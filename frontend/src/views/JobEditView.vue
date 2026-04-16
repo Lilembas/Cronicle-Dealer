@@ -207,6 +207,7 @@ const buildCronExpr = () => {
     cron.value.month,
     cron.value.dayOfWeek,
   ].join(' ')
+  validateCronExpr()
 }
 
 // 从表达式更新Cron组件
@@ -227,6 +228,59 @@ const updateCronFromExpr = (value: string) => {
 const selectPreset = (value: string) => {
   formData.value.cron_expr = value
   updateCronFromExpr(value)
+  validateCronExpr()
+}
+
+// Cron表达式校验
+const cronError = ref('')
+
+const validateCronField = (value: string, min: number, max: number): boolean => {
+  if (value === '*') return true
+  if (value.includes(',')) {
+    return value.split(',').every(part => validateCronField(part.trim(), min, max))
+  }
+  if (/^\*\/\d+$/.test(value)) {
+    const n = parseInt(value.split('/')[1])
+    return n >= 1
+  }
+  // N/M：从 N 开始每 M 单位执行，如 2/3
+  if (/^\d+\/\d+$/.test(value)) {
+    const [start, step] = value.split('/').map(Number)
+    return start >= min && start <= max && step >= 1
+  }
+  if (/^\d+-\d+(\/\d+)?$/.test(value)) {
+    const [range, step] = value.split('/')
+    const [a, b] = range.split('-').map(Number)
+    if (a < min || b > max || a > b) return false
+    if (step !== undefined && parseInt(step) < 1) return false
+    return true
+  }
+  if (/^\d+$/.test(value)) {
+    const n = parseInt(value)
+    return n >= min && n <= max
+  }
+  return false
+}
+
+const validateCronExpr = (): boolean => {
+  const expr = formData.value.cron_expr.trim()
+  if (!expr) {
+    cronError.value = '请输入Cron表达式'
+    return false
+  }
+  const parts = expr.split(/\s+/)
+  if (parts.length !== 5) {
+    cronError.value = 'Cron表达式须包含5个字段（分 时 日 月 周）'
+    return false
+  }
+  const [minute, hour, dom, month, dow] = parts
+  if (!validateCronField(minute, 0, 59)) { cronError.value = '「分」字段无效（范围 0-59）'; return false }
+  if (!validateCronField(hour, 0, 23)) { cronError.value = '「时」字段无效（范围 0-23）'; return false }
+  if (!validateCronField(dom, 1, 31)) { cronError.value = '「日」字段无效（范围 1-31）'; return false }
+  if (!validateCronField(month, 1, 12)) { cronError.value = '「月」字段无效（范围 1-12）'; return false }
+  if (!validateCronField(dow, 0, 7)) { cronError.value = '「周」字段无效（范围 0-7）'; return false }
+  cronError.value = ''
+  return true
 }
 
 // 切换运行方式时清空已选值
@@ -252,8 +306,8 @@ const save = async () => {
     ElMessage.warning('请输入任务名称')
     return
   }
-  if (!formData.value.cron_expr.trim()) {
-    ElMessage.warning('请输入Cron表达式')
+  if (!validateCronExpr()) {
+    ElMessage.warning(cronError.value)
     return
   }
   if (!formData.value.command.trim()) {
@@ -427,10 +481,13 @@ onMounted(() => {
               </div>
               <div class="cron-raw">
                 <span class="raw-label">表达式:</span>
-                <el-input v-model="formData.cron_expr" placeholder="* * * * *" @input="updateCronFromExpr" size="small" class="raw-input" />
+                <el-input v-model="formData.cron_expr" placeholder="* * * * *" size="small" class="raw-input" readonly />
               </div>
             </div>
-            <div class="field-hint" style="margin-top: 8px">
+            <div v-if="cronError" class="cron-error" style="margin-top: 8px">
+              {{ cronError }}
+            </div>
+            <div v-else class="field-hint" style="margin-top: 8px">
               格式：分 时 日 月 周 (5位标准版)。使用 * 表示通配，*/N 表示频率。
             </div>
           </el-form-item>
@@ -597,6 +654,12 @@ onMounted(() => {
   color: #94a3b8;
 }
 
+.cron-error {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #f56c6c;
+}
+
 .env-row {
   display: flex;
   align-items: center;
@@ -678,6 +741,10 @@ onMounted(() => {
   flex-direction: column;
   gap: 4px;
   align-items: center;
+}
+
+.cron-part :deep(.el-input__inner) {
+  text-align: center;
 }
 
 .part-label {

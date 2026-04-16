@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { jobsApi } from '@/api'
+import { jobsApi, nodesApi, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
 import { Plus, Edit, Delete, VideoPlay, RefreshRight, View, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -73,6 +73,85 @@ const getGroupColor = (group: string) => {
     colorIndex++
   }
   return groupColorMap[group]
+}
+
+// 节点ID -> hostname 映射
+const nodesMap = ref<Map<string, string>>(new Map())
+
+const loadNodes = async () => {
+  try {
+    const all = await nodesApi.list({}) as unknown as Node[]
+    const map = new Map<string, string>()
+    ;(all || []).forEach(n => map.set(n.id, n.hostname))
+    nodesMap.value = map
+  } catch {
+    // 加载失败不影响主要功能
+  }
+}
+
+// 执行目标格式化
+const formatTarget = (row: any): { type: 'any' | 'node' | 'tags'; label?: string; tags?: string[] } => {
+  const targetType = row.target_type || 'any'
+  if (targetType === 'any' || !targetType) return { type: 'any' }
+  if (targetType === 'node_id') {
+    const hostname = nodesMap.value.get(row.target_value) || row.target_value
+    return { type: 'node', label: hostname }
+  }
+  if (targetType === 'tags') {
+    let tags: string[] = []
+    try {
+      const parsed = JSON.parse(row.target_value)
+      if (Array.isArray(parsed)) tags = parsed
+    } catch {
+      tags = row.target_value ? String(row.target_value).split(',').filter(Boolean) : []
+    }
+    return { type: 'tags', tags }
+  }
+  return { type: 'any' }
+}
+
+// Cron表达式转人类可读描述
+const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+const formatCron = (expr: string): string => {
+  if (!expr) return expr
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length !== 5) return expr
+  const [min, hour, dom, month, dow] = parts
+
+  if (expr === '* * * * *') return '每分钟'
+
+  // */N * * * * → 每N分钟
+  if (/^\*\/\d+$/.test(min) && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    return `每${min.split('/')[1]}分钟`
+  }
+  // N/M * * * * → 从第N分开始每M分钟
+  if (/^\d+\/\d+$/.test(min) && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    const [start, step] = min.split('/')
+    return `从第${start}分起每${step}分钟`
+  }
+  // 0 */N * * * → 每N小时
+  if (min === '0' && /^\*\/\d+$/.test(hour) && dom === '*' && month === '*' && dow === '*') {
+    return `每${hour.split('/')[1]}小时`
+  }
+  // M * * * * → 每小时第M分
+  if (/^\d+$/.test(min) && hour === '*' && dom === '*' && month === '*' && dow === '*') {
+    return `每小时第${min}分`
+  }
+  // M H * * D → 每周X H:M
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && /^\d+$/.test(dow)) {
+    const label = weekDays[parseInt(dow) % 7]
+    return `每${label} ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`
+  }
+  // M H D * * → 每月D日 H:M
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && /^\d+$/.test(dom) && month === '*' && dow === '*') {
+    return `每月${dom}日 ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`
+  }
+  // M H * * * → 每天 H:M
+  if (/^\d+$/.test(min) && /^\d+$/.test(hour) && dom === '*' && month === '*' && dow === '*') {
+    return `每天 ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`
+  }
+  return expr
 }
 
 // 新建任务
@@ -151,6 +230,7 @@ const handleTaskStatus = async () => {
 // 组件挂载 - 设置 WebSocket 监听
 onMounted(() => {
   wsStore.onMessage('task_status', handleTaskStatus)
+  loadNodes()
 })
 
 // 组件卸载 - 移除 WebSocket 监听
@@ -190,7 +270,29 @@ onUnmounted(() => {
               <span class="job-name-link" @click="handleDetail(row.id)">{{ row.name }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="cron_expr" label="Cron 表达式" width="140" />
+          <el-table-column label="执行节点" width="150">
+            <template #default="{ row }">
+              <template v-if="formatTarget(row).type === 'any'">
+                <el-tag size="small" type="info" effect="plain">任意节点</el-tag>
+              </template>
+              <template v-else-if="formatTarget(row).type === 'node'">
+                <el-tag size="small" type="primary" effect="plain" style="max-width: 130px; overflow: hidden; text-overflow: ellipsis">
+                  {{ formatTarget(row).label }}
+                </el-tag>
+              </template>
+              <template v-else-if="formatTarget(row).type === 'tags'">
+                <div class="target-tags">
+                  <el-tag
+                    v-for="tag in formatTarget(row).tags"
+                    :key="tag"
+                    size="small"
+                    type="warning"
+                    effect="plain"
+                  >{{ tag }}</el-tag>
+                </div>
+              </template>
+            </template>
+          </el-table-column>
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
@@ -208,6 +310,13 @@ onUnmounted(() => {
                 {{ row.last_status === 'success' ? '成功' : row.last_status === 'failed' ? '失败' : row.last_status === 'running' ? '运行中' : '待执行' }}
               </el-tag>
               <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="cron_expr" label="执行计划" width="160">
+            <template #default="{ row }">
+              <el-tooltip :content="row.cron_expr" placement="top">
+                <span class="cron-label">{{ formatCron(row.cron_expr) }}</span>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column prop="next_run_time" label="下次执行" width="170">
@@ -311,6 +420,18 @@ onUnmounted(() => {
 
 .job-name-link:hover {
   text-decoration: underline;
+}
+
+.cron-label {
+  font-size: 13px;
+  color: #475569;
+  cursor: default;
+}
+
+.target-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .action-row {
