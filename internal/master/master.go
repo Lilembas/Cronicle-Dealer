@@ -116,6 +116,7 @@ func (m *Master) startServices() error {
 
 	// 启动任务消费者
 	m.taskConsumer = NewTaskConsumer(m.dispatcher, m.cfg.Master.DispatchRetry)
+	m.taskConsumer.SetWebSocketServer(m.wsServer)
 	consumerCtx, cancel := context.WithCancel(context.Background())
 	m.consumerCancel = cancel
 	go m.taskConsumer.Start(consumerCtx)

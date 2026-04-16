@@ -78,6 +78,17 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 		event.StartTime = &now
 		event.LogPath = fmt.Sprintf("/var/log/cronicle/events/%s.log", event.ID)
 
+		// 同步写入数据库，确保 start_time 被正确记录
+		if err := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).
+			Updates(map[string]interface{}{
+				"start_time": now,
+				"log_path":  event.LogPath,
+			}).Error; err != nil {
+			logger.Warn("更新事件 start_time 失败",
+				zap.String("event_id", event.ID),
+				zap.Error(err))
+		}
+
 		// 记录调度开始日志
 		dispatchLog := fmt.Sprintf("[%s] [Master] 任务开始调度\n", now.Format("2006-01-02 15:04:05"))
 		dispatchLog += fmt.Sprintf("[%s] [Master] 任务ID: %s, 作业ID: %s\n", now.Format("2006-01-02 15:04:05"), event.ID, event.JobID)

@@ -22,6 +22,7 @@ const (
 // TaskConsumer 任务消费者
 type TaskConsumer struct {
 	dispatcher  *Dispatcher
+	wsServer    *WebSocketServer
 	retryCfg    config.DispatchRetryConfig
 	done        chan struct{}
 }
@@ -33,6 +34,11 @@ func NewTaskConsumer(dispatcher *Dispatcher, retryCfg config.DispatchRetryConfig
 		retryCfg:   retryCfg,
 		done:       make(chan struct{}),
 	}
+}
+
+// SetWebSocketServer 设置 WebSocket 服务器（用于广播状态变化）
+func (tc *TaskConsumer) SetWebSocketServer(wsServer *WebSocketServer) {
+	tc.wsServer = wsServer
 }
 
 // Start 启动任务消费者
@@ -196,6 +202,15 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 			zap.String("job_id", event.JobID),
 			zap.Error(updateErr))
 	}
+		}
+
+		// 通过 WebSocket 广播任务状态变更
+		if tc.wsServer != nil {
+			if err := tc.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, 1); err != nil {
+				logger.Warn("广播任务失败状态失败",
+					zap.String("event_id", event.ID),
+					zap.Error(err))
+			}
 		}
 
 	logger.Error("任务分发失败，达到最大重试次数",
