@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { jobsApi, nodesApi, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { Plus, Edit, Delete, VideoPlay, RefreshRight, View, Clock } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, VideoPlay, RefreshRight, View, Clock, CircleCheckFilled, CircleCloseFilled, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const wsStore = useWebSocketStore()
@@ -302,13 +302,13 @@ onUnmounted(() => {
           </el-table-column>
           <el-table-column label="最后执行" width="100" align="center">
             <template #default="{ row }">
-              <el-tag
-                v-if="row.last_status && row.last_status !== '-'"
-                :type="row.last_status === 'success' ? 'success' : row.last_status === 'failed' ? 'danger' : row.last_status === 'running' ? 'warning' : 'info'"
-                size="small"
-              >
-                {{ row.last_status === 'success' ? '成功' : row.last_status === 'failed' ? '失败' : row.last_status === 'running' ? '运行中' : '待执行' }}
-              </el-tag>
+              <span v-if="row.last_status && row.last_status !== '-'" :class="['status-badge', `status-${row.last_status}`]">
+                <el-icon v-if="row.last_status === 'success'"><CircleCheckFilled /></el-icon>
+                <el-icon v-else-if="row.last_status === 'failed'"><CircleCloseFilled /></el-icon>
+                <el-icon v-else-if="row.last_status === 'running'" class="is-loading"><Loading /></el-icon>
+                <el-icon v-else><Clock /></el-icon>
+                <span>{{ row.last_status === 'success' ? '成功' : row.last_status === 'failed' ? '失败' : row.last_status === 'running' ? '执行中' : '待执行' }}</span>
+              </span>
               <span v-else>-</span>
             </template>
           </el-table-column>
@@ -424,7 +424,7 @@ onUnmounted(() => {
 
 .cron-label {
   font-size: 13px;
-  color: #475569;
+  color: #94a3b8;
   cursor: default;
 }
 
@@ -432,6 +432,33 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #fff;
+}
+
+.status-success {
+  background: #22c55e;
+}
+
+.status-failed {
+  background: #ef4444;
+}
+
+.status-running {
+  background: #3b82f6;
+}
+
+.status-pending {
+  background: #64748b;
 }
 
 .action-row {
