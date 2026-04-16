@@ -192,7 +192,7 @@ func setDefaults() {
 	viper.SetDefault("master.heartbeat.check_interval", 30)
 
 	// 分发重试默认值
-	viper.SetDefault("master.dispatch_retry.max_retries", 3)
+	viper.SetDefault("master.dispatch_retry.max_retries", 1)
 	viper.SetDefault("master.dispatch_retry.base_delay_sec", 2)
 	viper.SetDefault("master.dispatch_retry.max_delay_sec", 30)
 

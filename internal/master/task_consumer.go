@@ -160,7 +160,7 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 			}
 		}()
 
-		logger.Warn("任务分发失败，稍后重试",
+		logger.Warn("调度失败，将进行重试",
 			zap.String("task_key", taskKey),
 			zap.String("job_id", event.JobID),
 			zap.String("event_id", event.ID),
@@ -188,7 +188,7 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 			"start_time":    startTime,
 			"duration":      duration,
 			"exit_code":     1,
-			"error_message": fmt.Sprintf("任务分发失败（重试%d次后放弃）: %v", retryCount, dispatchErr),
+			"error_message": fmt.Sprintf("任务分发失败（已重试%d次后放弃）: %v", retryCount, dispatchErr),
 		}).Error
 	if updateErr != nil {
 		logger.Error("更新分发失败事件状态失败",
