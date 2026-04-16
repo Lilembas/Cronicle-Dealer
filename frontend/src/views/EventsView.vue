@@ -2,9 +2,9 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { eventsApi, type Event } from '@/api'
+import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { RefreshRight, View, Filter, CircleClose } from '@element-plus/icons-vue'
+import { RefreshRight, View, Filter, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const wsStore = useWebSocketStore()
@@ -19,7 +19,8 @@ const highlightId = ref(route.query.highlight as string || '')
 // 筛选条件
 const filters = ref({
   status: '',
-  jobId: '',
+  jobName: '',
+  jobCategory: '',
   startDate: '',
   endDate: '',
 })
@@ -37,7 +38,8 @@ const { data: eventsDataRaw, isLoading, refetch } = useQuery({
     page: pagination.value.page,
     page_size: pagination.value.pageSize,
     status: filters.value.status || undefined,
-    job_id: filters.value.jobId || undefined,
+    job_name: filters.value.jobName || undefined,
+    job_category: filters.value.jobCategory || undefined,
   }),
 })
 const eventsData = eventsDataRaw as unknown as { total: number; data: Event[] } | undefined
@@ -62,6 +64,17 @@ const statusOptions = [
   { label: '运行中', value: 'running' },
   { label: '已排队', value: 'queued' },
 ]
+
+// 分组选项（从 jobs 加载）
+const categoryOptions = ref<{ label: string; value: string }[]>([])
+const loadCategories = async () => {
+  const { data } = await jobsApi.list({ page_size: 1000 }) as unknown as { data: any[] }
+  const categories = [...new Set((data || []).map((j: any) => j.category).filter(Boolean))]
+  categoryOptions.value = [
+    { label: '全部', value: '' },
+    ...categories.map((c: string) => ({ label: c, value: c })),
+  ]
+}
 
 // 状态标签类型
 const getStatusType = (status: string) => {
@@ -129,7 +142,8 @@ const applyFilter = () => {
 const resetFilter = () => {
   filters.value = {
     status: '',
-    jobId: '',
+    jobName: '',
+    jobCategory: '',
     startDate: '',
     endDate: '',
   }
@@ -150,6 +164,7 @@ const handleTaskStatus = () => {
 
 // 组件挂载 - 设置 WebSocket 监听
 onMounted(() => {
+  loadCategories()
   wsStore.onMessage('task_status', handleTaskStatus)
 })
 
@@ -179,13 +194,24 @@ onUnmounted(() => {
           </el-select>
         </el-form-item>
 
-        <el-form-item label="任务ID">
+        <el-form-item label="任务名称">
           <el-input
-            v-model="filters.jobId"
-            placeholder="输入任务ID"
+            v-model="filters.jobName"
+            placeholder="输入任务名称"
             clearable
             style="width: 200px"
           />
+        </el-form-item>
+
+        <el-form-item label="任务分组">
+          <el-select v-model="filters.jobCategory" placeholder="选择分组" clearable style="width: 150px">
+            <el-option
+              v-for="option in categoryOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
         </el-form-item>
 
         <el-form-item>
@@ -207,11 +233,25 @@ onUnmounted(() => {
       >
         <el-table-column prop="id" label="Event ID" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
-            <el-text type="primary" class="event-id" :id="`event-row-${row.id}`">{{ row.id }}</el-text>
+            <el-tooltip :content="row.id" placement="top">
+              <el-text type="primary" class="event-id clickable" :id="`event-row-${row.id}`" @click="viewDetail(row)">{{ row.id.split('_').slice(-1)[0] }}</el-text>
+            </el-tooltip>
           </template>
         </el-table-column>
 
-        <el-table-column prop="job_id" label="任务ID" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="job_name" label="任务名称" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-text v-if="row.job_id" type="primary" class="clickable" @click="router.push(`/jobs/${row.job_id}/detail`)">{{ row.job_name || row.job_id }}</el-text>
+            <span v-else>{{ row.job_name || row.job_id }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="分组" width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-tag v-if="row.job_category" size="small" type="info">{{ row.job_category }}</el-tag>
+            <span v-else class="text-gray">-</span>
+          </template>
+        </el-table-column>
 
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
@@ -263,13 +303,13 @@ onUnmounted(() => {
               :icon="View"
               @click="viewDetail(row)"
             >
-              查看日志
+              日志
             </el-button>
             <el-button
               v-if="canAbort(row.status)"
               type="danger"
               size="small"
-              :icon="CircleClose"
+              :icon="SwitchButton"
               @click="handleAbort(row)"
             >
               中止
@@ -337,10 +377,13 @@ onUnmounted(() => {
 .event-id {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 13px;
+}
+
+.clickable {
   cursor: pointer;
 }
 
-.event-id:hover {
+.clickable:hover {
   text-decoration: underline;
 }
 

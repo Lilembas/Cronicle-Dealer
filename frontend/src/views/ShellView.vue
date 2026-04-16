@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { shellApi, nodesApi, type Node } from '@/api'
+import { shellApi, nodesApi, eventsApi, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { VideoPlay, CircleClose, Delete, Loading, QuestionFilled } from '@element-plus/icons-vue'
+import { VideoPlay, CircleClose, Delete, Loading, QuestionFilled, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
@@ -70,7 +70,10 @@ const loadNodes = async () => {
     nodes.value = allNodes.filter((node: Node) => node.tags !== 'master' && !node.tags?.includes('master'))
 
 
-    console.log('加载到在线节点:', nodes.value.length, '个', nodes.value.map(n => ({ id: n.id, tags: n.tags })))
+    // 单节点时自动选中
+    if (nodes.value.length === 1) {
+      selectedNodeId.value = nodes.value[0].id
+    }
   } catch (error) {
     console.error('加载节点列表失败:', error)
     ElMessage.warning('加载节点列表失败，请检查服务器连接')
@@ -176,6 +179,17 @@ const executeCommand = async () => {
   }
 }
 
+// 中断执行
+const abortCommand = async () => {
+  if (!currentEventId.value) return
+  try {
+    await eventsApi.abort(currentEventId.value)
+    ElMessage.success('已发送中断请求')
+  } catch (error: any) {
+    ElMessage.error('中断失败: ' + (error.response?.data?.error || error.message))
+  }
+}
+
 // 清空输出
 const clearOutput = () => {
   logs.value = ''
@@ -270,6 +284,14 @@ const getNodeName = (nodeId: string) => {
             @change="onCommandChange"
           />
           <div class="command-actions">
+            <el-button
+              v-if="isExecuting"
+              type="danger"
+              :icon="SwitchButton"
+              @click="abortCommand"
+            >
+              中断
+            </el-button>
             <el-button
               type="primary"
               :icon="VideoPlay"

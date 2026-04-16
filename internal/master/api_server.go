@@ -15,6 +15,7 @@ import (
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
+	"github.com/cronicle/cronicle-next/pkg/utils"
 	"github.com/cronicle/cronicle-next/pkg/logger"
 )
 
@@ -229,7 +230,7 @@ func (s *APIServer) createJob(c *gin.Context) {
 	
 	// 生成 ID
 	if job.ID == "" {
-		job.ID = "job_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+		job.ID = utils.GenerateID("job")
 	}
 	
 	// 保存到数据库
@@ -319,7 +320,7 @@ func (s *APIServer) triggerJob(c *gin.Context) {
 	now := time.Now()
 
 	// 生成 Event 记录
-	eventID := fmt.Sprintf("event_%d", now.UnixNano())
+	eventID := utils.GenerateID("event")
 	event := &models.Event{
 		ID:            eventID,
 		JobID:         job.ID,
@@ -404,6 +405,19 @@ func (s *APIServer) listEvents(c *gin.Context) {
 	if jobID := c.Query("job_id"); jobID != "" {
 		query = query.Where("job_id = ?", jobID)
 	}
+	if jobName := c.Query("job_name"); jobName != "" {
+		query = query.Where("job_name LIKE ?", "%"+jobName+"%")
+	}
+	if jobCategory := c.Query("job_category"); jobCategory != "" {
+		var jobIDs []string
+		storage.DB.Model(&models.Job{}).Where("category = ?", jobCategory).Pluck("id", &jobIDs)
+		if len(jobIDs) == 0 {
+			// 没有匹配的 Job，直接返回空结果
+			c.JSON(http.StatusOK, gin.H{"total": 0, "page": 1, "data": []models.Event{}})
+			return
+		}
+		query = query.Where("job_id IN ?", jobIDs)
+	}
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -420,6 +434,23 @@ func (s *APIServer) listEvents(c *gin.Context) {
 	if err := query.Offset(offset).Limit(pageSize).Order("start_time DESC, id DESC").Find(&events).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// 填充 Job 分组信息
+	if len(events) > 0 {
+		var jobIDs []string
+		jobCategoryMap := make(map[string]string)
+		for _, e := range events {
+			jobIDs = append(jobIDs, e.JobID)
+		}
+		var jobs []models.Job
+		storage.DB.Select("id, category").Where("id IN ?", jobIDs).Find(&jobs)
+		for _, j := range jobs {
+			jobCategoryMap[j.ID] = j.Category
+		}
+		for i := range events {
+			events[i].JobCategory = jobCategoryMap[events[i].JobID]
+		}
 	}
 	
 	c.JSON(http.StatusOK, gin.H{
@@ -686,8 +717,8 @@ func (s *APIServer) executeShell(c *gin.Context) {
 	}
 
 	// 创建临时任务和事件
-	jobID := fmt.Sprintf("shell_adhoc_%d", time.Now().UnixNano())
-	eventID := fmt.Sprintf("shell_event_%d", time.Now().UnixNano())
+	jobID := utils.GenerateID("job")
+	eventID := utils.GenerateID("event")
 
 	ctx := context.Background()
 	taskKey := fmt.Sprintf("%s:%s", jobID, eventID)

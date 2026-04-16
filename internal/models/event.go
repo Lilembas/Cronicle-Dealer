@@ -43,6 +43,9 @@ type Event struct {
 	// 元数据
 	CreatedAt    time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+
+	// JOIN 字段（非数据库列）
+	JobCategory  string    `gorm:"-" json:"job_category,omitempty"`
 }
 
 // TableName 表名

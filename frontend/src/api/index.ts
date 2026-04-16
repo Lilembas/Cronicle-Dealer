@@ -63,6 +63,7 @@ export interface Event {
     parent_event_id: string
     created_at: string
     updated_at: string
+    job_category?: string
 }
 
 export interface EventListResponse {

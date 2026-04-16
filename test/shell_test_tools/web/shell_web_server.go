@@ -14,6 +14,7 @@ import (
 	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-next/pkg/utils"
 )
 
 func main() {
@@ -123,8 +124,8 @@ func executeShellHandler(c *gin.Context) {
 	}
 
 	// 创建临时任务和事件
-	jobID := fmt.Sprintf("shell_test_%d", time.Now().UnixNano())
-	eventID := fmt.Sprintf("shell_event_%d", time.Now().UnixNano())
+	jobID := utils.GenerateID("job")
+	eventID := utils.GenerateID("event")
 
 	ctx := context.Background()
 	taskKey := fmt.Sprintf("%s:%s", jobID, eventID)
