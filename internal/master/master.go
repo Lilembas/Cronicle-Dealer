@@ -48,9 +48,11 @@ type Master struct {
 	scheduler      *Scheduler
 	dispatcher     *Dispatcher
 	taskConsumer   *TaskConsumer
+	logSubscriber  *LogSubscriber // Redis Pub/Sub 日志订阅器
 	consumerCancel context.CancelFunc
 	healthChecker  *HealthChecker
 	healthCancel   context.CancelFunc
+	logSubCancel   context.CancelFunc // 日志订阅器取消函数
 	masterNodeID   string // Master 节点自己的 ID
 }
 
@@ -131,6 +133,15 @@ func (m *Master) startServices() error {
 		return err
 	}
 
+	// 启动日志订阅器（订阅 Redis Pub/Sub，推送到 WebSocket 前端）
+	m.logSubscriber = NewLogSubscriber(m.wsServer)
+	logSubCtx, logSubCancel := context.WithCancel(context.Background())
+	m.logSubCancel = logSubCancel
+	m.logSubscriber.Start(logSubCtx)
+
+	// 异步恢复孤儿日志（Master 重启后清理上次残留的无 TTL 日志）
+	go m.grpcServer.RecoverOrphanLogs(context.Background())
+
 	logger.Info("Master 核心服务启动完成")
 	return nil
 }
@@ -161,6 +172,11 @@ func (m *Master) Stop() {
 		if ok := m.healthChecker.Wait(10 * time.Second); !ok {
 			logger.Warn("健康检查器停止超时")
 		}
+	}
+
+	// 停止日志订阅器
+	if m.logSubCancel != nil {
+		m.logSubCancel()
 	}
 
 	if m.scheduler != nil {

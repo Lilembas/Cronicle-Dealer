@@ -18,9 +18,6 @@ service CronicleService {
   // Master 向 Worker 提交任务
   rpc SubmitTask(TaskRequest) returns (TaskResponse);
 
-  // Worker 向 Master 流式传输日志
-  rpc StreamLogs(stream LogChunk) returns (LogAck);
-
   // Worker 上报任务执行结果
   rpc ReportTaskResult(TaskResult) returns (TaskResultAck);
 
@@ -95,26 +92,6 @@ enum TaskType {
 message TaskResponse {
   bool accepted = 1;
   string message = 2;
-}
-
-// ========== 日志流 ==========
-
-message LogChunk {
-  string job_id = 1;
-  string event_id = 2;
-  bytes content = 3;
-  int64 timestamp = 4;
-  StreamType stream_type = 5;
-}
-
-enum StreamType {
-  STDOUT = 0;
-  STDERR = 1;
-  SYSTEM = 2;
-}
-
-message LogAck {
-  bool received = 1;
 }
 
 // ========== 任务结果上报 ==========

@@ -23,7 +23,6 @@ const (
 	CronicleService_Heartbeat_FullMethodName        = "/cronicle.CronicleService/Heartbeat"
 	CronicleService_UnregisterNode_FullMethodName   = "/cronicle.CronicleService/UnregisterNode"
 	CronicleService_SubmitTask_FullMethodName       = "/cronicle.CronicleService/SubmitTask"
-	CronicleService_StreamLogs_FullMethodName       = "/cronicle.CronicleService/StreamLogs"
 	CronicleService_ReportTaskResult_FullMethodName = "/cronicle.CronicleService/ReportTaskResult"
 	CronicleService_AbortTask_FullMethodName        = "/cronicle.CronicleService/AbortTask"
 )
@@ -42,8 +41,6 @@ type CronicleServiceClient interface {
 	UnregisterNode(ctx context.Context, in *UnregisterNodeRequest, opts ...grpc.CallOption) (*UnregisterNodeResponse, error)
 	// Master 向 Worker 提交任务
 	SubmitTask(ctx context.Context, in *TaskRequest, opts ...grpc.CallOption) (*TaskResponse, error)
-	// Worker 向 Master 流式传输日志
-	StreamLogs(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LogChunk, LogAck], error)
 	// Worker 上报任务执行结果
 	ReportTaskResult(ctx context.Context, in *TaskResult, opts ...grpc.CallOption) (*TaskResultAck, error)
 	// Master 中止任务
@@ -98,19 +95,6 @@ func (c *cronicleServiceClient) SubmitTask(ctx context.Context, in *TaskRequest,
 	return out, nil
 }
 
-func (c *cronicleServiceClient) StreamLogs(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LogChunk, LogAck], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &CronicleService_ServiceDesc.Streams[0], CronicleService_StreamLogs_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[LogChunk, LogAck]{ClientStream: stream}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type CronicleService_StreamLogsClient = grpc.ClientStreamingClient[LogChunk, LogAck]
-
 func (c *cronicleServiceClient) ReportTaskResult(ctx context.Context, in *TaskResult, opts ...grpc.CallOption) (*TaskResultAck, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TaskResultAck)
@@ -145,8 +129,6 @@ type CronicleServiceServer interface {
 	UnregisterNode(context.Context, *UnregisterNodeRequest) (*UnregisterNodeResponse, error)
 	// Master 向 Worker 提交任务
 	SubmitTask(context.Context, *TaskRequest) (*TaskResponse, error)
-	// Worker 向 Master 流式传输日志
-	StreamLogs(grpc.ClientStreamingServer[LogChunk, LogAck]) error
 	// Worker 上报任务执行结果
 	ReportTaskResult(context.Context, *TaskResult) (*TaskResultAck, error)
 	// Master 中止任务
@@ -172,9 +154,6 @@ func (UnimplementedCronicleServiceServer) UnregisterNode(context.Context, *Unreg
 }
 func (UnimplementedCronicleServiceServer) SubmitTask(context.Context, *TaskRequest) (*TaskResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SubmitTask not implemented")
-}
-func (UnimplementedCronicleServiceServer) StreamLogs(grpc.ClientStreamingServer[LogChunk, LogAck]) error {
-	return status.Error(codes.Unimplemented, "method StreamLogs not implemented")
 }
 func (UnimplementedCronicleServiceServer) ReportTaskResult(context.Context, *TaskResult) (*TaskResultAck, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportTaskResult not implemented")
@@ -275,13 +254,6 @@ func _CronicleService_SubmitTask_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CronicleService_StreamLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(CronicleServiceServer).StreamLogs(&grpc.GenericServerStream[LogChunk, LogAck]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type CronicleService_StreamLogsServer = grpc.ClientStreamingServer[LogChunk, LogAck]
-
 func _CronicleService_ReportTaskResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TaskResult)
 	if err := dec(in); err != nil {
@@ -350,12 +322,6 @@ var CronicleService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CronicleService_AbortTask_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "StreamLogs",
-			Handler:       _CronicleService_StreamLogs_Handler,
-			ClientStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "pkg/grpc/proto/cronicle.proto",
 }

@@ -100,6 +100,11 @@ func main() {
 	sig := <-sigChan
 	logger.Info("收到退出信号，正在关闭...", zap.String("signal", sig.String()))
 
+	// 关闭所有日志文件句柄，flush 到磁盘
+	if err := storage.CloseAllLogFiles(); err != nil {
+		logger.Warn("关闭日志文件失败", zap.Error(err))
+	}
+
 	executor.Stop()
 	client.Close()
 

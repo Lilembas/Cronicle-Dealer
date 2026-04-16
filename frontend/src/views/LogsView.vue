@@ -125,13 +125,20 @@ const handleHistoryLog = (data: any) => {
   }
 }
 
-const handleTaskStatus = (data: any) => {
+const handleTaskStatus = async (data: any) => {
   if (data.event_id === eventId()) {
     if (event.value) {
       event.value = { ...event.value, status: data.status, exit_code: data.exit_code }
     }
     if (data.status !== 'running') {
       exitCode.value = data.exit_code
+      // 任务完成后重新加载完整日志，补全 Pub/Sub 断连期间可能丢失的日志
+      try {
+        const res = await shellApi.getLogs(eventId())
+        if (res.logs) {
+          logs.value = res.logs
+        }
+      } catch {}
     }
   }
 }

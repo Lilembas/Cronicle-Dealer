@@ -164,7 +164,7 @@ onUnmounted(() => {
       <el-table :data="events" stripe>
         <el-table-column prop="id" label="Event ID" min-width="180" show-overflow-tooltip>
           <template #default="{ row }">
-            <span class="event-link" @click="router.push(`/logs/${row.id}`)">{{ row.id }}</span>
+            <span class="event-link" @click="router.push(`/logs/${row.id}`)">{{ row.id.split('_').slice(-1)[0] }}</span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="110" align="center">

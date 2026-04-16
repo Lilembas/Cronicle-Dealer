@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"strings"
 	"sync"
@@ -250,40 +249,6 @@ func (s *GRPCServer) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.T
 	}, nil
 }
 
-// StreamLogs 接收日志流
-func (s *GRPCServer) StreamLogs(stream pb.CronicleService_StreamLogsServer) error {
-	for {
-		chunk, err := stream.Recv()
-		if err == io.EOF {
-			// 流结束，返回最终确认
-			return stream.SendAndClose(&pb.LogAck{Received: true})
-		}
-		if err != nil {
-			logger.Error("接收日志流失败", zap.Error(err))
-			return err
-		}
-
-		logger.Debug("收到日志",
-			zap.String("job_id", chunk.JobId),
-			zap.String("event_id", chunk.EventId),
-			zap.Int("size", len(chunk.Content)))
-
-		// 1. 将日志存储到Redis+文件供前端查询
-		ctx := context.Background()
-		if err := storage.SaveLogChunk(ctx, chunk.EventId, string(chunk.Content)); err != nil {
-			logger.Error("存储日志失败", zap.Error(err))
-		}
-
-		// 2. 通过WebSocket实时推送到前端
-		if s.wsServer != nil {
-			content := string(chunk.Content)
-			if err := s.wsServer.BroadcastLog(chunk.EventId, content); err != nil {
-				logger.Error("WebSocket推送日志失败", zap.Error(err))
-			}
-		}
-	}
-}
-
 // ReportTaskResult 接收任务执行结果
 func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (*pb.TaskResultAck, error) {
 	logger.Info("收到任务执行结果",
@@ -323,18 +288,8 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 		return &pb.TaskResultAck{Received: false}, nil
 	}
 
-	// 设置日志过期时间（任务完成后15分钟自动清理）
-	if err := storage.SetLogExpiration(ctx, req.EventId); err != nil {
-		logger.Warn("设置日志过期时间失败", zap.Error(err))
-	}
-
-	// 兜底：从 tasks:result 中取完整日志覆盖 task_logs，防止 StreamLogs 传输丢失
-	taskKey := fmt.Sprintf("%s:%s", req.JobId, req.EventId)
-	if result, err := storage.GetTaskResult(ctx, taskKey); err == nil {
-		if output, ok := result["output"]; ok && output != "" {
-			storage.SetLogComplete(ctx, req.EventId, output)
-		}
-	}
+	// 下载全量日志到本地文件，然后设置Redis TTL=15min
+	s.DownloadAndExpireLog(ctx, req.EventId)
 
 	// 更新 Job 的统计信息
 	now := time.Now()
@@ -360,6 +315,82 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 	}
 
 	return &pb.TaskResultAck{Received: true}, nil
+}
+
+// DownloadAndExpireLog 从Redis下载全量日志到本地文件，然后设置TTL=15min
+func (s *GRPCServer) DownloadAndExpireLog(ctx context.Context, eventID string) {
+	logKey := fmt.Sprintf("task_logs:%s", eventID)
+
+	// 1. 从Redis读取全量日志
+	logs, err := storage.RedisClient.Get(ctx, logKey).Result()
+	if err != nil {
+		logger.Warn("从Redis读取全量日志失败，尝试从task result获取",
+			zap.String("event_id", eventID),
+			zap.Error(err))
+		// Redis中没有日志时跳过（可能Worker已写入本地文件）
+		return
+	}
+
+	// 2. 写入本地文件（保证持久化）
+	if logs != "" {
+		if err := storage.SaveLogToFile(eventID, logs); err != nil {
+			logger.Error("保存全量日志到本地文件失败",
+				zap.String("event_id", eventID),
+				zap.Error(err))
+		} else {
+			logger.Info("全量日志已下载到本地",
+				zap.String("event_id", eventID),
+				zap.Int("size", len(logs)))
+		}
+	}
+
+	// 3. 设置Redis TTL=15min
+	if err := storage.SetLogExpiration(ctx, eventID); err != nil {
+		logger.Warn("设置日志过期时间失败", zap.Error(err))
+	}
+}
+
+// RecoverOrphanLogs 扫描并恢复孤儿日志
+// 扫描 Redis 中所有无 TTL 的 task_logs key，对已终止事件下载日志到本地并设 TTL=15min
+func (s *GRPCServer) RecoverOrphanLogs(ctx context.Context) {
+	orphanIDs, err := storage.ScanOrphanLogs(ctx)
+	if err != nil {
+		logger.Error("扫描孤儿日志失败", zap.Error(err))
+		return
+	}
+
+	if len(orphanIDs) == 0 {
+		return
+	}
+
+	logger.Info("发现孤儿日志", zap.Int("count", len(orphanIDs)))
+
+	// 已终止的事件状态集合
+	terminalStatuses := map[string]bool{
+		eventStatusSuccess: true, eventStatusFailed: true,
+		eventStatusAborted: true, eventStatusTimeout: true,
+	}
+
+	recovered := 0
+	for _, eventID := range orphanIDs {
+		var event models.Event
+		if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err != nil {
+			// 事件记录不存在，直接设 TTL 清理 Redis 残留
+			storage.SetLogExpiration(ctx, eventID)
+			continue
+		}
+
+		if terminalStatuses[event.Status] {
+			// 事件已终止，下载日志并设 TTL
+			s.DownloadAndExpireLog(ctx, eventID)
+			recovered++
+		}
+		// running/pending 事件跳过，等正常流程处理
+	}
+
+	logger.Info("孤儿日志恢复完成",
+		zap.Int("total", len(orphanIDs)),
+		zap.Int("recovered", recovered))
 }
 
 // AbortTask 中止任务

@@ -123,7 +123,7 @@ onUnmounted(() => {
       >
         <el-table-column prop="id" label="Event ID" min-width="180">
           <template #default="{ row }">
-            <el-text type="primary" class="event-id" @click="viewLog(row)">{{ row.id }}</el-text>
+            <el-text type="primary" class="event-id" @click="viewLog(row)">{{ row.id.split('_').slice(-1)[0] }}</el-text>
           </template>
         </el-table-column>
 

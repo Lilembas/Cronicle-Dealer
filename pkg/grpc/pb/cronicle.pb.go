@@ -70,55 +70,6 @@ func (TaskType) EnumDescriptor() ([]byte, []int) {
 	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{0}
 }
 
-type StreamType int32
-
-const (
-	StreamType_STDOUT StreamType = 0
-	StreamType_STDERR StreamType = 1
-	StreamType_SYSTEM StreamType = 2
-)
-
-// Enum value maps for StreamType.
-var (
-	StreamType_name = map[int32]string{
-		0: "STDOUT",
-		1: "STDERR",
-		2: "SYSTEM",
-	}
-	StreamType_value = map[string]int32{
-		"STDOUT": 0,
-		"STDERR": 1,
-		"SYSTEM": 2,
-	}
-)
-
-func (x StreamType) Enum() *StreamType {
-	p := new(StreamType)
-	*p = x
-	return p
-}
-
-func (x StreamType) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (StreamType) Descriptor() protoreflect.EnumDescriptor {
-	return file_pkg_grpc_proto_cronicle_proto_enumTypes[1].Descriptor()
-}
-
-func (StreamType) Type() protoreflect.EnumType {
-	return &file_pkg_grpc_proto_cronicle_proto_enumTypes[1]
-}
-
-func (x StreamType) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use StreamType.Descriptor instead.
-func (StreamType) EnumDescriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{1}
-}
-
 type RegisterNodeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
@@ -505,7 +456,7 @@ type TaskRequest struct {
 	Timeout       int32                  `protobuf:"varint,6,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	WorkingDir    string                 `protobuf:"bytes,7,opt,name=working_dir,json=workingDir,proto3" json:"working_dir,omitempty"`
 	ScheduledTime int64                  `protobuf:"varint,8,opt,name=scheduled_time,json=scheduledTime,proto3" json:"scheduled_time,omitempty"`
-	StrictMode    bool                   `protobuf:"varint,9,opt,name=strict_mode,json=strictMode,proto3" json:"strict_mode,omitempty"`
+	StrictMode    bool                   `protobuf:"varint,9,opt,name=strict_mode,json=strictMode,proto3" json:"strict_mode,omitempty"` // 严格模式：任何命令失败立即退出
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -596,6 +547,13 @@ func (x *TaskRequest) GetScheduledTime() int64 {
 	return 0
 }
 
+func (x *TaskRequest) GetStrictMode() bool {
+	if x != nil {
+		return x.StrictMode
+	}
+	return false
+}
+
 type TaskResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
@@ -648,126 +606,6 @@ func (x *TaskResponse) GetMessage() string {
 	return ""
 }
 
-type LogChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	EventId       string                 `protobuf:"bytes,2,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
-	Content       []byte                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
-	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	StreamType    StreamType             `protobuf:"varint,5,opt,name=stream_type,json=streamType,proto3,enum=cronicle.StreamType" json:"stream_type,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LogChunk) Reset() {
-	*x = LogChunk{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LogChunk) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LogChunk) ProtoMessage() {}
-
-func (x *LogChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LogChunk.ProtoReflect.Descriptor instead.
-func (*LogChunk) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *LogChunk) GetJobId() string {
-	if x != nil {
-		return x.JobId
-	}
-	return ""
-}
-
-func (x *LogChunk) GetEventId() string {
-	if x != nil {
-		return x.EventId
-	}
-	return ""
-}
-
-func (x *LogChunk) GetContent() []byte {
-	if x != nil {
-		return x.Content
-	}
-	return nil
-}
-
-func (x *LogChunk) GetTimestamp() int64 {
-	if x != nil {
-		return x.Timestamp
-	}
-	return 0
-}
-
-func (x *LogChunk) GetStreamType() StreamType {
-	if x != nil {
-		return x.StreamType
-	}
-	return StreamType_STDOUT
-}
-
-type LogAck struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Received      bool                   `protobuf:"varint,1,opt,name=received,proto3" json:"received,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LogAck) Reset() {
-	*x = LogAck{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LogAck) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LogAck) ProtoMessage() {}
-
-func (x *LogAck) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LogAck.ProtoReflect.Descriptor instead.
-func (*LogAck) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *LogAck) GetReceived() bool {
-	if x != nil {
-		return x.Received
-	}
-	return false
-}
-
 type TaskResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	JobId         string                 `protobuf:"bytes,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
@@ -783,7 +621,7 @@ type TaskResult struct {
 
 func (x *TaskResult) Reset() {
 	*x = TaskResult{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[10]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -795,7 +633,7 @@ func (x *TaskResult) String() string {
 func (*TaskResult) ProtoMessage() {}
 
 func (x *TaskResult) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[10]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -808,7 +646,7 @@ func (x *TaskResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResult.ProtoReflect.Descriptor instead.
 func (*TaskResult) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{10}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TaskResult) GetJobId() string {
@@ -869,7 +707,7 @@ type TaskResultAck struct {
 
 func (x *TaskResultAck) Reset() {
 	*x = TaskResultAck{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[11]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -881,7 +719,7 @@ func (x *TaskResultAck) String() string {
 func (*TaskResultAck) ProtoMessage() {}
 
 func (x *TaskResultAck) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[11]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -894,7 +732,7 @@ func (x *TaskResultAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResultAck.ProtoReflect.Descriptor instead.
 func (*TaskResultAck) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{11}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TaskResultAck) GetReceived() bool {
@@ -915,7 +753,7 @@ type AbortTaskRequest struct {
 
 func (x *AbortTaskRequest) Reset() {
 	*x = AbortTaskRequest{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[12]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -927,7 +765,7 @@ func (x *AbortTaskRequest) String() string {
 func (*AbortTaskRequest) ProtoMessage() {}
 
 func (x *AbortTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[12]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -940,7 +778,7 @@ func (x *AbortTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbortTaskRequest.ProtoReflect.Descriptor instead.
 func (*AbortTaskRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{12}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *AbortTaskRequest) GetJobId() string {
@@ -974,7 +812,7 @@ type AbortTaskResponse struct {
 
 func (x *AbortTaskResponse) Reset() {
 	*x = AbortTaskResponse{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[13]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -986,7 +824,7 @@ func (x *AbortTaskResponse) String() string {
 func (*AbortTaskResponse) ProtoMessage() {}
 
 func (x *AbortTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[13]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -999,7 +837,7 @@ func (x *AbortTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbortTaskResponse.ProtoReflect.Descriptor instead.
 func (*AbortTaskResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{13}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AbortTaskResponse) GetSuccess() bool {
@@ -1030,7 +868,7 @@ type NodeResources struct {
 
 func (x *NodeResources) Reset() {
 	*x = NodeResources{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[14]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1042,7 +880,7 @@ func (x *NodeResources) String() string {
 func (*NodeResources) ProtoMessage() {}
 
 func (x *NodeResources) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[14]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1055,7 +893,7 @@ func (x *NodeResources) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeResources.ProtoReflect.Descriptor instead.
 func (*NodeResources) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{14}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *NodeResources) GetCpuUsage() float64 {
@@ -1111,7 +949,7 @@ type ResourceUsage struct {
 
 func (x *ResourceUsage) Reset() {
 	*x = ResourceUsage{}
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[15]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1123,7 +961,7 @@ func (x *ResourceUsage) String() string {
 func (*ResourceUsage) ProtoMessage() {}
 
 func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[15]
+	mi := &file_pkg_grpc_proto_cronicle_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1136,7 +974,7 @@ func (x *ResourceUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceUsage.ProtoReflect.Descriptor instead.
 func (*ResourceUsage) Descriptor() ([]byte, []int) {
-	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{15}
+	return file_pkg_grpc_proto_cronicle_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ResourceUsage) GetCpuPercent() float64 {
@@ -1191,7 +1029,7 @@ const file_pkg_grpc_proto_cronicle_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"L\n" +
 	"\x16UnregisterNodeResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xcd\x02\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xee\x02\n" +
 	"\vTaskRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x19\n" +
 	"\bevent_id\x18\x02 \x01(\tR\aeventId\x12&\n" +
@@ -1201,22 +1039,15 @@ const file_pkg_grpc_proto_cronicle_proto_rawDesc = "" +
 	"\atimeout\x18\x06 \x01(\x05R\atimeout\x12\x1f\n" +
 	"\vworking_dir\x18\a \x01(\tR\n" +
 	"workingDir\x12%\n" +
-	"\x0escheduled_time\x18\b \x01(\x03R\rscheduledTime\x1a6\n" +
+	"\x0escheduled_time\x18\b \x01(\x03R\rscheduledTime\x12\x1f\n" +
+	"\vstrict_mode\x18\t \x01(\bR\n" +
+	"strictMode\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"D\n" +
 	"\fTaskResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\xab\x01\n" +
-	"\bLogChunk\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x19\n" +
-	"\bevent_id\x18\x02 \x01(\tR\aeventId\x12\x18\n" +
-	"\acontent\x18\x03 \x01(\fR\acontent\x12\x1c\n" +
-	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x125\n" +
-	"\vstream_type\x18\x05 \x01(\x0e2\x14.cronicle.StreamTypeR\n" +
-	"streamType\"$\n" +
-	"\x06LogAck\x12\x1a\n" +
-	"\breceived\x18\x01 \x01(\bR\breceived\"\xfa\x01\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xfa\x01\n" +
 	"\n" +
 	"TaskResult\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x19\n" +
@@ -1254,23 +1085,13 @@ const file_pkg_grpc_proto_cronicle_proto_rawDesc = "" +
 	"\x05SHELL\x10\x00\x12\b\n" +
 	"\x04HTTP\x10\x01\x12\n" +
 	"\n" +
-	"\x06DOCKER\x10\x02*0\n" +
-	"\n" +
-	"StreamType\x12\n" +
-	"\n" +
-	"\x06STDOUT\x10\x00\x12\n" +
-	"\n" +
-	"\x06STDERR\x10\x01\x12\n" +
-	"\n" +
-	"\x06SYSTEM\x10\x022\xf7\x03\n" +
+	"\x06DOCKER\x10\x022\xc1\x03\n" +
 	"\x0fCronicleService\x12M\n" +
 	"\fRegisterNode\x12\x1d.cronicle.RegisterNodeRequest\x1a\x1e.cronicle.RegisterNodeResponse\x12D\n" +
 	"\tHeartbeat\x12\x1a.cronicle.HeartbeatRequest\x1a\x1b.cronicle.HeartbeatResponse\x12S\n" +
 	"\x0eUnregisterNode\x12\x1f.cronicle.UnregisterNodeRequest\x1a .cronicle.UnregisterNodeResponse\x12;\n" +
 	"\n" +
-	"SubmitTask\x12\x15.cronicle.TaskRequest\x1a\x16.cronicle.TaskResponse\x124\n" +
-	"\n" +
-	"StreamLogs\x12\x12.cronicle.LogChunk\x1a\x10.cronicle.LogAck(\x01\x12A\n" +
+	"SubmitTask\x12\x15.cronicle.TaskRequest\x1a\x16.cronicle.TaskResponse\x12A\n" +
 	"\x10ReportTaskResult\x12\x14.cronicle.TaskResult\x1a\x17.cronicle.TaskResultAck\x12D\n" +
 	"\tAbortTask\x12\x1a.cronicle.AbortTaskRequest\x1a\x1b.cronicle.AbortTaskResponseB/Z-github.com/cronicle/cronicle-next/pkg/grpc/pbb\x06proto3"
 
@@ -1286,55 +1107,49 @@ func file_pkg_grpc_proto_cronicle_proto_rawDescGZIP() []byte {
 	return file_pkg_grpc_proto_cronicle_proto_rawDescData
 }
 
-var file_pkg_grpc_proto_cronicle_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_pkg_grpc_proto_cronicle_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_pkg_grpc_proto_cronicle_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_pkg_grpc_proto_cronicle_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_pkg_grpc_proto_cronicle_proto_goTypes = []any{
 	(TaskType)(0),                  // 0: cronicle.TaskType
-	(StreamType)(0),                // 1: cronicle.StreamType
-	(*RegisterNodeRequest)(nil),    // 2: cronicle.RegisterNodeRequest
-	(*RegisterNodeResponse)(nil),   // 3: cronicle.RegisterNodeResponse
-	(*HeartbeatRequest)(nil),       // 4: cronicle.HeartbeatRequest
-	(*HeartbeatResponse)(nil),      // 5: cronicle.HeartbeatResponse
-	(*UnregisterNodeRequest)(nil),  // 6: cronicle.UnregisterNodeRequest
-	(*UnregisterNodeResponse)(nil), // 7: cronicle.UnregisterNodeResponse
-	(*TaskRequest)(nil),            // 8: cronicle.TaskRequest
-	(*TaskResponse)(nil),           // 9: cronicle.TaskResponse
-	(*LogChunk)(nil),               // 10: cronicle.LogChunk
-	(*LogAck)(nil),                 // 11: cronicle.LogAck
-	(*TaskResult)(nil),             // 12: cronicle.TaskResult
-	(*TaskResultAck)(nil),          // 13: cronicle.TaskResultAck
-	(*AbortTaskRequest)(nil),       // 14: cronicle.AbortTaskRequest
-	(*AbortTaskResponse)(nil),      // 15: cronicle.AbortTaskResponse
-	(*NodeResources)(nil),          // 16: cronicle.NodeResources
-	(*ResourceUsage)(nil),          // 17: cronicle.ResourceUsage
-	nil,                            // 18: cronicle.TaskRequest.EnvEntry
+	(*RegisterNodeRequest)(nil),    // 1: cronicle.RegisterNodeRequest
+	(*RegisterNodeResponse)(nil),   // 2: cronicle.RegisterNodeResponse
+	(*HeartbeatRequest)(nil),       // 3: cronicle.HeartbeatRequest
+	(*HeartbeatResponse)(nil),      // 4: cronicle.HeartbeatResponse
+	(*UnregisterNodeRequest)(nil),  // 5: cronicle.UnregisterNodeRequest
+	(*UnregisterNodeResponse)(nil), // 6: cronicle.UnregisterNodeResponse
+	(*TaskRequest)(nil),            // 7: cronicle.TaskRequest
+	(*TaskResponse)(nil),           // 8: cronicle.TaskResponse
+	(*TaskResult)(nil),             // 9: cronicle.TaskResult
+	(*TaskResultAck)(nil),          // 10: cronicle.TaskResultAck
+	(*AbortTaskRequest)(nil),       // 11: cronicle.AbortTaskRequest
+	(*AbortTaskResponse)(nil),      // 12: cronicle.AbortTaskResponse
+	(*NodeResources)(nil),          // 13: cronicle.NodeResources
+	(*ResourceUsage)(nil),          // 14: cronicle.ResourceUsage
+	nil,                            // 15: cronicle.TaskRequest.EnvEntry
 }
 var file_pkg_grpc_proto_cronicle_proto_depIdxs = []int32{
-	16, // 0: cronicle.RegisterNodeRequest.resources:type_name -> cronicle.NodeResources
-	16, // 1: cronicle.HeartbeatRequest.resources:type_name -> cronicle.NodeResources
+	13, // 0: cronicle.RegisterNodeRequest.resources:type_name -> cronicle.NodeResources
+	13, // 1: cronicle.HeartbeatRequest.resources:type_name -> cronicle.NodeResources
 	0,  // 2: cronicle.TaskRequest.type:type_name -> cronicle.TaskType
-	18, // 3: cronicle.TaskRequest.env:type_name -> cronicle.TaskRequest.EnvEntry
-	1,  // 4: cronicle.LogChunk.stream_type:type_name -> cronicle.StreamType
-	17, // 5: cronicle.TaskResult.resource_usage:type_name -> cronicle.ResourceUsage
-	2,  // 6: cronicle.CronicleService.RegisterNode:input_type -> cronicle.RegisterNodeRequest
-	4,  // 7: cronicle.CronicleService.Heartbeat:input_type -> cronicle.HeartbeatRequest
-	6,  // 8: cronicle.CronicleService.UnregisterNode:input_type -> cronicle.UnregisterNodeRequest
-	8,  // 9: cronicle.CronicleService.SubmitTask:input_type -> cronicle.TaskRequest
-	10, // 10: cronicle.CronicleService.StreamLogs:input_type -> cronicle.LogChunk
-	12, // 11: cronicle.CronicleService.ReportTaskResult:input_type -> cronicle.TaskResult
-	14, // 12: cronicle.CronicleService.AbortTask:input_type -> cronicle.AbortTaskRequest
-	3,  // 13: cronicle.CronicleService.RegisterNode:output_type -> cronicle.RegisterNodeResponse
-	5,  // 14: cronicle.CronicleService.Heartbeat:output_type -> cronicle.HeartbeatResponse
-	7,  // 15: cronicle.CronicleService.UnregisterNode:output_type -> cronicle.UnregisterNodeResponse
-	9,  // 16: cronicle.CronicleService.SubmitTask:output_type -> cronicle.TaskResponse
-	11, // 17: cronicle.CronicleService.StreamLogs:output_type -> cronicle.LogAck
-	13, // 18: cronicle.CronicleService.ReportTaskResult:output_type -> cronicle.TaskResultAck
-	15, // 19: cronicle.CronicleService.AbortTask:output_type -> cronicle.AbortTaskResponse
-	13, // [13:20] is the sub-list for method output_type
-	6,  // [6:13] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	15, // 3: cronicle.TaskRequest.env:type_name -> cronicle.TaskRequest.EnvEntry
+	14, // 4: cronicle.TaskResult.resource_usage:type_name -> cronicle.ResourceUsage
+	1,  // 5: cronicle.CronicleService.RegisterNode:input_type -> cronicle.RegisterNodeRequest
+	3,  // 6: cronicle.CronicleService.Heartbeat:input_type -> cronicle.HeartbeatRequest
+	5,  // 7: cronicle.CronicleService.UnregisterNode:input_type -> cronicle.UnregisterNodeRequest
+	7,  // 8: cronicle.CronicleService.SubmitTask:input_type -> cronicle.TaskRequest
+	9,  // 9: cronicle.CronicleService.ReportTaskResult:input_type -> cronicle.TaskResult
+	11, // 10: cronicle.CronicleService.AbortTask:input_type -> cronicle.AbortTaskRequest
+	2,  // 11: cronicle.CronicleService.RegisterNode:output_type -> cronicle.RegisterNodeResponse
+	4,  // 12: cronicle.CronicleService.Heartbeat:output_type -> cronicle.HeartbeatResponse
+	6,  // 13: cronicle.CronicleService.UnregisterNode:output_type -> cronicle.UnregisterNodeResponse
+	8,  // 14: cronicle.CronicleService.SubmitTask:output_type -> cronicle.TaskResponse
+	10, // 15: cronicle.CronicleService.ReportTaskResult:output_type -> cronicle.TaskResultAck
+	12, // 16: cronicle.CronicleService.AbortTask:output_type -> cronicle.AbortTaskResponse
+	11, // [11:17] is the sub-list for method output_type
+	5,  // [5:11] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_pkg_grpc_proto_cronicle_proto_init() }
@@ -1347,8 +1162,8 @@ func file_pkg_grpc_proto_cronicle_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_grpc_proto_cronicle_proto_rawDesc), len(file_pkg_grpc_proto_cronicle_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   17,
+			NumEnums:      1,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

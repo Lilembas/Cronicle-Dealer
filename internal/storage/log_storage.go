@@ -5,11 +5,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/cronicle/cronicle-next/pkg/logger"
 	"go.uber.org/zap"
+)
+
+const (
+	// Redis Pub/Sub 频道名
+	logPubSubChannel = "cronicle:logs"
+	// 日志消息分隔符
+	logMessageSep = "\t"
 )
 
 var (
@@ -43,20 +51,12 @@ func InitLogStorage(dir string) error {
 func SaveLogChunk(ctx context.Context, eventID, content string) error {
 	logKey := fmt.Sprintf("task_logs:%s", eventID)
 
-	// 1. 存储到Redis（动态延长TTL）
+	// 1. 存储到Redis（不设置TTL，由Master在任务完成后统一管理）
 	if err := RedisClient.Append(ctx, logKey, content).Err(); err != nil {
 		logger.Error("存储日志到Redis失败",
 			zap.String("event_id", eventID),
 			zap.Error(err))
 		// Redis失败不阻塞文件写入
-	} else {
-		// 动态延长TTL：每次写入都延长到当前时间+15分钟
-		// 这样任务运行期间Redis会一直保持日志
-		if err := RedisClient.Expire(ctx, logKey, logExpireTime).Err(); err != nil {
-			logger.Warn("延长日志TTL失败",
-				zap.String("event_id", eventID),
-				zap.Error(err))
-		}
 	}
 
 	// 2. 同步写入文件（保证持久化）
@@ -100,7 +100,7 @@ func GetLogs(ctx context.Context, eventID string) (string, error) {
 	return string(content), nil
 }
 
-// SetLogComplete 用完整日志覆盖写入（兜底，防止 StreamLogs 传输丢失）
+// SetLogComplete 用完整日志覆盖写入 Redis（任务完成时保证日志完整）
 func SetLogComplete(ctx context.Context, eventID string, content string) error {
 	logKey := fmt.Sprintf("task_logs:%s", eventID)
 	return RedisClient.Set(ctx, logKey, content, 0).Err()
@@ -125,11 +125,42 @@ func SetLogExpiration(ctx context.Context, eventID string) error {
 	return nil
 }
 
-// appendToFileAsync 异步写入文件
-// 注意：此函数已废弃，保留是为了兼容性
-// 实际使用 appendToFileSync 进行同步写入
-func appendToFileAsync(eventID, content string) {
-	appendToFileSync(eventID, content)
+// ScanOrphanLogs 扫描 Redis 中所有无过期时间的 task_logs key（孤儿日志）
+// 返回 eventID 列表
+func ScanOrphanLogs(ctx context.Context) ([]string, error) {
+	var orphanIDs []string
+	var cursor uint64
+
+	for {
+		keys, nextCursor, err := RedisClient.Scan(ctx, cursor, "task_logs:*", 100).Result()
+		if err != nil {
+			return nil, fmt.Errorf("扫描 task_logs 失败: %w", err)
+		}
+		cursor = nextCursor
+
+		for _, key := range keys {
+			// 提取 eventID（key 格式: task_logs:{eventID}）
+			eventID := strings.TrimPrefix(key, "task_logs:")
+			if eventID == "" {
+				continue
+			}
+			// TTL=-1 表示永不过期（孤儿日志）
+			ttl, err := RedisClient.TTL(ctx, key).Result()
+			if err != nil {
+				logger.Warn("获取日志TTL失败", zap.String("key", key), zap.Error(err))
+				continue
+			}
+			if ttl < 0 { // -1 = no TTL, -2 = key not exist
+				orphanIDs = append(orphanIDs, eventID)
+			}
+		}
+
+		if cursor == 0 {
+			break
+		}
+	}
+
+	return orphanIDs, nil
 }
 
 // appendToFileSync 同步写入文件并flush到磁盘
@@ -178,6 +209,23 @@ func getLogFilePath(eventID string) string {
 	return filepath.Join(logDir, fmt.Sprintf("%s.log", eventID))
 }
 
+// SaveLogToFile 用完整内容覆盖写入日志文件（Master下载全量日志时使用）
+func SaveLogToFile(eventID, content string) error {
+	logFilePath := getLogFilePath(eventID)
+
+	// 先关闭已缓存的文件句柄（如果有），避免写入冲突
+	CloseLogHandle(eventID)
+
+	fileWriteMutex.Lock()
+	defer fileWriteMutex.Unlock()
+
+	if err := os.WriteFile(logFilePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("写入日志文件失败: %w", err)
+	}
+
+	return nil
+}
+
 // getCachedFile 从缓存获取文件句柄
 func getCachedFile(path string) *os.File {
 	fileCacheMutex.RLock()
@@ -211,6 +259,78 @@ func CloseAllLogFiles() error {
 	fileCache = make(map[string]*os.File)
 
 	return lastErr
+}
+
+// PublishLog 通过 Redis Pub/Sub 发布日志（供 Master 实时推送前端）
+func PublishLog(ctx context.Context, eventID, content string) {
+	msg := eventID + logMessageSep + content
+	if err := RedisClient.Publish(ctx, logPubSubChannel, msg).Err(); err != nil {
+		logger.Warn("发布日志到Pub/Sub失败",
+			zap.String("event_id", eventID),
+			zap.Error(err))
+	}
+}
+
+// SubscribeLog 订阅 Redis Pub/Sub 日志频道
+// 返回消息 channel（格式 "eventID\tcontent"）和取消函数
+func SubscribeLog(ctx context.Context) (<-chan string, func()) {
+	msgChan := make(chan string, 100)
+	sub := RedisClient.Subscribe(ctx, logPubSubChannel)
+
+	cancel := func() {
+		sub.Unsubscribe(ctx, logPubSubChannel)
+		sub.Close()
+		close(msgChan)
+	}
+
+	go func() {
+		defer cancel()
+		ch := sub.Channel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				select {
+				case msgChan <- msg.Payload:
+				default:
+					// channel 满了丢弃，避免阻塞
+					logger.Warn("日志订阅channel已满，丢弃消息")
+				}
+			}
+		}
+	}()
+
+	return msgChan, cancel
+}
+
+// CloseLogHandle 关闭指定 eventID 的日志文件句柄
+func CloseLogHandle(eventID string) {
+	logFilePath := getLogFilePath(eventID)
+
+	fileCacheMutex.Lock()
+	defer fileCacheMutex.Unlock()
+
+	if file, ok := fileCache[logFilePath]; ok {
+		if err := file.Close(); err != nil {
+			logger.Warn("关闭日志文件句柄失败",
+				zap.String("event_id", eventID),
+				zap.Error(err))
+		}
+		delete(fileCache, logFilePath)
+	}
+}
+
+// ParseLogMessage 解析 Pub/Sub 日志消息，返回 eventID 和 content
+func ParseLogMessage(msg string) (eventID, content string) {
+	idx := strings.Index(msg, logMessageSep)
+	if idx < 0 {
+		return msg, ""
+	}
+	return msg[:idx], msg[idx+len(logMessageSep):]
 }
 
 // CleanupOldLogs 清理旧日志文件（定期调用）

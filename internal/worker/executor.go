@@ -32,12 +32,6 @@ const (
 	maxStderrBufferSize = 32 * 1024 // 32KB
 )
 
-// outputChunk 输出数据块（包含流类型）
-type outputChunk struct {
-	data       []byte
-	streamType pb.StreamType
-}
-
 // Executor 任务执行器
 type Executor struct {
 	pb.UnimplementedCronicleServiceServer
@@ -229,7 +223,7 @@ func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, string, erro
 	}
 }
 
-// executeShell 执行 Shell 脚本（支持流式输出）
+// executeShell 执行 Shell 脚本（日志直写 Redis + 文件，通过 Pub/Sub 实时推送）
 func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error) {
 	ctx := context.Background()
 	if req.Timeout > 0 {
@@ -244,10 +238,6 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 			req.StrictMode = true
 		}
 	}
-
-	// 根据严格模式选择 bash 参数
-	// 严格模式：任何命令失败立即退出（bash -e -c "command"）
-	// 标准模式：使用 bash 默认行为（bash -c "command"）
 
 	// 安全地截取命令预览（最多100字符）
 	commandPreview := req.Command
@@ -299,89 +289,33 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 	}
 	e.runningJobs.Store(req.EventId, cmd)
 
-	// 用于收集完整输出
+	// 用于收集完整输出和 stderr
 	var fullOutput bytes.Buffer
-	var stderrBuffer bytes.Buffer // 用于生成错误报告
-
-	outputChan := make(chan outputChunk, 100) // 缓冲通道避免阻塞
+	var stderrBuffer bytes.Buffer
 	var wg sync.WaitGroup
-
-	// 创建日志流（如果Master客户端可用）
-	var logStream pb.CronicleService_StreamLogsClient
-	if e.masterClient != nil {
-		logStreamCtx, logStreamCancel := context.WithCancel(context.Background())
-		defer logStreamCancel()
-
-		logStream, err = e.masterClient.StreamLogs(logStreamCtx)
-		if err != nil {
-			logger.Warn("创建日志流失败，将只存储到内存", zap.String("event_id", req.EventId), zap.Error(err))
-			logStream = nil
-		}
-	}
-
-	// 启动goroutine读取并发送日志
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for chunk := range outputChan {
-						// 写入完整输出
-				fullOutput.Write(chunk.data)
-
-				// 如果是 stderr，写入缓冲区（用于错误报告）
-				if chunk.streamType == pb.StreamType_STDERR {
-					if stderrBuffer.Len() < maxStderrBufferSize {
-						stderrBuffer.Write(chunk.data)
-					} else if stderrBuffer.Len() == maxStderrBufferSize {
-						// 第一次超出，添加省略标记
-						stderrBuffer.WriteString("...")
-					}
-				}
-
-			// 实时发送到Master
-			if logStream != nil {
-				chunk := &pb.LogChunk{
-					EventId:    req.EventId,
-					Content:    chunk.data,
-					Timestamp:  time.Now().Unix(),
-					StreamType: chunk.streamType,
-				}
-
-				if err := logStream.Send(chunk); err != nil {
-					logger.Warn("发送日志失败", zap.String("event_id", req.EventId), zap.Error(err))
-					break
-				}
-			}
-		}
-	}()
 
 	// 启动goroutine读取stdout
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		e.readStream(stdout, req.EventId, "stdout", outputChan, pb.StreamType_STDOUT)
+		e.readStreamAndStore(stdout, req.EventId, "stdout", &fullOutput, nil)
 	}()
 
 	// 启动goroutine读取stderr
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		e.readStream(stderr, req.EventId, "stderr", outputChan, pb.StreamType_STDERR)
+		e.readStreamAndStore(stderr, req.EventId, "stderr", &fullOutput, &stderrBuffer)
 	}()
 
-	// 等待命令执行完成
-	err = cmd.Wait()
-
-	// 等待所有读取goroutine完成
+	// 先等待所有读取goroutine完成（必须先于 cmd.Wait，否则管道 fd 会被关闭导致 "file already closed"）
 	wg.Wait()
-	close(outputChan) // 所有goroutine完成后再关闭channel
-	<-done             // 等待日志发送完成
 
-	// 关闭日志流
-	if logStream != nil {
-		if _, err := logStream.CloseAndRecv(); err != nil {
-			logger.Warn("关闭日志流失败", zap.Error(err))
-		}
-	}
+	// 关闭日志文件句柄，flush 到磁盘
+	storage.CloseLogHandle(req.EventId)
+
+	// 等待命令执行完成（此时管道已读完，安全地 reap 子进程）
+	err = cmd.Wait()
 
 	exitCode, _ := extractExitCode(err)
 	if reason, aborted := e.abortedJobs.Load(req.EventId); aborted {
@@ -399,27 +333,32 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 	return exitCode, fullOutput.String(), stderrBuffer.String(), err
 }
 
-// readStream 读取输出流
-func (e *Executor) readStream(reader io.Reader, eventID, streamType string, outputChan chan outputChunk, streamTypePB pb.StreamType) {
+// readStreamAndStore 读取输出流，直写 Redis + 本地文件，发布 Pub/Sub 通知
+func (e *Executor) readStreamAndStore(reader io.Reader, eventID, streamType string, fullOutput *bytes.Buffer, stderrBuffer *bytes.Buffer) {
 	scanner := bufio.NewScanner(reader)
 	buf := make([]byte, 0, 1024) // 1KB缓冲区
 	scanner.Buffer(buf, 10*1024*1024) // 最大10MB行
+	ctx := context.Background()
 
 	for scanner.Scan() {
-		// 复制数据，避免 scanner 内部缓冲区在下次 Scan() 时被覆盖
 		line := scanner.Bytes()
-		data := make([]byte, len(line)+1)
-		copy(data, line)
-		data[len(line)] = '\n'
-		outputChan <- outputChunk{
-			data:       data,
-			streamType: streamTypePB,
+		content := string(line) + "\n"
+
+		// 写入完整输出缓冲区
+		fullOutput.WriteString(content)
+
+		// 如果是 stderr，写入错误缓冲区
+		if stderrBuffer != nil {
+			if stderrBuffer.Len() < maxStderrBufferSize {
+				stderrBuffer.WriteString(content)
+			} else if stderrBuffer.Len() == maxStderrBufferSize {
+				stderrBuffer.WriteString("...")
+			}
 		}
 
-		logger.Debug("实时输出",
-			zap.String("event_id", eventID),
-			zap.String("stream", streamType),
-			zap.String("line", string(line)))
+		// 直写 Redis（APPEND）+ 本地文件（Sync），Pub/Sub 实时通知
+		storage.SaveLogChunk(ctx, eventID, content)
+		storage.PublishLog(ctx, eventID, content)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -474,9 +413,9 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 	}
 	storage.SetTaskStatus(ctx, taskKey, status)
 
-	// 向Master报告任务结果（Master负责更新数据库中的Event记录）
+	// 向Master报告任务结果（同步调用，确保 Master 收到后才返回）
 	if e.masterClient != nil {
-		go e.reportToMaster(req, startTime, endTime, exitCode, execErr)
+		e.reportToMaster(req, startTime, endTime, exitCode, execErr)
 	} else {
 		logger.Warn("Master客户端未设置，无法主动报告任务结果",
 			zap.String("event_id", req.EventId))
@@ -490,7 +429,7 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 
 // reportToMaster 向Master报告任务执行结果
 func (e *Executor) reportToMaster(req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, execErr error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	result := &pb.TaskResult{

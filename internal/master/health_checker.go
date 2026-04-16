@@ -54,6 +54,10 @@ func (h *HealthChecker) Start(ctx context.Context) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	// 定期扫描孤儿日志（每 20 个检查周期触发一次）
+	orphanLogCheckCounter := 0
+	const orphanLogCheckInterval = 20
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -61,6 +65,13 @@ func (h *HealthChecker) Start(ctx context.Context) {
 			return
 		case <-ticker.C:
 			h.checkAllNodes()
+
+			// 定期扫描孤儿日志（每 20 个检查周期触发一次）
+			orphanLogCheckCounter++
+			if orphanLogCheckCounter >= orphanLogCheckInterval {
+				orphanLogCheckCounter = 0
+				h.grpcServer.RecoverOrphanLogs(ctx)
+			}
 		}
 	}
 }
@@ -217,6 +228,9 @@ func (h *HealthChecker) cleanupOrphanedEvents(node models.Node) {
 			logger.Warn("写入孤儿事件日志失败", zap.Error(err))
 		}
 
+
+			// 下载全量日志到本地并设置 Redis TTL=15min
+			h.grpcServer.DownloadAndExpireLog(context.Background(), event.ID)
 		// WebSocket 广播事件状态变更
 		if h.wsServer != nil {
 			if err := h.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, 1); err != nil {
