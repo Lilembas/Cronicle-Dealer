@@ -85,9 +85,9 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 		zap.String("ip", req.Ip),
 		zap.Int32("pid", req.Pid))
 
-	// 检查是否已存在相同 hostname + ip 的非 master 节点
+	// 检查是否已存在相同 hostname 的非 master 节点
 	var existingNode models.Node
-	err := storage.DB.Where("hostname = ? AND ip = ?", req.Hostname, req.Ip).
+	err := storage.DB.Where("hostname = ?", req.Hostname).
 		Where("tags NOT LIKE '%master%'").
 		Order("created_at DESC").
 		First(&existingNode).Error
@@ -129,6 +129,7 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 	} else {
 		// 更新现有节点记录，但保留创建时间
 		updates := map[string]interface{}{
+			"ip":             node.IP,
 			"g_rpc_address": node.GRPCAddress,
 			"tags":           node.Tags,
 			"pid":            node.PID,

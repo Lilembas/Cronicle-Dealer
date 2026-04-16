@@ -139,6 +139,7 @@ func cleanupDuplicateNodes() error {
 	var groups []NodeGroup
 	if err := storage.DB.Model(&models.Node{}).
 		Select("hostname, ip, count(*) as count").
+		Where("tags NOT LIKE '%master%' OR tags IS NULL").
 		Group("hostname, ip").
 		Having("count > 1").
 		Scan(&groups).Error; err != nil {
@@ -162,6 +163,7 @@ func cleanupDuplicateNodes() error {
 
 		var nodes []models.Node
 		if err := storage.DB.Where("hostname = ? AND ip = ?", group.Hostname, group.IP).
+			Where("tags NOT LIKE '%master%' OR tags IS NULL").
 			Order("created_at ASC").
 			Find(&nodes).Error; err != nil {
 			logger.Error("查询重复节点失败", zap.Error(err))

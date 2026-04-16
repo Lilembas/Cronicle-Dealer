@@ -45,15 +45,8 @@ const availableGroups = ref<string[]>([...commonGroups])
 const loadGroups = async () => {
   try {
     const result = await jobsApi.list({ page: 1, page_size: 100 }) as unknown as { data: any[] }
-    const groups = new Set<string>()
-    if (result?.data) {
-      result.data.forEach((job: any) => {
-        if (job.category) groups.add(job.category)
-      })
-    }
-    // 合并预置分组和已有分组
-    const allGroups = new Set([...commonGroups, ...groups])
-    availableGroups.value = Array.from(allGroups).sort()
+    const groups = result?.data?.map((job: any) => job.category).filter(Boolean) || []
+    availableGroups.value = Array.from(new Set([...commonGroups, ...groups])).sort()
   } catch {
     // 加载失败使用默认分组
     availableGroups.value = [...commonGroups]
@@ -109,11 +102,9 @@ const loadNodes = async () => {
   try {
     loadingNodes.value = true
     const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
-    nodes.value = (allNodes || []).filter((node: Node) => {
-      // 路由节点不作为执行节点
-      const tagsStr = String(node.tags || '')
-      return !tagsStr.includes('master')
-    })
+    nodes.value = (allNodes || []).filter((node: Node) => 
+      !String(node.tags || '').includes('master')
+    )
     console.log('Nodes loaded:', nodes.value.length)
   } catch (error) {
     console.error('加载节点列表失败:', error)
@@ -143,14 +134,7 @@ const loadJob = async () => {
   try {
     const job = await jobsApi.get(route.params.id as string) as any
     // 处理后端可能返回的 tags 字段
-    let tags: string[] = []
-    if (job.tags) {
-      if (typeof job.tags === 'string') {
-        tags = job.tags.split(',').filter(Boolean)
-      } else if (Array.isArray(job.tags)) {
-        tags = job.tags
-      }
-    }
+    let tags: string[] = Array.isArray(job.tags) ? job.tags : (typeof job.tags === 'string' ? job.tags.split(',').filter(Boolean) : [])
 
     // 处理 target_value 如果是 JSON 数组
     let targetValue = job.target_value

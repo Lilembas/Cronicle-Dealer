@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -141,11 +142,26 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 		}
 	}
 
+	// 设置 retryCount
+	retryCount := 0
+	if rcStr, ok := taskDetails["dispatch_retry_count"]; ok {
+		if rc, err := strconv.Atoi(rcStr); err == nil {
+			retryCount = rc
+		}
+	}
+
+	// 如果是重试调用，在日志中追加提示
+	if retryCount > 0 {
+		retryLog := fmt.Sprintf("[%s] [Master] 🔄 开始第 %d 次重试调度...\n", time.Now().Format("2006-01-02 15:04:05"), retryCount)
+		storage.SaveLogChunk(context.Background(), event.ID, retryLog)
+	}
+
 	// 记录任务分发详情
 	logger.Info("任务分发详情",
 		zap.String("event_id", event.ID),
 		zap.String("command", job.Command),
-		zap.Bool("strict_mode", job.StrictMode))
+		zap.Bool("strict_mode", job.StrictMode),
+		zap.Int("retry_count", retryCount))
 
 	node, err := d.selectNode(job)
 	if err != nil {

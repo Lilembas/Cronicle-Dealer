@@ -26,7 +26,7 @@ const { data: jobsDataRaw, isLoading, refetch } = useQuery({
     page_size: pagination.value.pageSize,
   }),
 })
-const jobsData = jobsDataRaw as unknown as { total: number; page: number; data: any[] } | undefined
+const jobsData = jobsDataRaw as unknown as import('vue').Ref<{ total: number; page: number; data: any[] } | undefined>
 
 // 当前选中分组
 const selectedGroup = ref('')
@@ -34,11 +34,7 @@ const selectedGroup = ref('')
 // 计算所有分组
 const allGroups = computed(() => {
   const jobs = jobsData.value?.data || []
-  const groups = new Set<string>()
-  jobs.forEach((job: any) => {
-    groups.add(job.category || '未分组')
-  })
-  return Array.from(groups).sort()
+  return Array.from(new Set(jobs.map((job: any) => job.category || '未分组'))).sort()
 })
 
 // 按分组归类任务
@@ -56,10 +52,8 @@ const groupedJobs = computed(() => {
 // 过滤后的分组
 const filteredGroups = computed(() => {
   if (!selectedGroup.value) return groupedJobs.value
-  const map = new Map<string, any[]>()
   const jobs = groupedJobs.value.get(selectedGroup.value)
-  if (jobs) map.set(selectedGroup.value, jobs)
-  return map
+  return jobs ? new Map([[selectedGroup.value, jobs]]) : new Map()
 })
 
 // 分组颜色映射
@@ -81,9 +75,7 @@ const nodesMap = ref<Map<string, string>>(new Map())
 const loadNodes = async () => {
   try {
     const all = await nodesApi.list({}) as unknown as Node[]
-    const map = new Map<string, string>()
-    ;(all || []).forEach(n => map.set(n.id, n.hostname))
-    nodesMap.value = map
+    nodesMap.value = new Map((all || []).map(n => [n.id, n.hostname]))
   } catch {
     // 加载失败不影响主要功能
   }

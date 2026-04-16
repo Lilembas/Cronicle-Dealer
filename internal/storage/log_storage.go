@@ -277,10 +277,13 @@ func SubscribeLog(ctx context.Context) (<-chan string, func()) {
 	msgChan := make(chan string, 100)
 	sub := RedisClient.Subscribe(ctx, logPubSubChannel)
 
+	var once sync.Once
 	cancel := func() {
-		sub.Unsubscribe(ctx, logPubSubChannel)
-		sub.Close()
-		close(msgChan)
+		once.Do(func() {
+			sub.Unsubscribe(ctx, logPubSubChannel)
+			sub.Close()
+			close(msgChan)
+		})
 	}
 
 	go func() {
