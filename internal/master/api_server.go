@@ -245,7 +245,7 @@ func (s *APIServer) createJob(c *gin.Context) {
 	}
 	
 	// 如果任务已启用，添加到调度器
-	if job.Enabled {
+	if utils.BoolValue(job.Enabled) {
 		if err := s.scheduler.AddJob(&job); err != nil {
 			logger.Error("添加任务到调度器失败", zap.Error(err))
 		}

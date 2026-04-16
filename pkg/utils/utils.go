@@ -44,3 +44,16 @@ func Unique(slice []string) []string {
 	
 	return result
 }
+
+// BoolValue 获取布尔指针的值，如果为 nil 则返回 false
+func BoolValue(b *bool) bool {
+	if b == nil {
+		return false
+	}
+	return *b
+}
+
+// BoolPtr 创建布尔指针
+func BoolPtr(b bool) *bool {
+	return &b
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-next/pkg/utils"
 )
 
 // Claims JWT 载荷
@@ -40,7 +41,7 @@ func (s *APIServer) login(c *gin.Context) {
 		return
 	}
 
-	if !user.Active || !user.CheckPassword(req.Password) {
+	if !utils.BoolValue(user.Active) || !user.CheckPassword(req.Password) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		return
 	}
@@ -79,7 +80,7 @@ func (s *APIServer) refreshToken(c *gin.Context) {
 	}
 
 	var user models.User
-	if err := storage.DB.Where("id = ?", claims.UserID).First(&user).Error; err != nil || !user.Active {
+	if err := storage.DB.Where("id = ?", claims.UserID).First(&user).Error; err != nil || !utils.BoolValue(user.Active) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户不存在或已禁用"})
 		return
 	}
@@ -175,7 +176,7 @@ func EnsureDefaultAdmin() error {
 		Username: "admin",
 		Email:    "admin@cronicle.local",
 		Role:     "admin",
-		Active:   true,
+		Active:   utils.BoolPtr(true),
 		FullName: "System Administrator",
 	}
 	if err := user.SetPassword("admin123"); err != nil {

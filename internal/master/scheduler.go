@@ -115,7 +115,7 @@ func (s *Scheduler) RemoveJob(jobID string) {
 // UpdateJob 更新任务
 func (s *Scheduler) UpdateJob(job *models.Job) error {
 	s.RemoveJob(job.ID)
-	if job.Enabled {
+	if utils.BoolValue(job.Enabled) {
 		return s.AddJob(job)
 	}
 	return nil

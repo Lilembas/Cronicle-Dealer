@@ -229,6 +229,18 @@ onMounted(() => {
 onUnmounted(() => {
   wsStore.offMessage('task_status', handleTaskStatus)
 })
+
+const getStatusText = (status: string) => {
+  const map: Record<string, string> = {
+    success: '成功',
+    failed: '失败',
+    running: '运行中',
+    queued: '已入队',
+    pending: '待执行',
+    aborted: '已中止',
+  }
+  return map[status] || status
+}
 </script>
 
 <template>
@@ -299,7 +311,7 @@ onUnmounted(() => {
                 <el-icon v-else-if="row.last_status === 'failed'"><CircleCloseFilled /></el-icon>
                 <el-icon v-else-if="row.last_status === 'running'" class="is-loading"><Loading /></el-icon>
                 <el-icon v-else><Clock /></el-icon>
-                <span>{{ row.last_status === 'success' ? '成功' : row.last_status === 'failed' ? '失败' : row.last_status === 'running' ? '执行中' : '待执行' }}</span>
+                <span>{{ getStatusText(row.last_status) }}</span>
               </span>
               <span v-else>-</span>
             </template>
@@ -426,32 +438,6 @@ onUnmounted(() => {
   gap: 4px;
 }
 
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 400;
-  color: #fff;
-}
-
-.status-success {
-  background: #22c55e;
-}
-
-.status-failed {
-  background: #ef4444;
-}
-
-.status-running {
-  background: #3b82f6;
-}
-
-.status-pending {
-  background: #64748b;
-}
 
 .action-row {
   display: flex;

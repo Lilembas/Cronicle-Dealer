@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { RefreshRight, View, Filter, SwitchButton } from '@element-plus/icons-vue'
+import { RefreshRight, View, Filter, SwitchButton, CircleCheckFilled, CircleCloseFilled, Loading, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const wsStore = useWebSocketStore()
@@ -62,7 +62,7 @@ const statusOptions = [
   { label: '成功', value: 'success' },
   { label: '失败', value: 'failed' },
   { label: '运行中', value: 'running' },
-  { label: '已排队', value: 'queued' },
+  { label: '已入队', value: 'queued' },
 ]
 
 // 分组选项（从 jobs 加载）
@@ -77,15 +77,6 @@ const loadCategories = async () => {
 }
 
 // 状态标签类型
-const getStatusType = (status: string) => {
-  const map: Record<string, any> = {
-    success: 'success',
-    failed: 'danger',
-    running: 'warning',
-    queued: 'info',
-  }
-  return map[status] || 'info'
-}
 
 // 状态文本
 const getStatusText = (status: string) => {
@@ -93,7 +84,8 @@ const getStatusText = (status: string) => {
     success: '成功',
     failed: '失败',
     running: '运行中',
-    queued: '已排队',
+    queued: '已入队',
+    pending: '待执行',
     aborted: '已中止',
   }
   return map[status] || status
@@ -255,9 +247,13 @@ onUnmounted(() => {
 
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">
-              {{ getStatusText(row.status) }}
-            </el-tag>
+            <span :class="['status-badge', `status-${row.status}`]">
+              <el-icon v-if="row.status === 'success'"><CircleCheckFilled /></el-icon>
+              <el-icon v-else-if="row.status === 'failed'"><CircleCloseFilled /></el-icon>
+              <el-icon v-else-if="row.status === 'running'" class="is-loading"><Loading /></el-icon>
+              <el-icon v-else><Clock /></el-icon>
+              <span>{{ getStatusText(row.status) }}</span>
+            </span>
           </template>
         </el-table-column>
 

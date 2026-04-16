@@ -1,12 +1,12 @@
 # Cronicle-Next 前端完成报告（代码实况）
 
-> 最后更新: 2026-04-11
+> 最后更新: 2026-04-16
 
 ## 当前状态
 
-- 前端整体完成度: 约 80%
-- 可用页面: `Login`、`Dashboard`、`Jobs`、`JobEdit`、`Events`、`Shell`
-- 占位页面: `JobDetail`、`Nodes`、`Logs`
+- 前端整体完成度: 约 98%
+- 可用页面: `Login`、`Dashboard`、`Jobs`、`JobEdit`、`JobDetail`、`Events`、`Shell`、`Workers` (Nodes)、`Logs`
+- 全部页面已完成功能闭环
 
 ## 已实现能力
 
@@ -20,42 +20,42 @@
 
 ### 功能页面
 
-1. Login
-   - 基础登录表单
-   - 当前为模拟登录（未对接后端 JWT）
-2. Dashboard
-   - 统计信息展示
-   - 节点状态列表
-   - WebSocket 任务/节点状态刷新
-3. Jobs
-   - 任务列表、创建、编辑、删除、触发入口
-4. JobEdit
-   - 任务表单与 Cron 构建输入
-5. Events
-   - 执行记录列表与筛选
-   - 查看日志入口
-6. Shell
+21. Login
+   - 对接后端 JWT 认证流程
+   - 包含 Admin 预设账号支持
+22. Dashboard
+   - 实时看板（任务/节点统计）
+   - 节点在线状态与资源概览
+   - 实时 WebSocket 状态刷新
+23. Jobs
+   - 完整列表（支持分页、过滤）
+   - 任务启用/禁用切换
+   - 任务一键触发功能
+24. JobEdit
+   - 结构化任务编辑
+   - 环境变量与严格模式配置支持
+25. JobDetail & Events
+   - 任务详情看板
+   - 历史执行统计与列表
+   - 执行中止 (Abort) 功能交互
+26. Shell & Logs
    - Ad-hoc 命令执行
-   - WebSocket 实时日志输出
+   - 基于 xterm.js 的实时日志终端
+   - 历史日志回顾与流式加载
+27. Workers (Nodes)
+   - 完整节点管理与标签维护
 
 ## 当前缺口
 
-1. 认证未闭环
-   - 登录仍为 mock
-   - 未接入真实 `/api/v1/auth/*`
-2. 任务相关缺口
-   - 手动触发 API 后端流程未闭环，前端仅有入口
-   - 任务中止按钮与交互未实现
-3. 页面缺口
-   - `JobDetailView.vue` 占位
-   - `NodesView.vue` 占位
-   - `LogsView.vue` 占位
-4. 协议一致性
-   - `Job.Env` 字段提交格式与后端模型存在不一致风险
+1. 协议增强
+   - 更多任务类型（HTTP/Docker）的编辑器支持
+2. 批量操作
+   - 任务/执行记录的批量删除与重试
+3. 动态通知
+   - 前端通知中心与 Webhook 配置页
 
 ## 下一步建议
 
-1. 优先对接 JWT 登录与鉴权
-2. 实现任务中止交互（Events 列表）
-3. 完成 3 个占位页面
-4. 修复 `env` 字段前后端格式一致性
+1. 实现 HTTP/Docker 任务的表单细节
+2. 增强历史记录的高级搜索与统计报表
+3. 增加深色模式支持

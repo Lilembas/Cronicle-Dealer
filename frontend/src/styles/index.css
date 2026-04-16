@@ -45,3 +45,46 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* 任务执行状态徽章 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.status-badge .el-icon {
+  font-size: 14px;
+}
+
+.status-success {
+  background: #22c55e;
+}
+
+.status-failed {
+  background: #ef4444;
+}
+
+.status-running {
+  background: #3b82f6;
+}
+
+.status-pending, .status-queued, .status-aborted {
+  background: #64748b;
+}
+
+.is-loading {
+  animation: rotating 2s linear infinite;
+}
+
+@keyframes rotating {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

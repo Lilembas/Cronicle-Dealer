@@ -22,7 +22,7 @@ const formData = ref({
   enabled: true,
   env: [] as Array<{ key: string; value: string }>,
   tags: [] as string[],
-  target_type: '',
+  target_type: 'tags',
   target_value: '',
   strict_mode: false,
 })
@@ -160,7 +160,7 @@ const loadJob = async () => {
       enabled: job.enabled,
       env: parseEnvString(job.env),
       tags: tags,
-      target_type: job.target_type || 'any',
+      target_type: job.target_type === 'node_id' ? 'node_id' : 'tags',
       target_value: String(targetValue || ''),
       strict_mode: job.strict_mode || false,
     }
@@ -300,6 +300,10 @@ const save = async () => {
   }
 
   // 验证目标服务器配置
+  if (!formData.value.target_type) {
+    ElMessage.warning('请选择运行节点方式')
+    return
+  }
   if (formData.value.target_type === 'node_id' && !formData.value.target_value) {
     ElMessage.warning('请选择执行服务器')
     return

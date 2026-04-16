@@ -14,7 +14,7 @@ type User struct {
 	
 	// 角色权限
 	Role     string `gorm:"type:varchar(20);default:'user'" json:"role"` // admin, user, viewer
-	Active   bool   `gorm:"default:true" json:"active"`
+	Active   *bool  `gorm:"default:true" json:"active"`
 	
 	// 个人信息
 	FullName string `gorm:"type:varchar(255)" json:"full_name"`

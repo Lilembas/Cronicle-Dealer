@@ -14,7 +14,7 @@ type Job struct {
 	// 调度配置
 	CronExpr    string    `gorm:"type:varchar(100);not null" json:"cron_expr"`
 	Timezone    string    `gorm:"type:varchar(50);default:'UTC'" json:"timezone"`
-	Enabled     bool      `gorm:"default:true" json:"enabled"`
+	Enabled     *bool     `gorm:"default:true" json:"enabled"`
 	
 	// 执行配置
 	TaskType    string    `gorm:"type:varchar(20);default:'shell'" json:"task_type"` // shell, http, docker
@@ -38,7 +38,7 @@ type Job struct {
 	
 	// 通知配置
 	NotifyOnSuccess bool   `gorm:"default:false" json:"notify_on_success"`
-	NotifyOnFailure bool   `gorm:"default:true" json:"notify_on_failure"`
+	NotifyOnFailure *bool   `gorm:"default:true" json:"notify_on_failure"`
 	NotifyWebhook   string `gorm:"type:varchar(500)" json:"notify_webhook"`
 	
 	// 元数据

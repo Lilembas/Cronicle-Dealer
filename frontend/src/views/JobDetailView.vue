@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { jobsApi, eventsApi, type Job, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { ArrowLeft, Edit, VideoPlay, RefreshRight } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, VideoPlay, RefreshRight, CircleCheckFilled, CircleCloseFilled, Loading, Clock } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const wsStore = useWebSocketStore()
@@ -15,17 +15,6 @@ const events = ref<Event[]>([])
 const loading = ref(false)
 const triggering = ref(false)
 
-const getStatusType = (status: string) => {
-  const map: Record<string, any> = {
-    success: 'success',
-    failed: 'danger',
-    running: 'warning',
-    queued: 'info',
-    pending: 'info',
-    aborted: 'info',
-  }
-  return map[status] || 'info'
-}
 
 const getStatusText = (status: string) => {
   const map: Record<string, string> = {
@@ -73,7 +62,7 @@ const handleTrigger = async () => {
 
   try {
     triggering.value = true
-    const result = await jobsApi.trigger(job.value.id) as unknown as TriggerResponse
+    const result = await jobsApi.trigger(job.value.id) as unknown as import('@/api').TriggerResponse
     ElMessage.success(`任务 "${job.value.name}" 已入队，Event ID: ${result.event_id}`)
     loadData()
   } catch (error: any) {
@@ -169,9 +158,13 @@ onUnmounted(() => {
         </el-table-column>
         <el-table-column label="状态" width="110" align="center">
           <template #default="{ row }">
-            <el-tag size="small" :type="getStatusType(row.status)">
-              {{ getStatusText(row.status) }}
-            </el-tag>
+            <span :class="['status-badge', `status-${row.status}`]">
+              <el-icon v-if="row.status === 'success'"><CircleCheckFilled /></el-icon>
+              <el-icon v-else-if="row.status === 'failed'"><CircleCloseFilled /></el-icon>
+              <el-icon v-else-if="row.status === 'running'" class="is-loading"><Loading /></el-icon>
+              <el-icon v-else><Clock /></el-icon>
+              <span>{{ getStatusText(row.status) }}</span>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="开始时间" width="180">
