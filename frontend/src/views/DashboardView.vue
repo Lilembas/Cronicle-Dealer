@@ -81,6 +81,14 @@ const handleTaskStatus = () => {
   eventsApi.list({ status: 'running', page_size: 5 }).then(data => {
     runningEvents.value = (data as any).data || []
   })
+  // ALSO refresh upcoming jobs
+  jobsApi.list({ page_size: 100, enabled: true }).then(data => {
+    const now = new Date().getTime()
+    upcomingJobs.value = ((data as any).data || [])
+      .filter((j: any) => j.enabled && j.next_run_time && new Date(j.next_run_time).getTime() > now)
+      .sort((a: any, b: any) => new Date(a.next_run_time).getTime() - new Date(b.next_run_time).getTime())
+      .slice(0, 5)
+  })
 }
 
 const handleAbort = async (event: any) => {
