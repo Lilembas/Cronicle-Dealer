@@ -157,8 +157,8 @@ onUnmounted(() => {
           <Breadcrumb :model="breadcrumbItems" />
         </div>
         <div class="right-actions">
-          <Button severity="info" icon="pi pi-play" :loading="triggering" outlined @click="handleTrigger" label="立即触发" />
-          <Button icon="pi pi-pencil" outlined @click="handleEdit" label="编辑" />
+          <Button icon="pi pi-play" :loading="triggering" class="btn-trigger" @click="handleTrigger" label="立即触发" />
+          <Button icon="pi pi-pencil" class="btn-edit" @click="handleEdit" label="编辑" />
         </div>
       </div>
 
@@ -321,7 +321,43 @@ onUnmounted(() => {
 .card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+}
+
+.right-actions :deep(.p-button) {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+
+.right-actions :deep(.p-button:hover) {
+  transform: translateY(-1px);
+}
+
+.btn-trigger {
+  background: #f0f9ff !important;
+  color: #0284c7 !important;
+  border-color: #bae6fd !important;
+}
+
+.btn-trigger:hover {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.1), 0 2px 4px -1px rgba(14, 165, 233, 0.06) !important;
+}
+
+.btn-edit {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.btn-edit:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
 }
 
 .page-title {
