@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, inject, type Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
@@ -17,6 +17,7 @@ import Paginator from 'primevue/paginator'
 
 const wsStore = useWebSocketStore()
 const queryClient = useQueryClient()
+const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
 
 const router = useRouter()
@@ -57,6 +58,9 @@ onMounted(() => {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     })
+  }
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = () => refetch()
   }
 })
 
@@ -171,9 +175,7 @@ onUnmounted(() => {
 
 <template>
   <div class="events">
-    <div class="page-header">
-      <Button icon="pi pi-refresh" text @click="() => refetch()" label="刷新" />
-    </div>
+    <div class="page-header"></div>
 
     <!-- 筛选栏 -->
     <Card class="filter-card">
@@ -224,7 +226,7 @@ onUnmounted(() => {
 
           <Column field="job_name" header="任务名称" style="min-width: 150px">
             <template #body="{ data }">
-              <span v-if="data.job_id" class="text-primary-500 cursor-pointer hover:underline" @click="router.push(`/jobs/${data.job_id}/detail`)">{{ data.job_name || data.job_id }}</span>
+              <span v-if="data.job_id" class="job-name-link" @click="router.push(`/jobs/${data.job_id}/detail`)">{{ data.job_name || data.job_id }}</span>
               <span v-else>{{ data.job_name || data.job_id }}</span>
             </template>
           </Column>
@@ -250,9 +252,9 @@ onUnmounted(() => {
 
           <Column header="执行时间" style="width: 180px">
             <template #body="{ data }">
-              <div v-if="data.start_time">
+              <div v-if="data.start_time" class="time-text">
                 <div>{{ new Date(data.start_time).toLocaleString('zh-CN') }}</div>
-                <div v-if="data.end_time" class="text-sm text-gray-400">
+                <div v-if="data.end_time" class="time-text-end">
                   至 {{ new Date(data.end_time).toLocaleString('zh-CN') }}
                 </div>
               </div>
@@ -262,7 +264,7 @@ onUnmounted(() => {
 
           <Column header="持续时间" style="width: 120px">
             <template #body="{ data }">
-              {{ formatDuration(data.duration) }}
+              <span class="time-text">{{ formatDuration(data.duration) }}</span>
             </template>
           </Column>
 
@@ -282,11 +284,11 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column header="操作" frozen alignFrozen="right" style="width: 180px">
+          <Column header="操作" frozen alignFrozen="right" style="width: 100px">
             <template #body="{ data }">
-              <div class="flex gap-2">
-                <Button severity="info" size="small" icon="pi pi-eye" @click="viewDetail(data)" label="日志" />
-                <Button v-if="canAbort(data.status)" severity="danger" size="small" icon="pi pi-stop-circle" @click="handleAbort(data)" label="中止" />
+              <div class="action-buttons">
+                <Button v-tooltip.top="'日志'" size="small" icon="pi pi-eye" outlined severity="info" @click="viewDetail(data)" />
+                <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" outlined severity="danger" @click="handleAbort(data)" />
               </div>
             </template>
           </Column>
@@ -347,6 +349,16 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.job-name-link {
+  font-size: 13px;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.job-name-link:hover {
+  text-decoration: underline;
+}
+
 :deep(.row-highlight) {
   background-color: #fef9c3 !important;
   transition: background-color 2s ease;
@@ -364,6 +376,60 @@ onUnmounted(() => {
 .text-red {
   color: #ef4444;
   font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.action-buttons :deep(.p-button) {
+  padding: 6px;
+  margin: 0;
+  transition: all 0.2s ease;
+}
+
+.action-buttons :deep(.p-button-outlined) {
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.action-buttons :deep(.p-button-outlined:hover) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.action-buttons :deep(.p-button-danger-outlined) {
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.action-buttons :deep(.p-button-danger-outlined:hover) {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.action-buttons :deep(.p-button-info-outlined) {
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.action-buttons :deep(.p-button-info-outlined:hover) {
+  background: #eff6ff;
+  border-color: #60a5fa;
+  color: #1d4ed8;
+}
+
+.time-text {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.time-text-end {
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 .pagination {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed } from 'vue'
+import { onMounted, onUnmounted, ref, computed, inject, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { eventsApi, shellApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
@@ -7,11 +7,13 @@ import { showToast } from '@/utils/toast'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import Card from 'primevue/card'
-import ProgressSpinner from 'primevue/progressspinner'
+import Skeleton from 'primevue/skeleton'
+import Breadcrumb from 'primevue/breadcrumb'
 
 const route = useRoute()
 const router = useRouter()
 const wsStore = useWebSocketStore()
+const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
 const loading = ref(false)
 const event = ref<Event | null>(null)
@@ -79,6 +81,11 @@ const logSizeText = computed(() => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 })
+
+const breadcrumbItems = computed(() => [
+  { label: '执行记录', command: () => router.push('/events') },
+  { label: '日志查看' }
+])
 
 const isCompleted = computed(() => {
   if (!event.value) return false
@@ -149,6 +156,9 @@ onMounted(async () => {
   wsStore.onMessage('history_log', handleHistoryLog)
   wsStore.onMessage('task_status', handleTaskStatus)
   wsStore.joinRoom(`event:${eventId()}`)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = reloadAll
+  }
 })
 
 onUnmounted(() => {
@@ -156,45 +166,87 @@ onUnmounted(() => {
   wsStore.offMessage('history_log', handleHistoryLog)
   wsStore.offMessage('task_status', handleTaskStatus)
   wsStore.leaveRoom(`event:${eventId()}`)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = null
+  }
 })
 </script>
 
 <template>
   <div class="logs-page">
-    <div v-if="loading" class="flex justify-center py-16">
-      <ProgressSpinner style="width:50px;height:50px" strokeWidth="4" />
+    <div v-if="loading" class="skeleton-page">
+      <div class="flex items-center gap-3 mb-6">
+        <Skeleton width="60px" height="32px" borderRadius="8px" />
+        <Skeleton width="120px" height="24px" />
+      </div>
+      <Skeleton width="100%" height="160px" borderRadius="12px" class="mb-4" />
+      <Skeleton width="100%" height="420px" borderRadius="12px" />
     </div>
 
     <template v-else>
       <div class="page-header">
         <div class="left-area">
-          <Button icon="pi pi-arrow-left" text @click="router.back()" label="返回" />
-          <h2 class="page-title">日志查看</h2>
+          <Breadcrumb :model="breadcrumbItems" />
         </div>
-        <div class="right-area">
-          <Button icon="pi pi-refresh" text @click="reloadAll" label="刷新" />
-        </div>
+        <div class="right-area"></div>
       </div>
 
       <Card v-if="event" class="meta-card">
         <template #content>
-          <div class="desc-grid">
-            <div class="desc-label">Event ID</div>
-            <div class="desc-value">{{ event.id }}</div>
-            <div class="desc-label">Job ID</div>
-            <div class="desc-value">{{ event.job_id }}</div>
-            <div class="desc-label">状态</div>
-            <div class="desc-value">
-              <Tag :value="event.status" :severity="getStatusSeverity(event.status)" />
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-id-card"></i>
+                <span>Event ID</span>
+              </div>
+              <div class="info-value mono">{{ event.id }}</div>
             </div>
-            <div class="desc-label">节点</div>
-            <div class="desc-value">{{ event.node_name || event.node_id || '-' }}</div>
-            <div class="desc-label">退出码</div>
-            <div class="desc-value">{{ exitCode ?? '-' }}</div>
-            <div class="desc-label">结束时间</div>
-            <div class="desc-value">{{ event.end_time ? new Date(event.end_time).toLocaleString('zh-CN') : '-' }}</div>
-            <div v-if="event.error_message" class="desc-label">错误信息</div>
-            <div v-if="event.error_message" class="desc-value col-span-2 text-red-500">{{ event.error_message }}</div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-cog"></i>
+                <span>Job ID</span>
+              </div>
+              <div class="info-value mono">{{ event.job_id }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-info-circle"></i>
+                <span>状态</span>
+              </div>
+              <div class="info-value">
+                <Tag :value="event.status" :severity="getStatusSeverity(event.status)" />
+              </div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-server"></i>
+                <span>节点</span>
+              </div>
+              <div class="info-value">{{ event.node_name || event.node_id || '-' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-flag"></i>
+                <span>退出码</span>
+              </div>
+              <div class="info-value" :class="{ 'exit-error': exitCode !== 0 && exitCode !== null && exitCode !== undefined }">
+                {{ exitCode ?? '-' }}
+              </div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-clock"></i>
+                <span>结束时间</span>
+              </div>
+              <div class="info-value">{{ event.end_time ? new Date(event.end_time).toLocaleString('zh-CN') : '-' }}</div>
+            </div>
+          </div>
+          <div v-if="event.error_message" class="error-box">
+            <div class="error-header">
+              <i class="pi pi-exclamation-triangle"></i>
+              <span>错误信息</span>
+            </div>
+            <div class="error-content">{{ event.error_message }}</div>
           </div>
         </template>
       </Card>
@@ -259,6 +311,77 @@ onUnmounted(() => {
   border-radius: 12px;
   border: 1px solid var(--color-border);
   margin-bottom: 16px;
+}
+
+/* 信息网格布局 */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.info-label i {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.info-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.info-value.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.exit-error {
+  color: #dc2626;
+}
+
+/* 错误信息框 */
+.error-box {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #dc2626;
+  margin-bottom: 6px;
+}
+
+.error-header i {
+  font-size: 14px;
+}
+
+.error-content {
+  font-size: 13px;
+  color: #991b1b;
+  line-height: 1.5;
 }
 
 .logs-card-header {

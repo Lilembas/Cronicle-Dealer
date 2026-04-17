@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, inject, type Ref } from 'vue'
 import { statsApi, nodesApi } from '@/api'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
@@ -7,7 +7,7 @@ import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import ProgressBar from 'primevue/progressbar'
 import Card from 'primevue/card'
-import ProgressSpinner from 'primevue/progressspinner'
+import Skeleton from 'primevue/skeleton'
 import { useWebSocketStore } from '@/stores/websocket'
 
 const stats = ref<any>(null)
@@ -15,6 +15,7 @@ const nodes = ref<any[]>([])
 const statsLoading = ref(true)
 const nodesLoading = ref(true)
 const wsStore = useWebSocketStore()
+const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
 const loadData = async () => {
   try {
@@ -79,31 +80,40 @@ onMounted(async () => {
 
   wsStore.onMessage('task_status', handleTaskStatus)
   wsStore.onMessage('node_status', handleNodeStatus)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = refetchStats
+  }
 })
 
 onUnmounted(() => {
   wsStore.offMessage('task_status', handleTaskStatus)
   wsStore.offMessage('node_status', handleNodeStatus)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = null
+  }
 })
 </script>
 
 <template>
   <div class="dashboard">
-    <!-- 页面操作 -->
-    <div class="page-header">
-      <Button
-        severity="info"
-        icon="pi pi-refresh"
-        @click="refetchStats()"
-        class="refresh-btn"
-        label="刷新"
-      />
-    </div>
-
     <!-- 统计卡片网格 -->
-    <div class="relative">
-      <ProgressSpinner v-if="statsLoading" style="width:40px;height:40px" strokeWidth="4" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10" />
-      <div class="stats-grid" :class="{ 'opacity-50 pointer-events-none': statsLoading }">
+    <div class="stats-grid">
+      <!-- Skeleton Loading -->
+      <template v-if="statsLoading">
+        <div v-for="i in 4" :key="i" class="stat-card">
+          <div class="stat-card-inner">
+            <Skeleton width="48px" height="48px" borderRadius="12px" />
+            <div class="stat-content">
+              <Skeleton width="60px" height="12px" class="mb-2" />
+              <Skeleton width="48px" height="28px" class="mb-1" />
+              <Skeleton width="80px" height="12px" />
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <!-- Actual Stats -->
+      <template v-else>
         <!-- 总任务数 -->
         <div class="stat-card">
           <div class="stat-card-inner">
@@ -159,7 +169,7 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- 节点状态列表 -->

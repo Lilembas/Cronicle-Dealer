@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useQueryClient } from '@tanstack/vue-query'
 import { jobsApi, nodesApi, type Node } from '@/api'
 import { showToast } from '@/utils/toast'
 import InputText from 'primevue/inputtext'
@@ -11,6 +12,10 @@ import Select from 'primevue/select'
 import SelectButton from 'primevue/selectbutton'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
+import FloatLabel from 'primevue/floatlabel'
+import InputGroup from 'primevue/inputgroup'
+import InputGroupAddon from 'primevue/inputgroupaddon'
+import Breadcrumb from 'primevue/breadcrumb'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
 import 'codemirror/mode/shell/shell.js'
@@ -346,8 +351,7 @@ onMounted(() => {
 <template>
   <div class="job-edit">
     <div class="page-header">
-      <Button icon="pi pi-arrow-left" text @click="cancel" class="back-btn" label="返回" />
-      <h2 class="page-title">{{ title }}</h2>
+      <Breadcrumb :model="[{ label: '任务管理', command: () => router.push('/jobs') }, { label: title }]" />
     </div>
 
     <Card class="form-card">
@@ -357,25 +361,21 @@ onMounted(() => {
           <div class="form-section">
             <h3 class="section-title">基本信息</h3>
 
-            <div class="grid grid-cols-24 gap-4 mb-4">
-              <div class="col-span-14">
-                <div class="flex flex-col gap-1">
-                  <label class="font-medium text-sm">任务名称 <span class="text-red-500">*</span></label>
-                  <InputText v-model="formData.name" placeholder="输入任务名称" class="w-full" />
-                </div>
-              </div>
-              <div class="col-span-10">
-                <div class="flex flex-col gap-1">
-                  <label class="font-medium text-sm">任务分组</label>
-                  <Select v-model="formData.category" :options="availableGroups" filterable editable placeholder="选择或输入分组" class="w-full" />
-                </div>
-              </div>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+              <FloatLabel>
+                <InputText v-model="formData.name" id="job-name" class="w-full" />
+                <label for="job-name">任务名称 <span class="text-red-500">*</span></label>
+              </FloatLabel>
+              <FloatLabel>
+                <Select v-model="formData.category" id="job-category" :options="availableGroups" filterable editable class="w-full" />
+                <label for="job-category">任务分组</label>
+              </FloatLabel>
             </div>
 
-            <div class="flex flex-col gap-1 mb-4">
-              <label class="font-medium text-sm">任务描述</label>
-              <Textarea v-model="formData.description" placeholder="简要说明此任务的功能和用途..." rows="2" autoResize class="w-full" />
-            </div>
+            <FloatLabel class="mb-4">
+              <Textarea v-model="formData.description" id="job-desc" rows="2" autoResize class="w-full" />
+              <label for="job-desc">任务描述</label>
+            </FloatLabel>
           </div>
 
           <!-- Cron表达式 -->
@@ -488,27 +488,25 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="grid grid-cols-24 gap-6 mb-4">
-              <div class="col-span-10">
-                <div class="flex flex-col gap-1">
-                  <label class="font-medium text-sm">超时限制 (s)</label>
-                  <InputNumber v-model="formData.timeout" :min="1" :max="86400" :step="60" showButtons buttonLayout="horizontal" incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus" class="w-full" />
-                </div>
-              </div>
-              <div class="col-span-14">
-                <div class="flex flex-col gap-1">
-                  <label class="font-medium text-sm">严格模式</label>
-                  <div class="strict-wrap">
-                    <ToggleSwitch v-model="formData.strict_mode" />
-                    <i class="pi pi-question-circle help-mini cursor-help" v-tooltip.top="'启用：命令失败立即终止\n禁用：继续执行后续命令'"></i>
-                    <span class="field-hint">开启后脚本遇错即停</span>
-                  </div>
-                </div>
+            <div class="grid grid-cols-2 gap-6 mb-4">
+              <FloatLabel>
+                <InputGroup>
+                  <InputGroupAddon>
+                    <i class="pi pi-clock" />
+                  </InputGroupAddon>
+                  <InputNumber v-model="formData.timeout" id="job-timeout" :min="1" :max="86400" :step="60" showButtons buttonLayout="horizontal" incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus" class="w-full" />
+                </InputGroup>
+                <label for="job-timeout">超时限制 (s)</label>
+              </FloatLabel>
+              <div class="flex items-center gap-2">
+                <ToggleSwitch v-model="formData.strict_mode" />
+                <span class="text-sm">严格模式</span>
+                <i class="pi pi-question-circle help-mini cursor-help" v-tooltip.top="'启用：命令失败立即终止\n禁用：继续执行后续命令'"></i>
               </div>
             </div>
 
             <div class="flex flex-col gap-1 mb-4">
-              <label class="font-medium text-sm">执行脚本 <span class="text-red-500">*</span></label>
+              <label class="font-medium text-sm mb-2">执行脚本 <span class="text-red-500">*</span></label>
               <div class="command-editor-wrapper">
                 <Codemirror
                   v-model:value="formData.command"

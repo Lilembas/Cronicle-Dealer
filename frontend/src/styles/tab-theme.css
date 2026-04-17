@@ -48,7 +48,21 @@
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
-  padding-right: 4px;
+  padding-right: 8px;
+}
+
+.refresh-btn {
+  transition: all 0.2s ease;
+  color: var(--color-text-muted);
+}
+
+.refresh-btn:hover {
+  color: var(--color-brand);
+  background: var(--color-surface-hover);
+}
+
+.refresh-btn:active {
+  transform: rotate(180deg);
 }
 
 /* ===== PrimeVue Tabs Overrides ===== */
@@ -78,7 +92,7 @@
 
 .head-tab .p-tab:hover {
   color: var(--color-brand);
-  background: var(--color-brand-light);
+  background: rgba(59, 130, 246, 0.06);
 }
 
 /* ===== Main Content Area ===== */

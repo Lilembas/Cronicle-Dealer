@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from '@/utils/toast'
 import Button from 'primevue/button'
@@ -7,6 +7,8 @@ import Menu from 'primevue/menu'
 import Tabs from 'primevue/tabs'
 import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
+import ScrollTop from 'primevue/scrolltop'
+import Tooltip from 'primevue/tooltip'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -16,6 +18,13 @@ const authStore = useAuthStore()
 const timeNow = ref(new Date().toLocaleTimeString())
 let intervalId: number | null = null
 let isMounted = false
+
+// Global refresh trigger - pages can provide a refresh handler
+const globalRefreshHandler = ref<(() => void) | null>(null)
+provide('globalRefreshHandler', globalRefreshHandler)
+
+// Register tooltip directive
+const vTooltip = Tooltip
 
 const tabs = [
   { id: '/dashboard', label: '仪表盘', icon: 'pi pi-home' },
@@ -46,6 +55,13 @@ function handleLogout() {
   showToast({ severity: 'success', summary: '已退出登录', life: 3000 })
   authStore.logout()
   router.push('/login')
+}
+
+function handleGlobalRefresh() {
+  if (globalRefreshHandler.value) {
+    globalRefreshHandler.value()
+    showToast({ severity: 'info', summary: '已刷新', life: 1500 })
+  }
 }
 
 onMounted(() => {
@@ -103,7 +119,20 @@ onUnmounted(() => {
           </Tab>
         </TabList>
       </Tabs>
-      <div class="time-display">{{ timeNow }}</div>
+      <div class="time-display">
+          <i class="pi pi-clock mr-2" style="font-size: 12px; opacity: 0.7" />
+          {{ timeNow }}
+        </div>
+        <Button
+          text
+          severity="secondary"
+          icon="pi pi-refresh"
+          class="refresh-btn"
+          @click="handleGlobalRefresh"
+          v-tooltip.left="'刷新当前页面'"
+          aria-label="刷新当前页面"
+          style="padding: 6px; border-radius: 6px"
+        />
     </div>
 
     <!-- Tab Content Container -->
@@ -116,6 +145,8 @@ onUnmounted(() => {
         </router-view>
       </div>
     </div>
+
+    <ScrollTop />
   </div>
 </template>
 

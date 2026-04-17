@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, inject, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { jobsApi, eventsApi, type Job, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
@@ -10,9 +10,11 @@ import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
-import ProgressSpinner from 'primevue/progressspinner'
+import Skeleton from 'primevue/skeleton'
+import Breadcrumb from 'primevue/breadcrumb'
 
 const wsStore = useWebSocketStore()
+const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
 
 const route = useRoute()
@@ -84,7 +86,10 @@ const handleEdit = () => {
   }
 }
 
-const goBack = () => router.push('/jobs')
+const breadcrumbItems = ref([
+  { label: '任务管理', command: () => router.push('/jobs') },
+  { label: '任务详情' }
+])
 
 const handleTaskStatus = (data: any) => {
   if (job.value && data.job_id === job.value.id) {
@@ -95,57 +100,108 @@ const handleTaskStatus = (data: any) => {
 onMounted(() => {
   loadData()
   wsStore.onMessage('task_status', handleTaskStatus)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = loadData
+  }
 })
 
 onUnmounted(() => {
   wsStore.offMessage('task_status', handleTaskStatus)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = null
+  }
 })
 </script>
 
 <template>
   <div class="job-detail">
-    <div v-if="loading" class="flex justify-center py-16">
-      <ProgressSpinner style="width:50px;height:50px" strokeWidth="4" />
+    <div v-if="loading" class="skeleton-page">
+      <div class="flex items-center gap-3 mb-6">
+        <Skeleton width="60px" height="32px" borderRadius="8px" />
+        <Skeleton width="120px" height="24px" />
+      </div>
+      <div class="mb-4">
+        <Skeleton width="100%" height="200px" borderRadius="12px" />
+      </div>
+      <Skeleton width="100%" height="300px" borderRadius="12px" />
     </div>
 
     <template v-else>
       <div class="page-header">
         <div class="left-actions">
-          <Button icon="pi pi-arrow-left" text @click="goBack" label="返回" />
-          <h2 class="page-title">任务详情</h2>
+          <Breadcrumb :model="breadcrumbItems" />
         </div>
         <div class="right-actions">
-          <Button icon="pi pi-refresh" text @click="loadData" label="刷新" />
-          <Button severity="info" icon="pi pi-play" :loading="triggering" @click="handleTrigger" label="立即触发" />
-          <Button icon="pi pi-pencil" text @click="handleEdit" label="编辑" />
+          <Button severity="info" icon="pi pi-play" :loading="triggering" outlined @click="handleTrigger" label="立即触发" />
+          <Button icon="pi pi-pencil" outlined @click="handleEdit" label="编辑" />
         </div>
       </div>
 
       <Card v-if="job" class="job-card">
         <template #title>
           <div class="card-header">
-            <span>{{ job.name }}</span>
+            <span class="job-name">{{ job.name }}</span>
             <Tag :value="job.enabled ? '已启用' : '已禁用'" :severity="job.enabled ? 'success' : 'secondary'" />
           </div>
         </template>
         <template #content>
-          <div class="desc-grid">
-            <div class="desc-label">任务 ID</div>
-            <div class="desc-value">{{ job.id }}</div>
-            <div class="desc-label">分类</div>
-            <div class="desc-value">{{ job.category || '-' }}</div>
-            <div class="desc-label">Cron</div>
-            <div class="desc-value">{{ job.cron_expr }}</div>
-            <div class="desc-label">任务类型</div>
-            <div class="desc-value">{{ job.task_type }}</div>
-            <div class="desc-label">超时（秒）</div>
-            <div class="desc-value">{{ job.timeout }}</div>
-            <div class="desc-label">下次执行</div>
-            <div class="desc-value">{{ job.next_run_time ? new Date(job.next_run_time).toLocaleString('zh-CN') : '-' }}</div>
-            <div class="desc-label">描述</div>
-            <div class="desc-value col-span-2">{{ job.description || '-' }}</div>
-            <div class="desc-label">执行命令</div>
-            <div class="desc-value col-span-2"><pre class="command">{{ job.command }}</pre></div>
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-id-card"></i>
+                <span>Job ID</span>
+              </div>
+              <div class="info-value mono">{{ job.id }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-tag"></i>
+                <span>分类</span>
+              </div>
+              <div class="info-value">{{ job.category || '-' }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-calendar"></i>
+                <span>Cron</span>
+              </div>
+              <div class="info-value">{{ job.cron_expr }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-cog"></i>
+                <span>任务类型</span>
+              </div>
+              <div class="info-value">{{ job.task_type }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-clock"></i>
+                <span>超时（秒）</span>
+              </div>
+              <div class="info-value">{{ job.timeout }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">
+                <i class="pi pi-calendar-plus"></i>
+                <span>下次执行</span>
+              </div>
+              <div class="info-value">{{ job.next_run_time ? new Date(job.next_run_time).toLocaleString('zh-CN') : '-' }}</div>
+            </div>
+          </div>
+          <div v-if="job.description" class="desc-row">
+            <div class="desc-label">
+              <i class="pi pi-file-edit"></i>
+              <span>描述</span>
+            </div>
+            <div class="desc-value">{{ job.description }}</div>
+          </div>
+          <div class="desc-row">
+            <div class="desc-label">
+              <i class="pi pi-terminal"></i>
+              <span>执行命令</span>
+            </div>
+            <pre class="command">{{ job.command }}</pre>
           </div>
         </template>
       </Card>
@@ -158,10 +214,10 @@ onUnmounted(() => {
           </div>
         </template>
         <template #content>
-          <DataTable :value="events" stripedRows>
+          <DataTable :value="events" stripedRows class="events-table">
             <Column field="id" header="Event ID" style="min-width: 180px">
               <template #body="{ data }">
-                <span class="link-text" @click="router.push(`/logs/${data.id}`)">{{ data.id.split('_').slice(-1)[0] }}</span>
+                <span class="link-text event-id" @click="router.push(`/logs/${data.id}`)">{{ data.id.split('_').slice(-1)[0] }}</span>
               </template>
             </Column>
             <Column header="状态" style="width: 110px" alignHeader="center" align="center">
@@ -177,17 +233,19 @@ onUnmounted(() => {
             </Column>
             <Column header="开始时间" style="width: 180px">
               <template #body="{ data }">
-                {{ data.start_time ? new Date(data.start_time).toLocaleString('zh-CN') : '-' }}
+                <span class="time-text">{{ data.start_time ? new Date(data.start_time).toLocaleString('zh-CN') : '-' }}</span>
               </template>
             </Column>
-            <Column header="持续时长(秒)" style="width: 120px" alignHeader="right" align="right">
+            <Column header="持续时长" style="width: 100px" alignHeader="right" align="right">
               <template #body="{ data }">
-                {{ data.duration || '-' }}
+                <span class="time-text">{{ data.duration ? `${data.duration}秒` : '-' }}</span>
               </template>
             </Column>
             <Column header="退出码" style="width: 90px" alignHeader="center" align="center">
               <template #body="{ data }">
-                {{ data.exit_code ?? '-' }}
+                <span :class="['exit-code', { 'exit-error': data.exit_code !== 0 && data.exit_code !== undefined && data.exit_code !== null }]">
+                  {{ data.exit_code ?? '-' }}
+                </span>
               </template>
             </Column>
           </DataTable>
@@ -234,10 +292,109 @@ onUnmounted(() => {
   margin-bottom: 16px;
 }
 
+.job-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
 .command {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
   word-break: break-all;
   margin: 0;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.time-text {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* 信息网格布局 */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.info-label i {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.info-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.info-value.mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+/* 描述和命令行 */
+.desc-row {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.desc-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.desc-label i {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* 执行记录表格 */
+.events-table {
+  width: 100%;
+}
+
+.event-id {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.event-id:hover {
+  text-decoration: underline;
+}
+
+.exit-code {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+}
+
+.exit-error {
+  color: #dc2626;
+  font-weight: 500;
 }
 </style>

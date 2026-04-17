@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, type Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
@@ -9,9 +9,11 @@ import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Paginator from 'primevue/paginator'
+import Breadcrumb from 'primevue/breadcrumb'
 
 const wsStore = useWebSocketStore()
 const queryClient = useQueryClient()
+const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
 const router = useRouter()
 const route = useRoute()
@@ -57,6 +59,11 @@ const formatDuration = (seconds: number) => {
   return `${(seconds / 3600).toFixed(2)}小时`
 }
 
+const breadcrumbItems = computed(() => [
+  { label: '任务管理', command: () => router.push('/jobs') },
+  { label: '执行历史' }
+])
+
 const goBack = () => {
   router.push('/jobs')
 }
@@ -85,10 +92,16 @@ const handleTaskStatus = (data: any) => {
 
 onMounted(() => {
   wsStore.onMessage('task_status', handleTaskStatus)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = () => refetch()
+  }
 })
 
 onUnmounted(() => {
   wsStore.offMessage('task_status', handleTaskStatus)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = null
+  }
 })
 </script>
 
@@ -96,11 +109,13 @@ onUnmounted(() => {
   <div class="job-history">
     <div class="page-header">
       <div class="header-left">
-        <Button icon="pi pi-arrow-left" text @click="goBack" label="返回" />
-        <span class="page-title">{{ jobData?.data?.name || '任务' }} - 执行历史</span>
+        <Breadcrumb :model="breadcrumbItems" />
+        <span v-if="jobData?.name" class="job-name-display">
+          <i class="pi pi-briefcase"></i>
+          {{ jobData.name }}
+        </span>
       </div>
-      <Button icon="pi pi-refresh" text @click="() => refetch()" label="刷新" />
-    </div>
+          </div>
 
     <Card class="table-card">
       <template #content>
@@ -130,13 +145,13 @@ onUnmounted(() => {
 
           <Column header="开始时间" style="width: 180px">
             <template #body="{ data }">
-              {{ data.start_time ? new Date(data.start_time).toLocaleString('zh-CN') : '-' }}
+              <span class="time-text">{{ data.start_time ? new Date(data.start_time).toLocaleString('zh-CN') : '-' }}</span>
             </template>
           </Column>
 
           <Column header="持续时间" style="width: 120px">
             <template #body="{ data }">
-              {{ formatDuration(data.duration) }}
+              <span class="time-text">{{ formatDuration(data.duration) }}</span>
             </template>
           </Column>
 
@@ -149,7 +164,15 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column field="node_name" header="执行节点" style="width: 120px" />
+          <Column header="执行节点" style="width: 120px">
+            <template #body="{ data }">
+              <span v-if="data.node_name" class="target-node">
+                <i class="pi pi-desktop" />
+                <span>{{ data.node_name }}</span>
+              </span>
+              <span v-else>-</span>
+            </template>
+          </Column>
         </DataTable>
 
         <div v-if="eventsData && eventsData.total > 0" class="pagination">
@@ -193,6 +216,24 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.job-name-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  font-weight: 500;
+  padding: 4px 12px;
+  background: #f0f9ff;
+  border-radius: 6px;
+  border: 1px solid #bae6fd;
+}
+
+.job-name-display i {
+  font-size: 14px;
+  color: #0284c7;
+}
+
 .page-title {
   font-size: 18px;
   font-weight: 600;
@@ -221,6 +262,35 @@ onUnmounted(() => {
 .text-red {
   color: #ef4444;
   font-weight: 500;
+}
+
+.time-text {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.target-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #0ea5e9;
+  background: #f0f9ff;
+  padding: 4px 10px 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #bae6fd;
+  max-width: 120px;
+}
+
+.target-node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-node i {
+  font-size: 12px;
+  color: #0284c7;
 }
 
 .pagination {

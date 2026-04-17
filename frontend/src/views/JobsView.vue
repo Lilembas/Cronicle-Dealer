@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, inject, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { jobsApi, nodesApi, type Node } from '@/api'
@@ -10,12 +10,14 @@ import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
+import Badge from 'primevue/badge'
 import Select from 'primevue/select'
 import Card from 'primevue/card'
 import Paginator from 'primevue/paginator'
 
 const wsStore = useWebSocketStore()
 const queryClient = useQueryClient()
+const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
 const router = useRouter()
 
@@ -57,16 +59,16 @@ const filteredGroups = computed(() => {
   return jobs ? new Map([[selectedGroup.value, jobs]]) : new Map()
 })
 
-const groupColorMap: Record<string, string> = {}
-const groupColors = ['success', 'warn', 'danger', 'info']
-let colorIndex = 0
+const groupIconMap: Record<string, string> = {}
+const groupIconList = ['pi pi-server', 'pi pi-box', 'pi pi-globe', 'pi pi-database', 'pi pi-shield', 'pi pi-cog']
+let iconIndex = 0
 
-const getGroupColor = (group: string) => {
-  if (!groupColorMap[group]) {
-    groupColorMap[group] = groupColors[colorIndex % groupColors.length]
-    colorIndex++
+const getGroupIcon = (group: string) => {
+  if (!groupIconMap[group]) {
+    groupIconMap[group] = groupIconList[iconIndex % groupIconList.length]
+    iconIndex++
   }
-  return groupColorMap[group]
+  return groupIconMap[group]
 }
 
 const nodesMap = ref<Map<string, string>>(new Map())
@@ -212,10 +214,16 @@ const handleTaskStatus = async () => {
 onMounted(() => {
   wsStore.onMessage('task_status', handleTaskStatus)
   loadNodes()
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = () => refetch()
+  }
 })
 
 onUnmounted(() => {
   wsStore.offMessage('task_status', handleTaskStatus)
+  if (globalRefreshHandler) {
+    globalRefreshHandler.value = null
+  }
 })
 
 const getStatusText = (status: string) => {
@@ -235,7 +243,6 @@ const getStatusText = (status: string) => {
   <div class="jobs">
     <div class="page-header">
       <div class="header-actions">
-        <Button icon="pi pi-refresh" text @click="() => refetch()" label="刷新" />
         <Button severity="info" icon="pi pi-plus" @click="handleCreate" label="新建任务" />
       </div>
       <Select
@@ -257,8 +264,9 @@ const getStatusText = (status: string) => {
           <!-- 按分组渲染 -->
           <div v-for="[group, jobs] in filteredGroups" :key="group" class="group-section">
             <div class="group-header">
-              <Tag :value="group" :severity="getGroupColor(group)" />
-              <span class="group-count">{{ jobs.length }} 个任务</span>
+              <i :class="getGroupIcon(group)" class="group-icon" />
+              <span class="group-name">{{ group }}</span>
+              <Badge :value="jobs.length" severity="secondary" />
             </div>
             <DataTable :value="jobs" stripedRows size="small" class="group-table">
               <Column field="name" header="任务名称" style="min-width: 120px">
@@ -266,32 +274,40 @@ const getStatusText = (status: string) => {
                   <span class="link-text" @click="handleDetail(data.id)">{{ data.name }}</span>
                 </template>
               </Column>
-              <Column header="执行节点" style="width: 150px">
+              <Column header="执行节点" style="width: 180px">
                 <template #body="{ data }">
                   <template v-if="formatTarget(data).type === 'any'">
-                    <Tag value="任意节点" severity="secondary" />
+                    <span class="target-any">
+                      <i class="pi pi-arrows-alt" />
+                      <span>任意节点</span>
+                    </span>
                   </template>
                   <template v-else-if="formatTarget(data).type === 'node'">
-                    <Tag :value="formatTarget(data).label" severity="info" class="max-w-[130px] truncate" />
+                    <span class="target-node">
+                      <i class="pi pi-desktop" />
+                      <span>{{ formatTarget(data).label }}</span>
+                    </span>
                   </template>
                   <template v-else-if="formatTarget(data).type === 'tags'">
-                    <div class="target-tags">
-                      <Tag
+                    <div class="target-node-list">
+                      <span
                         v-for="tag in formatTarget(data).tags"
                         :key="tag"
-                        :value="tag"
-                        severity="warn"
-                      />
+                        class="target-tag"
+                      >
+                        <i class="pi pi-sitemap" />
+                        <span>{{ tag }}</span>
+                      </span>
                     </div>
                   </template>
                 </template>
               </Column>
-              <Column header="状态" style="width: 90px" alignHeader="center" align="center">
+              <Column header="开启" style="width: 90px" alignHeader="center" align="center">
                 <template #body="{ data }">
                   <Tag :value="data.enabled ? '启用' : '禁用'" :severity="data.enabled ? 'success' : 'secondary'" />
                 </template>
               </Column>
-              <Column header="最后执行" style="width: 100px" alignHeader="center" align="center">
+              <Column header="状态" style="width: 100px" alignHeader="center" align="center">
                 <template #body="{ data }">
                   <span v-if="data.last_status && data.last_status !== '-'" :class="['status-badge', `status-${data.last_status}`]">
                     <i v-if="data.last_status === 'success'" class="pi pi-check-circle"></i>
@@ -310,17 +326,17 @@ const getStatusText = (status: string) => {
               </Column>
               <Column field="next_run_time" header="下次执行" style="width: 170px">
                 <template #body="{ data }">
-                  {{ data.next_run_time ? new Date(data.next_run_time).toLocaleString('zh-CN') : '-' }}
+                  <span class="time-text">{{ data.next_run_time ? new Date(data.next_run_time).toLocaleString('zh-CN') : '-' }}</span>
                 </template>
               </Column>
               <Column header="操作" frozen alignFrozen="right" style="width: 160px">
                 <template #body="{ data }">
                   <div class="action-row">
-                    <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" text rounded @click="handleDetail(data.id)" />
-                    <Button v-tooltip.top="'历史'" size="small" icon="pi pi-clock" text rounded @click="handleHistory(data.id)" />
-                    <Button v-tooltip.top="'触发'" size="small" icon="pi pi-play" severity="info" text rounded @click="handleTrigger(data.id, data.name)" />
-                    <Button v-tooltip.top="'编辑'" size="small" icon="pi pi-pencil" text rounded @click="handleEdit(data.id)" />
-                    <Button v-tooltip.top="'删除'" size="small" icon="pi pi-trash" severity="danger" text rounded @click="handleDelete(data.id, data.name)" />
+                    <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" outlined @click="handleDetail(data.id)" />
+                    <Button v-tooltip.top="'历史'" size="small" icon="pi pi-clock" outlined @click="handleHistory(data.id)" />
+                    <Button v-tooltip.top="'触发'" size="small" icon="pi pi-play" severity="info" outlined @click="handleTrigger(data.id, data.name)" />
+                    <Button v-tooltip.top="'编辑'" size="small" icon="pi pi-pencil" outlined @click="handleEdit(data.id)" />
+                    <Button v-tooltip.top="'删除'" size="small" icon="pi pi-trash" severity="danger" outlined @click="handleDelete(data.id, data.name)" />
                   </div>
                 </template>
               </Column>
@@ -370,7 +386,7 @@ const getStatusText = (status: string) => {
 }
 
 .group-section {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .group-section:last-of-type {
@@ -380,14 +396,29 @@ const getStatusText = (status: string) => {
 .group-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding-left: 2px;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
-.group-count {
-  font-size: 12px;
-  color: var(--color-text-muted);
+.group-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--color-border-light);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.group-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .cron-label {
@@ -396,22 +427,116 @@ const getStatusText = (status: string) => {
   cursor: default;
 }
 
-.target-tags {
+.time-text {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* 执行节点样式 */
+.target-any {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.target-any i {
+  font-size: 11px;
+}
+
+.target-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #0ea5e9;
+  background: #f0f9ff;
+  padding: 4px 10px 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #bae6fd;
+  max-width: 150px;
+}
+
+.target-node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-node i {
+  font-size: 12px;
+  color: #0284c7;
+}
+
+.target-node-list {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
 
+.target-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #0ea5e9;
+  background: #f0f9ff;
+  padding: 4px 10px 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #bae6fd;
+}
+
+.target-tag i {
+  font-size: 11px;
+  color: #0284c7;
+}
+
 .action-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-wrap: nowrap;
 }
 
 .action-row :deep(.p-button) {
-  padding: 4px;
+  padding: 6px;
   margin: 0;
+  transition: all 0.2s ease;
+}
+
+.action-row :deep(.p-button-outlined) {
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.action-row :deep(.p-button-outlined:hover) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.action-row :deep(.p-button-danger-outlined) {
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.action-row :deep(.p-button-danger-outlined:hover) {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.action-row :deep(.p-button-info-outlined) {
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.action-row :deep(.p-button-info-outlined:hover) {
+  background: #eff6ff;
+  border-color: #60a5fa;
+  color: #1d4ed8;
 }
 
 .pagination {

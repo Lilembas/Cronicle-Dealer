@@ -1,9 +1,9 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
-import Aura from '@primevue/themes/aura'
 import Tooltip from 'primevue/tooltip'
 import { VueQueryPlugin } from '@tanstack/vue-query'
+import CroniclePreset from './theme'
 
 import App from './App.vue'
 import router from './router'
@@ -19,17 +19,24 @@ app.use(createPinia())
 // 注册路由
 app.use(router)
 
-// 注册 PrimeVue + Aura 主题
+// 注册 PrimeVue + 自定义 Cronicle 主题
 app.use(PrimeVue, {
     theme: {
-        preset: Aura,
+        preset: CroniclePreset,
         options: {
             prefix: 'p',
             darkModeSelector: '.app-dark',
             cssLayer: false
         }
     },
-    ripple: true
+    ripple: true,
+    pt: {
+        datatable: {
+            headerCell: {
+                class: 'text-xs font-semibold uppercase tracking-wide text-surface-500'
+            }
+        }
+    }
 })
 
 // 注册 Tooltip 指令
