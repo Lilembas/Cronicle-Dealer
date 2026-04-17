@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
+import { ref, computed, provide, onMounted, onUnmounted, defineComponent, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from '@/utils/toast'
 import Button from 'primevue/button'
@@ -15,16 +15,28 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
-const timeNow = ref(new Date().toLocaleTimeString())
-let intervalId: number | null = null
-let isMounted = false
-
-// Global refresh trigger - pages can provide a refresh handler
 const globalRefreshHandler = ref<(() => void) | null>(null)
 provide('globalRefreshHandler', globalRefreshHandler)
 
 // Register tooltip directive
 const vTooltip = Tooltip
+
+const TimeDisplay = defineComponent({
+  setup() {
+    const timeNow = ref(new Date().toLocaleTimeString())
+    let intervalId: number | null = null
+    function updateTime() {
+      timeNow.value = new Date().toLocaleTimeString()
+    }
+    onMounted(() => {
+      intervalId = setInterval(updateTime, 500) as unknown as number
+    })
+    onUnmounted(() => {
+      if (intervalId !== null) { clearInterval(intervalId); intervalId = null }
+    })
+    return () => h('span', { class: 'time-display' }, timeNow.value)
+  }
+})
 
 const tabs = [
   { id: '/dashboard', label: '仪表盘', icon: 'pi pi-home' },
@@ -45,12 +57,6 @@ const userMenuItems = ref([
   }
 ])
 
-function updateTime() {
-  if (isMounted) {
-    timeNow.value = new Date().toLocaleTimeString()
-  }
-}
-
 function handleLogout() {
   showToast({ severity: 'success', summary: '已退出登录', life: 3000 })
   authStore.logout()
@@ -60,22 +66,9 @@ function handleLogout() {
 function handleGlobalRefresh() {
   if (globalRefreshHandler.value) {
     globalRefreshHandler.value()
-    showToast({ severity: 'info', summary: '已刷新', life: 1500 })
+    showToast({ severity: 'info', summary: '已刷新', life: 1000 })
   }
 }
-
-onMounted(() => {
-  isMounted = true
-  intervalId = setInterval(updateTime, 500) as unknown as number
-})
-
-onUnmounted(() => {
-  isMounted = false
-  if (intervalId !== null) {
-    clearInterval(intervalId)
-    intervalId = null
-  }
-})
 </script>
 
 <template>
@@ -119,20 +112,18 @@ onUnmounted(() => {
           </Tab>
         </TabList>
       </Tabs>
-      <div class="time-display">
-          <i class="pi pi-clock mr-2" style="font-size: 12px; opacity: 0.7" />
-          {{ timeNow }}
+      <div class="header-trailing">
+          <Button
+            text
+            severity="secondary"
+            icon="pi pi-refresh"
+            class="refresh-btn"
+            @click="handleGlobalRefresh"
+            v-tooltip.bottom="'刷新'"
+            aria-label="刷新"
+          />
+          <TimeDisplay />
         </div>
-        <Button
-          text
-          severity="secondary"
-          icon="pi pi-refresh"
-          class="refresh-btn"
-          @click="handleGlobalRefresh"
-          v-tooltip.left="'刷新当前页面'"
-          aria-label="刷新当前页面"
-          style="padding: 6px; border-radius: 6px"
-        />
     </div>
 
     <!-- Tab Content Container -->

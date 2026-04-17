@@ -59,17 +59,7 @@ const filteredGroups = computed(() => {
   return jobs ? new Map([[selectedGroup.value, jobs]]) : new Map()
 })
 
-const groupIconMap: Record<string, string> = {}
-const groupIconList = ['pi pi-server', 'pi pi-box', 'pi pi-globe', 'pi pi-database', 'pi pi-shield', 'pi pi-cog']
-let iconIndex = 0
-
-const getGroupIcon = (group: string) => {
-  if (!groupIconMap[group]) {
-    groupIconMap[group] = groupIconList[iconIndex % groupIconList.length]
-    iconIndex++
-  }
-  return groupIconMap[group]
-}
+const getGroupIcon = (_group: string) => 'pi pi-server'
 
 const nodesMap = ref<Map<string, string>>(new Map())
 
@@ -241,20 +231,18 @@ const getStatusText = (status: string) => {
 
 <template>
   <div class="jobs">
-    <div class="page-header">
-      <div class="header-actions">
-        <Button severity="info" icon="pi pi-plus" @click="handleCreate" label="新建任务" />
-      </div>
-      <Select
-        v-model="selectedGroup"
-        :options="allGroups"
-        placeholder="全部分组"
-        showClear
-        class="w-40"
-      />
-    </div>
-
     <Card>
+      <template #header>
+        <div class="card-header">
+          <Select
+            v-model="selectedGroup"
+            :options="allGroups"
+            placeholder="全部分组"
+            showClear
+            class="group-select"
+          />
+        </div>
+      </template>
       <template #content>
         <div v-if="isLoading" class="flex justify-center py-8">
           <i class="pi pi-spin pi-spinner text-2xl text-gray-400"></i>
@@ -274,7 +262,7 @@ const getStatusText = (status: string) => {
                   <span class="link-text" @click="handleDetail(data.id)">{{ data.name }}</span>
                 </template>
               </Column>
-              <Column header="执行节点" style="width: 180px">
+              <Column header="执行节点" style="width: 180px" alignHeader="center">
                 <template #body="{ data }">
                   <template v-if="formatTarget(data).type === 'any'">
                     <span class="target-any">
@@ -329,7 +317,7 @@ const getStatusText = (status: string) => {
                   <span class="time-text">{{ data.next_run_time ? new Date(data.next_run_time).toLocaleString('zh-CN') : '-' }}</span>
                 </template>
               </Column>
-              <Column header="操作" frozen alignFrozen="right" style="width: 160px">
+              <Column header="操作" frozen alignFrozen="right" alignHeader="center" style="width: 160px">
                 <template #body="{ data }">
                   <div class="action-row">
                     <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" outlined @click="handleDetail(data.id)" />
@@ -353,7 +341,22 @@ const getStatusText = (status: string) => {
               @page="onPageChange"
               template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
               currentPageReportTemplate="第 {first} 到 {last} 条，共 {totalRecords} 条"
+              :pt="{
+                root: { style: { fontSize: '11px', gap: '2px', padding: '0' } },
+                page: { style: { minWidth: '26px', height: '26px', fontSize: '11px' } },
+                previous: { style: { width: '26px', height: '26px' } },
+                next: { style: { width: '26px', height: '26px' } },
+                first: { style: { width: '26px', height: '26px' } },
+                last: { style: { width: '26px', height: '26px' } },
+                current: { style: { fontSize: '11px', height: '26px', justifySelf: 'center', display: 'flex', alignItems: 'center' } },
+                rppOptions: { root: { style: { height: '20px', fontSize: '10px', minWidth: '48px' } } }
+              }"
             />
+          </div>
+
+          <!-- 新建任务 -->
+          <div class="create-action">
+            <Button severity="info" icon="pi pi-plus" @click="handleCreate" label="新建任务" size="small" />
           </div>
 
           <div v-if="!isLoading && (!jobsData?.data || jobsData.data.length === 0)" class="text-center py-8 text-gray-400">
@@ -373,16 +376,19 @@ const getStatusText = (status: string) => {
   margin: 0 auto;
 }
 
-.page-header {
+.card-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  justify-content: flex-end;
 }
 
-.header-actions {
+.group-select {
+  width: 160px;
+}
+
+.create-action {
   display: flex;
-  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
 }
 
 .group-section {
@@ -496,6 +502,7 @@ const getStatusText = (status: string) => {
 .action-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   flex-wrap: nowrap;
 }
@@ -540,8 +547,48 @@ const getStatusText = (status: string) => {
 }
 
 .pagination {
-  margin-top: 20px;
+  margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.pagination :deep(.p-paginator-current) {
+  display: flex;
+  align-items: center;
+}
+
+.pagination :deep(.p-paginator) {
+  padding: 0;
+  gap: 2px;
+}
+
+.pagination :deep(.p-paginator-page) {
+  min-width: 24px;
+  height: 24px;
+}
+
+.pagination :deep(.p-paginator-first),
+.pagination :deep(.p-paginator-prev),
+.pagination :deep(.p-paginator-next),
+.pagination :deep(.p-paginator-last) {
+  min-width: 24px;
+  height: 24px;
+}
+
+.pagination :deep(.p-paginator-current) {
+  min-width: 90px;
+  justify-content: center;
+}
+
+.pagination :deep(.p-paginator-rpp-options) {
+  margin-left: 4px;
+}
+
+.pagination :deep(.p-paginator-rpp-options .p-paginator-page) {
+  min-width: 40px;
+  height: 22px;
+  font-size: 10px;
 }
 </style>

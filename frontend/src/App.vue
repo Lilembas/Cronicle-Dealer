@@ -24,7 +24,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <Toast position="top-right" />
+  <Toast position="top-right" class="toast-top-corner" />
   <ConfirmDialog />
   <RouterView />
 </template>

@@ -121,6 +121,17 @@ body {
 .usage-medium { color: #f59e0b; font-weight: 500; }
 .usage-high { color: #ef4444; font-weight: 500; }
 
+/* Toast auto-width for short messages */
+.toast-top-corner {
+  top: 8px !important;
+  right: 8px !important;
+}
+
+.toast-top-corner .p-toast-message {
+  min-width: fit-content;
+  width: fit-content;
+}
+
 /* Progress bar color via CSS variable */
 :deep(.p-progressbar-value) {
   background: var(--progress-color, #10b981);
