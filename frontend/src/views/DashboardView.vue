@@ -238,79 +238,60 @@ onUnmounted(() => {
 <style scoped>
 .dashboard {
   padding: 24px;
-  max-width: 1600px;
+  max-width: 1400px;
   margin: 0 auto;
-  background: #f8fafc;
-  min-height: calc(100vh - 60px);
 }
 
 .page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 32px;
-  gap: 16px;
-}
-
-.refresh-btn {
-  flex-shrink: 0;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 24px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
   margin-bottom: 24px;
 }
 
 .stat-card {
-  background: white;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  background: var(--color-surface);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
   cursor: pointer;
 }
 
 .stat-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-color: #cbd5e1;
 }
 
 .stat-card-inner {
-  padding: 24px;
+  padding: 20px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 
 .stat-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   flex-shrink: 0;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.stat-icon-blue {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-}
-
-.stat-icon-green {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-}
-
-.stat-icon-red {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-}
-
-.stat-icon-purple {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-}
+.stat-icon-blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+.stat-icon-green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+.stat-icon-red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+.stat-icon-purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
 
 .stat-content {
   flex: 1;
@@ -318,46 +299,38 @@ onUnmounted(() => {
 }
 
 .stat-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  color: #64748b;
-  margin-bottom: 8px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .stat-value {
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
-  line-height: 1;
-  margin-bottom: 6px;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+  margin-bottom: 2px;
 }
 
-.stat-value-success {
-  color: #10b981;
-}
-
-.stat-value-failed {
-  color: #ef4444;
-}
-
-.stat-value-nodes {
-  color: #8b5cf6;
-}
+.stat-value-success { color: #10b981; }
+.stat-value-failed { color: #ef4444; }
+.stat-value-nodes { color: #8b5cf6; }
 
 .stat-sub {
-  font-size: 13px;
-  color: #94a3b8;
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 
 .nodes-section {
-  margin-top: 24px;
+  margin-top: 0;
 }
 
 .nodes-card {
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
 }
 
 .card-header {
@@ -368,9 +341,9 @@ onUnmounted(() => {
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -382,8 +355,10 @@ onUnmounted(() => {
   padding: 0 8px;
 }
 
-:deep(.p-progressbar-value) {
-  background: var(--progress-color, #10b981);
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -391,22 +366,23 @@ onUnmounted(() => {
     padding: 16px;
   }
 
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
   .stats-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
 
   .stat-card-inner {
-    padding: 20px;
+    padding: 16px;
   }
 
   .stat-value {
-    font-size: 32px;
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 

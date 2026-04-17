@@ -313,13 +313,13 @@ onUnmounted(() => {
 <style scoped>
 .workers-page {
   padding: 24px;
-  max-width: 1600px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
 .table-card {
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
 }
 
 .hostname-cell {
@@ -331,44 +331,29 @@ onUnmounted(() => {
 
 .hostname-text {
   font-weight: 500;
-  color: #1e293b;
+  color: var(--color-text-primary);
 }
 
 .text-none {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 
 :deep(.offline-row) {
-  background-color: #f5f5f5 !important;
-  color: #999 !important;
+  background-color: #f8fafc !important;
+  color: #94a3b8 !important;
 }
 
 :deep(.offline-row:hover) {
-  background-color: #e8e8e8 !important;
+  background-color: #f1f5f9 !important;
 }
 
 :deep(.offline-row .hostname-text) {
-  color: #999 !important;
+  color: #94a3b8 !important;
 }
 
 :deep(.offline-row .p-tag) {
   opacity: 0.6;
-}
-
-.usage-low {
-  color: #10b981;
-  font-weight: 500;
-}
-
-.usage-medium {
-  color: #f59e0b;
-  font-weight: 500;
-}
-
-.usage-high {
-  color: #ef4444;
-  font-weight: 500;
 }
 
 @media (max-width: 768px) {
@@ -380,7 +365,7 @@ onUnmounted(() => {
 .action-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-wrap: nowrap;
 }
 

@@ -1,16 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from '@/utils/toast'
 import Button from 'primevue/button'
 import Menu from 'primevue/menu'
-import {
-  Home,
-  Calendar,
-  FileText,
-  Monitor,
-  Terminal
-} from 'lucide-vue-next'
+import Tabs from 'primevue/tabs'
+import TabList from 'primevue/tablist'
+import Tab from 'primevue/tab'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -21,16 +17,15 @@ const timeNow = ref(new Date().toLocaleTimeString())
 let intervalId: number | null = null
 let isMounted = false
 
-// Tab 配置 - 使用 lucide-vue-next 图标组件
-const tabs = ref([
-  { id: '/dashboard', label: '仪表盘', icon: Home },
-  { id: '/jobs', label: '任务管理', icon: Calendar },
-  { id: '/events', label: '执行记录', icon: FileText },
-  { id: '/workers', label: '节点管理', icon: Monitor },
-  { id: '/shell', label: 'Shell 执行', icon: Terminal },
-])
+const tabs = [
+  { id: '/dashboard', label: '仪表盘', icon: 'pi pi-home' },
+  { id: '/jobs', label: '任务管理', icon: 'pi pi-calendar' },
+  { id: '/events', label: '执行记录', icon: 'pi pi-list' },
+  { id: '/workers', label: '节点管理', icon: 'pi pi-server' },
+  { id: '/shell', label: 'Shell 执行', icon: 'pi pi-terminal' },
+]
 
-const activeTab = ref('')
+const activeTab = computed(() => route.path)
 const menu = ref()
 
 const userMenuItems = ref([
@@ -53,15 +48,9 @@ function handleLogout() {
   router.push('/login')
 }
 
-function switchTab(tabId: string) {
-  activeTab.value = tabId
-  router.push(tabId)
-}
-
 onMounted(() => {
   isMounted = true
   intervalId = setInterval(updateTime, 500) as unknown as number
-  activeTab.value = route.path
 })
 
 onUnmounted(() => {
@@ -69,12 +58,6 @@ onUnmounted(() => {
   if (intervalId !== null) {
     clearInterval(intervalId)
     intervalId = null
-  }
-})
-
-router.afterEach((to) => {
-  if (isMounted) {
-    activeTab.value = to.path
   }
 })
 </script>
@@ -85,10 +68,10 @@ router.afterEach((to) => {
     <div class="head-home">
       <div class="container">
         <svg class="logo-img" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="3" y="3" width="7" height="7" rx="1" fill="#3b82f6" />
-          <rect x="14" y="3" width="7" height="7" rx="1" fill="#8b5cf6" />
-          <rect x="3" y="14" width="7" height="7" rx="1" fill="#10b981" />
-          <rect x="14" y="14" width="7" height="7" rx="1" fill="#f59e0b" />
+          <rect x="3" y="3" width="7" height="7" rx="1.5" fill="#3b82f6" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" fill="#8b5cf6" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" fill="#10b981" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" fill="#f59e0b" />
         </svg>
         <div class="h1-head-home">Cronicle-Next</div>
       </div>
@@ -100,7 +83,7 @@ router.afterEach((to) => {
           @click="menu.toggle($event)"
         >
           {{ authStore.user?.fullName || 'Admin' }}
-          <i class="pi pi-chevron-down ml-2" />
+          <i class="pi pi-chevron-down ml-2" style="font-size: 12px" />
         </Button>
         <Menu ref="menu" :model="userMenuItems" :popup="true" />
       </div>
@@ -108,25 +91,24 @@ router.afterEach((to) => {
 
     <!-- Tabs Navigation -->
     <div class="head-tab">
-      <ul class="tabs">
-        <li
-          v-for="tab in tabs"
-          :key="tab.id"
-          :class="{ active: activeTab === tab.id }"
-          @click="switchTab(tab.id)"
-        >
-          <span class="tab-icon">
-            <component :is="tab.icon" :size="16" />
-          </span>
-          <span class="tab-label">{{ tab.label }}</span>
-        </li>
-      </ul>
+      <Tabs :value="activeTab">
+        <TabList>
+          <Tab v-for="tab in tabs" :key="tab.id" :value="tab.id">
+            <router-link v-slot="{ href, navigate }" :to="tab.id" custom>
+              <a :href="href" @click="navigate" class="tab-link">
+                <i :class="tab.icon" />
+                <span>{{ tab.label }}</span>
+              </a>
+            </router-link>
+          </Tab>
+        </TabList>
+      </Tabs>
       <div class="time-display">{{ timeNow }}</div>
     </div>
 
     <!-- Tab Content Container -->
-    <div class="tab_container">
-      <div class="tab_content">
+    <div class="main-content">
+      <div class="content-inner">
         <router-view v-slot="{ Component }">
           <transition name="page-fade" mode="out-in">
             <component :is="Component" />
@@ -142,35 +124,31 @@ router.afterEach((to) => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #c9e7f5;
+  background-color: var(--color-bg);
 }
 
-.user-dropdown-trigger {
-  cursor: pointer;
-  padding: 6px 12px;
-  border: 1px solid #999;
-  border-radius: 6px;
-  background: #f5f5f5;
-  transition: all 0.2s ease;
+.tab-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
 }
 
-.user-dropdown-trigger:hover {
-  background: #e8e8e8;
-  border-color: #777;
+.tab-link i {
+  font-size: 14px;
 }
 
 .page-fade-enter-active,
 .page-fade-leave-active {
-  transition: all 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
 .page-fade-enter-from {
   opacity: 0;
-  transform: translateY(10px);
 }
 
 .page-fade-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
 }
 </style>

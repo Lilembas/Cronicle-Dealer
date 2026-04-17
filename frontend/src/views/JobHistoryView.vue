@@ -112,7 +112,7 @@ onUnmounted(() => {
         >
           <Column field="id" header="Event ID" style="min-width: 180px">
             <template #body="{ data }">
-              <span class="event-id" @click="viewLog(data)">{{ data.id.split('_').slice(-1)[0] }}</span>
+              <span class="link-text event-id" @click="viewLog(data)">{{ data.id.split('_').slice(-1)[0] }}</span>
             </template>
           </Column>
 
@@ -176,7 +176,7 @@ onUnmounted(() => {
 <style scoped>
 .job-history {
   padding: 24px;
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -184,24 +184,24 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .page-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--color-text-primary);
 }
 
 .table-card {
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
 }
 
 .events-table {
@@ -209,14 +209,8 @@ onUnmounted(() => {
 }
 
 .event-id {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
-  color: #409eff;
-  cursor: pointer;
-}
-
-.event-id:hover {
-  text-decoration: underline;
 }
 
 .text-green {

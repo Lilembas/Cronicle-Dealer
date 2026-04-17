@@ -407,18 +407,18 @@ const downloadLog = async () => {
 <style scoped>
 .shell-page {
   padding: 24px;
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
 .shell-container {
   display: grid;
-  gap: 20px;
+  gap: 16px;
 }
 
 .command-card {
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
 }
 
 .no-nodes {
@@ -428,19 +428,19 @@ const downloadLog = async () => {
   justify-content: center;
   padding: 60px 20px;
   text-align: center;
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .no-nodes h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
   margin: 0 0 8px 0;
 }
 
 .no-nodes p {
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   margin: 0 0 20px 0;
 }
 
@@ -459,13 +459,13 @@ const downloadLog = async () => {
 
 .logs-stats {
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -482,8 +482,8 @@ const downloadLog = async () => {
   margin-bottom: 20px;
   padding: 12px 16px;
   background: #f8fafc;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-light);
 }
 
 .control-item {
@@ -493,9 +493,9 @@ const downloadLog = async () => {
 }
 
 .control-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
@@ -504,12 +504,12 @@ const downloadLog = async () => {
 }
 
 .command-input-group :deep(.CodeMirror) {
-  border: 1px solid #c0c4cc !important;
+  border: 1px solid var(--color-border) !important;
   border-radius: 8px;
   background-color: #fff !important;
   width: 100% !important;
   height: 240px !important;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 14px;
   padding: 4px;
 }
@@ -525,7 +525,7 @@ const downloadLog = async () => {
 }
 
 .help-icon {
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .quick-commands {
@@ -536,38 +536,38 @@ const downloadLog = async () => {
 }
 
 .quick-commands-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--color-text-secondary);
   padding-top: 6px;
 }
 
 .quick-commands-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .output-card {
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
 }
 
 .logs-container {
   min-height: 400px;
   max-height: 600px;
   overflow: auto;
-  background: #1e293b;
+  background: #0f172a;
   border-radius: 8px;
   padding: 16px;
 }
 
 .logs-content {
   margin: 0;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.6;
-  color: #f8fafc;
+  color: #e2e8f0;
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -579,13 +579,13 @@ const downloadLog = async () => {
   justify-content: center;
   height: 100%;
   min-height: 300px;
-  color: #64748b;
+  color: var(--color-text-muted);
   gap: 12px;
 }
 
 .logs-empty-hint {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .status-bar {
@@ -593,7 +593,7 @@ const downloadLog = async () => {
   align-items: center;
   gap: 24px;
   padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--color-border-light);
   font-size: 13px;
 }
 
@@ -601,11 +601,11 @@ const downloadLog = async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .status-running {
-  color: #3b82f6;
+  color: var(--color-brand);
 }
 
 @media (max-width: 768px) {

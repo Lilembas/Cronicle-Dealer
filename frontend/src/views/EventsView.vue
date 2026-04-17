@@ -215,7 +215,7 @@ onUnmounted(() => {
             <template #body="{ data }">
               <span
                 v-tooltip.top="data.id"
-                class="event-id clickable"
+                class="event-id link-text"
                 :id="`event-row-${data.id}`"
                 @click="viewDetail(data)"
               >{{ data.id.split('_').slice(-1)[0] }}</span>
@@ -316,26 +316,26 @@ onUnmounted(() => {
 <style scoped>
 .events {
   padding: 24px;
-  max-width: 1600px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
 .page-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-  margin-bottom: 24px;
-}
-
-.filter-card {
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
   margin-bottom: 20px;
 }
 
+.filter-card {
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  margin-bottom: 16px;
+}
+
 .table-card {
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
 }
 
 .events-table {
@@ -343,16 +343,8 @@ onUnmounted(() => {
 }
 
 .event-id {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
-}
-
-.clickable {
-  cursor: pointer;
-}
-
-.clickable:hover {
-  text-decoration: underline;
 }
 
 :deep(.row-highlight) {

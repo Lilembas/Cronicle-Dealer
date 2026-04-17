@@ -263,7 +263,7 @@ const getStatusText = (status: string) => {
             <DataTable :value="jobs" stripedRows size="small" class="group-table">
               <Column field="name" header="任务名称" style="min-width: 120px">
                 <template #body="{ data }">
-                  <span class="job-name-link" @click="handleDetail(data.id)">{{ data.name }}</span>
+                  <span class="link-text" @click="handleDetail(data.id)">{{ data.name }}</span>
                 </template>
               </Column>
               <Column header="执行节点" style="width: 150px">
@@ -352,19 +352,21 @@ const getStatusText = (status: string) => {
 
 <style scoped>
 .jobs {
-  padding: 20px;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .group-section {
@@ -385,31 +387,12 @@ const getStatusText = (status: string) => {
 
 .group-count {
   font-size: 12px;
-  color: #909399;
-}
-
-.group-table :deep(.p-datatable-thead > tr > th) {
-  background-color: #fafafa;
-}
-
-.pagination {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.job-name-link {
-  color: #409eff;
-  cursor: pointer;
-}
-
-.job-name-link:hover {
-  text-decoration: underline;
+  color: var(--color-text-muted);
 }
 
 .cron-label {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   cursor: default;
 }
 
@@ -422,12 +405,18 @@ const getStatusText = (status: string) => {
 .action-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-wrap: nowrap;
 }
 
 .action-row :deep(.p-button) {
   padding: 4px;
   margin: 0;
+}
+
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

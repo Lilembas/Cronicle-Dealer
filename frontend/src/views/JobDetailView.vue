@@ -161,7 +161,7 @@ onUnmounted(() => {
           <DataTable :value="events" stripedRows>
             <Column field="id" header="Event ID" style="min-width: 180px">
               <template #body="{ data }">
-                <span class="event-link" @click="router.push(`/logs/${data.id}`)">{{ data.id.split('_').slice(-1)[0] }}</span>
+                <span class="link-text" @click="router.push(`/logs/${data.id}`)">{{ data.id.split('_').slice(-1)[0] }}</span>
               </template>
             </Column>
             <Column header="状态" style="width: 110px" alignHeader="center" align="center">
@@ -200,7 +200,7 @@ onUnmounted(() => {
 <style scoped>
 .job-detail {
   padding: 24px;
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -217,61 +217,25 @@ onUnmounted(() => {
 .card-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .page-title {
   margin: 0;
-  font-size: 24px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .job-card,
 .events-card {
   border-radius: 12px;
+  border: 1px solid var(--color-border);
   margin-bottom: 16px;
 }
 
-.desc-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0;
-}
-
-.desc-label {
-  padding: 10px 16px;
-  background: #f8fafc;
-  font-weight: 500;
-  font-size: 14px;
-  color: #64748b;
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #e2e8f0;
-}
-
-.desc-value {
-  padding: 10px 16px;
-  font-size: 14px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.col-span-2 {
-  grid-column: span 2;
-}
-
-.col-span-2.desc-label {
-  border-right: none;
-}
-
-.event-link {
-  color: #409eff;
-  cursor: pointer;
-}
-
-.event-link:hover {
-  text-decoration: underline;
-}
-
 .command {
-  font-family: 'Courier New', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
   word-break: break-all;
   margin: 0;

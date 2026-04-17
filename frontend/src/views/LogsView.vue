@@ -230,7 +230,7 @@ onUnmounted(() => {
 <style scoped>
 .logs-page {
   padding: 24px;
-  max-width: 1500px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -239,7 +239,7 @@ onUnmounted(() => {
 .right-area {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .page-header {
@@ -249,50 +249,28 @@ onUnmounted(() => {
 
 .page-title {
   margin: 0;
-  font-size: 24px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .meta-card,
 .logs-card {
   border-radius: 12px;
+  border: 1px solid var(--color-border);
   margin-bottom: 16px;
-}
-
-.desc-grid {
-  display: grid;
-  grid-template-columns: auto 1fr auto 1fr auto 1fr;
-  gap: 0;
-}
-
-.desc-label {
-  padding: 8px 16px;
-  background: #f8fafc;
-  font-weight: 500;
-  font-size: 13px;
-  color: #64748b;
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #e2e8f0;
-}
-
-.desc-value {
-  padding: 8px 16px;
-  font-size: 13px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.col-span-2 {
-  grid-column: span 2;
 }
 
 .logs-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 24px;
 }
 
 .logs-stats {
   font-size: 13px;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .log-content {
@@ -304,8 +282,9 @@ onUnmounted(() => {
   background: #0f172a;
   color: #e2e8f0;
   border-radius: 8px;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }

@@ -54,12 +54,20 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
-    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+  <div class="login-page">
+    <div class="login-card">
       <!-- Logo 和标题 -->
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">Cronicle-Next</h1>
-        <p class="text-gray-500">分布式任务调度平台</p>
+        <div class="login-logo">
+          <svg class="logo-img" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" fill="#3b82f6" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" fill="#8b5cf6" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" fill="#10b981" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" fill="#f59e0b" />
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-800 mb-1">Cronicle-Next</h1>
+        <p class="text-gray-400 text-sm">分布式任务调度平台</p>
       </div>
 
       <!-- 登录表单 -->
@@ -106,11 +114,40 @@ const handleLogin = async () => {
 </template>
 
 <style scoped>
-.login-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  padding: 20px;
 }
+
+.login-card {
+  background: var(--color-surface);
+  border-radius: 16px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  padding: 40px 32px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-logo {
+  margin-bottom: 16px;
+}
+
+.login-logo .logo-img {
+  height: 40px;
+  width: auto;
+}
+
+.login-btn {
+  background: var(--color-brand);
+  border: none;
+  font-weight: 600;
+}
+
 .login-btn:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
+  background: #2563eb !important;
 }
 </style>

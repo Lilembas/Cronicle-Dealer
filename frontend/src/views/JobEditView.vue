@@ -547,27 +547,27 @@ onMounted(() => {
 <style scoped>
 .job-edit {
   padding: 24px;
-  max-width: 1000px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
 .page-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .form-card {
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
 }
 
 .form-content {
@@ -575,8 +575,8 @@ onMounted(() => {
 }
 
 .form-section {
-  padding: 16px 0;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .form-section:last-of-type {
@@ -584,22 +584,22 @@ onMounted(() => {
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 12px 0;
+  color: var(--color-text-primary);
+  margin: 0 0 16px 0;
 }
 
 .field-hint {
   margin-left: 12px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .cron-error {
   margin-left: 12px;
   font-size: 12px;
-  color: #f56c6c;
+  color: #ef4444;
 }
 
 .env-row {
@@ -610,7 +610,7 @@ onMounted(() => {
 }
 
 .env-eq {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-weight: bold;
 }
 
@@ -636,7 +636,7 @@ onMounted(() => {
 }
 
 .help-mini {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   cursor: help;
   font-size: 14px;
 }
@@ -656,7 +656,7 @@ onMounted(() => {
   background: #f8fafc;
   padding: 16px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border-light);
   width: 100%;
 }
 
@@ -676,7 +676,7 @@ onMounted(() => {
 
 .part-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
 
@@ -685,13 +685,13 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--color-border);
 }
 
 .raw-label {
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .raw-input {
@@ -711,12 +711,12 @@ onMounted(() => {
 }
 
 .command-editor-wrapper :deep(.CodeMirror) {
-  border: 1px solid #c0c4cc !important;
+  border: 1px solid var(--color-border) !important;
   border-radius: 8px;
   background-color: #fff !important;
   width: 100% !important;
   height: 240px !important;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 14px;
   padding: 4px;
 }
