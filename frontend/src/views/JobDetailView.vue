@@ -86,6 +86,31 @@ const handleEdit = () => {
   }
 }
 
+const viewLog = (id: string) => {
+  router.push(`/logs/${id}`)
+}
+
+const canAbort = (status: string) => status === 'running' || status === 'pending' || status === 'queued'
+
+const handleAbort = async (event: Event) => {
+  showConfirm({
+    message: `确认中止任务 ${event.id} 吗？`,
+    header: '中止确认',
+    icon: 'pi pi-exclamation-triangle',
+    acceptProps: { label: '确认', severity: 'danger' },
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    accept: async () => {
+      try {
+        await eventsApi.abort(event.id)
+        showToast({ severity: 'success', summary: '中止请求已提交', life: 3000 })
+        loadData()
+      } catch {
+        showToast({ severity: 'error', summary: '中止失败', life: 5000 })
+      }
+    },
+  })
+}
+
 const breadcrumbItems = ref([
   { label: '任务管理', command: () => router.push('/jobs') },
   { label: '任务详情' }
@@ -215,14 +240,25 @@ onUnmounted(() => {
         </template>
         <template #content>
           <DataTable :value="events" stripedRows class="events-table">
-            <Column field="id" header="Event ID" style="min-width: 180px">
+            <Column field="id" header="Event ID" style="width: 140px">
               <template #body="{ data }">
                 <span class="link-text event-id" @click="router.push(`/logs/${data.id}`)">{{ data.id.split('_').slice(-1)[0] }}</span>
               </template>
             </Column>
+
+            <Column header="执行节点" style="width: 140px">
+              <template #body="{ data }">
+                <span v-if="data.node_name" class="target-node">
+                  <i class="pi pi-desktop" />
+                  <span>{{ data.node_name }}</span>
+                </span>
+                <span v-else class="text-gray-400">-</span>
+              </template>
+            </Column>
+
             <Column header="状态" style="width: 110px" alignHeader="center" align="center">
               <template #body="{ data }">
-                <span :class="['status-badge', `status-${data.status}`]">
+                <span :class="['premium-badge', `badge-${data.status}`]">
                   <i v-if="data.status === 'success'" class="pi pi-check-circle"></i>
                   <i v-else-if="data.status === 'failed'" class="pi pi-times-circle"></i>
                   <i v-else-if="data.status === 'running'" class="pi pi-spin pi-spinner"></i>
@@ -231,6 +267,7 @@ onUnmounted(() => {
                 </span>
               </template>
             </Column>
+
             <Column header="开始时间" style="width: 180px">
               <template #body="{ data }">
                 <span class="time-text">{{ data.start_time ? new Date(data.start_time).toLocaleString('zh-CN') : '-' }}</span>
@@ -241,11 +278,20 @@ onUnmounted(() => {
                 <span class="time-text">{{ data.duration ? `${data.duration}秒` : '-' }}</span>
               </template>
             </Column>
-            <Column header="退出码" style="width: 90px" alignHeader="center" align="center">
+            <Column header="退出码" style="width: 100px" alignHeader="center" align="center">
               <template #body="{ data }">
-                <span :class="['exit-code', { 'exit-error': data.exit_code !== 0 && data.exit_code !== undefined && data.exit_code !== null }]">
-                  {{ data.exit_code ?? '-' }}
+                <span v-if="data.exit_code !== undefined" :class="data.exit_code === 0 ? 'text-green' : 'text-red'">
+                  {{ data.exit_code }}
                 </span>
+                <span v-else>-</span>
+              </template>
+            </Column>
+            <Column header="操作" frozen alignFrozen="right" style="width: 100px" align="left">
+              <template #body="{ data }">
+                <div class="action-buttons">
+                  <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" severity="info" class="btn-log" @click="viewLog(data.id)" />
+                  <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" severity="danger" class="btn-abort" @click="handleAbort(data)" />
+                </div>
               </template>
             </Column>
           </DataTable>
@@ -378,6 +424,49 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-start;
+}
+
+.action-buttons :deep(.p-button) {
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  transition: all 0.2s ease;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-buttons :deep(.btn-log) {
+  background: #f0f9ff !important;
+  border: 1px solid #bae6fd !important;
+  color: #0284c7 !important;
+}
+
+.action-buttons :deep(.btn-log:hover) {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  transform: translateY(-1px);
+}
+
+.action-buttons :deep(.btn-abort) {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  color: #dc2626 !important;
+}
+
+.action-buttons :deep(.btn-abort:hover) {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1) !important;
+}
+
 .event-id {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
   font-size: 13px;
@@ -388,13 +477,56 @@ onUnmounted(() => {
   text-decoration: underline;
 }
 
-.exit-code {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+.text-green { color: #16a34a; font-family: 'Fira Code', monospace; }
+.text-red { color: #dc2626; font-family: 'Fira Code', monospace; }
+
+.target-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
+  color: #0ea5e9;
+  background: #f0f9ff;
+  padding: 4px 10px 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #bae6fd;
+  max-width: 120px;
 }
 
-.exit-error {
-  color: #dc2626;
-  font-weight: 500;
+.target-node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.target-node i {
+  font-size: 12px;
+  color: #0284c7;
+}
+
+.time-text {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* Premium Badges */
+.premium-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.badge-success { background: #f0fdf4; color: #16a34a; border-color: #dcfce7; }
+.badge-failed { background: #fef2f2; color: #dc2626; border-color: #fee2e2; }
+.badge-running { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
+.badge-queued, .badge-pending { background: #f5f3ff; color: #7c3aed; border-color: #ede9fe; }
+.badge-aborted { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
 </style>

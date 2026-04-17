@@ -326,11 +326,11 @@ const getStatusText = (status: string) => {
               <Column header="操作" frozen alignFrozen="right" alignHeader="center" style="width: 160px">
                 <template #body="{ data }">
                   <div class="action-row">
-                    <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" outlined @click="handleDetail(data.id)" />
-                    <Button v-tooltip.top="'历史'" size="small" icon="pi pi-clock" outlined @click="handleHistory(data.id)" />
-                    <Button v-tooltip.top="'触发'" size="small" icon="pi pi-play" severity="info" outlined @click="handleTrigger(data.id, data.name)" />
-                    <Button v-tooltip.top="'编辑'" size="small" icon="pi pi-pencil" outlined @click="handleEdit(data.id)" />
-                    <Button v-tooltip.top="'删除'" size="small" icon="pi pi-trash" severity="danger" outlined @click="handleDelete(data.id, data.name)" />
+                    <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" outlined severity="secondary" class="action-btn" @click="handleDetail(data.id)" />
+                    <Button v-tooltip.top="'历史'" size="small" icon="pi pi-clock" outlined severity="secondary" class="action-btn" @click="handleHistory(data.id)" />
+                    <Button v-tooltip.top="'触发'" size="small" icon="pi pi-play" class="action-btn btn-trigger" @click="handleTrigger(data.id, data.name)" />
+                    <Button v-tooltip.top="'编辑'" size="small" icon="pi pi-pencil" outlined severity="secondary" class="action-btn" @click="handleEdit(data.id)" />
+                    <Button v-tooltip.top="'删除'" size="small" icon="pi pi-trash" class="action-btn btn-delete" @click="handleDelete(data.id, data.name)" />
                   </div>
                 </template>
               </Column>
@@ -546,9 +546,49 @@ const getStatusText = (status: string) => {
 .action-row {
   display: flex;
   align-items: center;
+  gap: 6px;
   justify-content: center;
-  gap: 4px;
-  flex-wrap: nowrap;
+}
+
+.action-btn {
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border: 1px solid var(--p-surface-200) !important;
+  border-radius: 6px !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--p-surface-400) !important;
+}
+
+.btn-trigger {
+  background: #f0f9ff !important; /* 直接使用颜色值确保生效 (info-50) */
+  color: #0284c7 !important;
+  border-color: #bae6fd !important;
+}
+
+.btn-trigger:hover {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.1) !important;
+}
+
+.btn-delete {
+  background: #fef2f2 !important; /* 直接使用颜色值确保生效 (danger-50) */
+  color: #dc2626 !important;
+  border-color: #fecaca !important;
+}
+
+.btn-delete:hover {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1) !important;
 }
 
 .action-row :deep(.p-button) {

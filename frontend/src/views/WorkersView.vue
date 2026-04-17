@@ -12,6 +12,7 @@ import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import ProgressBar from 'primevue/progressbar'
 
 const loading = ref(false)
 const nodes = ref<Node[]>([])
@@ -207,11 +208,14 @@ onUnmounted(() => {
           :rowClass="getRowClass"
           :selectableRow="canSelectRow"
           dataKey="id"
+          class="workers-table"
         >
           <Column selectionMode="multiple" headerStyle="width: 3rem" />
-          <Column field="hostname" header="Hostname" style="min-width: 150px">
+          <Column field="hostname" header="Hostname" style="min-width: 200px">
             <template #body="{ data }">
               <div class="hostname-cell">
+                <span :class="['status-dot', data.status === 'online' ? 'status-online' : 'status-offline']"></span>
+                <i :class="[isMasterNode(data) ? 'pi pi-shield text-amber-500' : 'pi pi-desktop text-blue-400']" class="node-icon"></i>
                 <span class="hostname-text">{{ data.hostname }}</span>
               </div>
             </template>
@@ -239,18 +243,22 @@ onUnmounted(() => {
               {{ formatUptime(data.registered_at) }}
             </template>
           </Column>
-          <Column header="CPU" style="width: 80px" alignHeader="right" align="right">
+          <Column header="CPU" style="width: 120px" alignHeader="center">
             <template #body="{ data }">
-              <span :class="getUsageClass(data.cpu_usage)">
-                {{ (data.cpu_usage || 0).toFixed(1) }}%
-              </span>
+              <div class="usage-metric" v-if="data.status === 'online'">
+                <ProgressBar :value="Math.min(data.cpu_usage || 0, 100)" :showValue="false" class="mini-progress" :class="getUsageClass(data.cpu_usage)" />
+                <span class="usage-text">{{ (data.cpu_usage || 0).toFixed(1) }}%</span>
+              </div>
+              <span v-else>-</span>
             </template>
           </Column>
-          <Column header="Mem" style="width: 80px" alignHeader="right" align="right">
+          <Column header="Memory" style="width: 120px" alignHeader="center">
             <template #body="{ data }">
-              <span :class="getUsageClass(data.memory_percent)">
-                {{ (data.memory_percent || 0).toFixed(1) }}%
-              </span>
+              <div class="usage-metric" v-if="data.status === 'online'">
+                <ProgressBar :value="Math.min(data.memory_percent || 0, 100)" :showValue="false" class="mini-progress" :class="getUsageClass(data.memory_percent)" />
+                <span class="usage-text">{{ (data.memory_percent || 0).toFixed(1) }}%</span>
+              </div>
+              <span v-else>-</span>
             </template>
           </Column>
           <Column header="操作" frozen alignFrozen="right" style="width: 100px">
@@ -325,52 +333,67 @@ onUnmounted(() => {
 .hostname-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-online {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.status-offline {
+  background: #94a3b8;
+}
+
+.node-icon {
+  font-size: 14px;
 }
 
 .hostname-text {
-  font-weight: 500;
-  color: var(--color-text-primary);
+  font-weight: 600;
+  font-size: 14px;
 }
 
-.text-none {
-  color: var(--color-text-muted);
-  font-size: 12px;
+.usage-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
 }
 
-:deep(.offline-row) {
-  background-color: #f8fafc !important;
-  color: #94a3b8 !important;
+.mini-progress {
+  height: 6px !important;
+  background: #f1f5f9 !important;
 }
 
-:deep(.offline-row:hover) {
-  background-color: #f1f5f9 !important;
+.usage-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--p-surface-600);
+  text-align: right;
 }
 
-:deep(.offline-row .hostname-text) {
-  color: #94a3b8 !important;
-}
-
-:deep(.offline-row .p-tag) {
-  opacity: 0.6;
-}
-
-@media (max-width: 768px) {
-  .workers-page {
-    padding: 16px;
-  }
-}
+.usage-low :deep(.p-progressbar-value) { background: #22c55e; }
+.usage-medium :deep(.p-progressbar-value) { background: #f59e0b; }
+.usage-high :deep(.p-progressbar-value) { background: #ef4444; }
 
 .action-row {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-wrap: nowrap;
+  gap: 4px;
 }
 
-.action-row :deep(.p-button) {
-  padding: 4px;
-  margin: 0;
+.online-row :deep(.p-datatable-tbody > tr:hover) {
+  background: #f8fafc;
+}
+
+:deep(.offline-row) {
+  opacity: 0.6;
 }
 </style>

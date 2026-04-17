@@ -4,12 +4,15 @@ import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
+import { showToast } from '@/utils/toast'
+import { showConfirm } from '@/utils/confirm'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Paginator from 'primevue/paginator'
 import Breadcrumb from 'primevue/breadcrumb'
+import { type Job } from '@/api'
 
 const wsStore = useWebSocketStore()
 const queryClient = useQueryClient()
@@ -20,10 +23,11 @@ const route = useRoute()
 
 const jobId = route.params.id as string
 
-const { data: jobData } = useQuery({
+const { data: jobDataRaw } = useQuery({
   queryKey: ['job', jobId],
   queryFn: () => jobsApi.get(jobId),
 })
+const jobData = computed(() => (jobDataRaw.value as any)?.data as Job | undefined)
 
 const pagination = ref({
   page: 1,
@@ -64,12 +68,31 @@ const breadcrumbItems = computed(() => [
   { label: '执行历史' }
 ])
 
-const goBack = () => {
-  router.push('/jobs')
-}
+// Removed goBack as it is unused
 
 const viewLog = (event: Event) => {
   router.push(`/logs/${event.id}`)
+}
+
+const canAbort = (status: string) => status === 'running' || status === 'pending' || status === 'queued'
+
+const handleAbort = async (event: Event) => {
+  showConfirm({
+    message: `确认中止任务 ${event.id} 吗？`,
+    header: '中止确认',
+    icon: 'pi pi-exclamation-triangle',
+    acceptProps: { label: '确认', severity: 'danger' },
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    accept: async () => {
+      try {
+        await eventsApi.abort(event.id)
+        showToast({ severity: 'success', summary: '中止请求已提交', life: 3000 })
+        queryClient.invalidateQueries({ queryKey: ['events'] })
+      } catch {
+        showToast({ severity: 'error', summary: '中止失败', life: 5000 })
+      }
+    },
+  })
 }
 
 const paginatorFirst = computed({
@@ -125,15 +148,25 @@ onUnmounted(() => {
           stripedRows
           class="events-table"
         >
-          <Column field="id" header="Event ID" style="min-width: 180px">
+          <Column field="id" header="Event ID" style="width: 140px">
             <template #body="{ data }">
               <span class="link-text event-id" @click="viewLog(data)">{{ data.id.split('_').slice(-1)[0] }}</span>
             </template>
           </Column>
 
-          <Column header="状态" style="width: 100px" alignHeader="center" align="center">
+          <Column header="执行节点" style="width: 140px">
             <template #body="{ data }">
-              <span :class="['status-badge', `status-${data.status}`]">
+              <span v-if="data.node_name" class="target-node">
+                <i class="pi pi-desktop" />
+                <span>{{ data.node_name }}</span>
+              </span>
+              <span v-else class="text-gray-400">-</span>
+            </template>
+          </Column>
+
+          <Column header="状态" style="width: 120px" alignHeader="center" align="center">
+            <template #body="{ data }">
+              <span :class="['premium-badge', `badge-${data.status}`]">
                 <i v-if="data.status === 'success'" class="pi pi-check-circle"></i>
                 <i v-else-if="data.status === 'failed'" class="pi pi-times-circle"></i>
                 <i v-else-if="data.status === 'running'" class="pi pi-spin pi-spinner"></i>
@@ -163,14 +196,16 @@ onUnmounted(() => {
               <span v-else>-</span>
             </template>
           </Column>
-
-          <Column header="执行节点" style="width: 120px">
+          <Column header="操作" frozen alignFrozen="right" style="width: 100px" align="left">
             <template #body="{ data }">
-              <span v-if="data.node_name" class="target-node">
-                <i class="pi pi-desktop" />
-                <span>{{ data.node_name }}</span>
-              </span>
-              <span v-else>-</span>
+              <div class="action-buttons">
+                <Button v-tooltip.top="'日志'" size="small" icon="pi pi-eye" class="action-btn" :pt="{ 
+                  root: { style: { background: '#f0f9ff', borderColor: '#bae6fd', color: '#0284c7' } } 
+                }" @click="viewLog(data)" />
+                <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" class="action-btn" :pt="{ 
+                  root: { style: { background: '#fef2f2', borderColor: '#fecaca', color: '#dc2626' } } 
+                }" @click="handleAbort(data)" />
+              </div>
             </template>
           </Column>
         </DataTable>
@@ -249,23 +284,35 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.action-btn {
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.95);
+}
+
 .event-id {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
 }
 
-.text-green {
-  color: #10b981;
-  font-weight: 500;
-}
-
-.text-red {
-  color: #ef4444;
-  font-weight: 500;
-}
+.text-green { color: #16a34a; font-family: 'Fira Code', monospace; }
+.text-red { color: #dc2626; font-family: 'Fira Code', monospace; }
 
 .time-text {
-  font-size: 12px;
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace;
+  font-size: 11px;
   color: var(--color-text-muted);
 }
 
@@ -293,9 +340,23 @@ onUnmounted(() => {
   color: #0284c7;
 }
 
-.pagination {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
+/* Premium Badges */
+.premium-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
 }
+
+.badge-success { background: #f0fdf4; color: #16a34a; border-color: #dcfce7; }
+.badge-failed { background: #fef2f2; color: #dc2626; border-color: #fee2e2; }
+.badge-running { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
+.badge-queued, .badge-pending { background: #f5f3ff; color: #7c3aed; border-color: #ede9fe; }
+.badge-aborted { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
 </style>

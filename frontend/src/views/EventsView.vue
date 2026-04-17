@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, inject, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, inject, watch, type Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
@@ -14,6 +14,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
 import Paginator from 'primevue/paginator'
+import ProgressBar from 'primevue/progressbar'
 
 const wsStore = useWebSocketStore()
 const queryClient = useQueryClient()
@@ -44,7 +45,6 @@ const { data: eventsDataRaw, isLoading, refetch } = useQuery({
     page: pagination.value.page,
     page_size: pagination.value.pageSize,
     status: filters.value.status || undefined,
-    job_name: filters.value.jobName || undefined,
     job_category: filters.value.jobCategory || undefined,
   }),
 })
@@ -126,11 +126,6 @@ const handleAbort = async (event: Event) => {
   })
 }
 
-const applyFilter = () => {
-  pagination.value.page = 1
-  refetch()
-}
-
 const resetFilter = () => {
   filters.value = {
     status: '',
@@ -139,9 +134,11 @@ const resetFilter = () => {
     startDate: '',
     endDate: '',
   }
-  pagination.value.page = 1
-  refetch()
 }
+
+watch(filters, () => {
+  pagination.value.page = 1
+}, { deep: true })
 
 const paginatorFirst = computed({
   get: () => (pagination.value.page - 1) * pagination.value.pageSize,
@@ -156,7 +153,7 @@ const onPageChange = (event: any) => {
 }
 
 const getRowClass = (data: Event) => {
-  return data.id === highlightId ? 'row-highlight' : ''
+  return data.id === highlightId.value ? 'row-highlight' : ''
 }
 
 const handleTaskStatus = () => {
@@ -175,8 +172,6 @@ onUnmounted(() => {
 
 <template>
   <div class="events">
-    <div class="page-header"></div>
-
     <!-- 筛选栏 -->
     <Card class="filter-card">
       <template #content>
@@ -196,8 +191,7 @@ onUnmounted(() => {
             <Select v-model="filters.jobCategory" :options="categoryOptions" optionLabel="label" optionValue="value" placeholder="选择分组" class="w-36" showClear />
           </div>
 
-          <Button severity="info" icon="pi pi-filter" @click="applyFilter" label="筛选" />
-          <Button severity="secondary" @click="resetFilter" label="重置" />
+          <Button severity="secondary" @click="resetFilter" label="重置" size="small" outlined />
         </div>
       </template>
     </Card>
@@ -213,7 +207,7 @@ onUnmounted(() => {
           :rowClass="getRowClass"
           rowHover
         >
-          <Column field="id" header="Event ID" style="min-width: 180px">
+          <Column field="id" header="Event ID" style="width: 100px">
             <template #body="{ data }">
               <span
                 v-tooltip.top="data.id"
@@ -224,23 +218,36 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column field="job_name" header="任务名称" style="min-width: 150px">
+          <Column field="job_name" header="任务名称" style="width: 180px">
             <template #body="{ data }">
               <span v-if="data.job_id" class="job-name-link" @click="router.push(`/jobs/${data.job_id}/detail`)">{{ data.job_name || data.job_id }}</span>
               <span v-else>{{ data.job_name || data.job_id }}</span>
             </template>
           </Column>
 
-          <Column header="分组" style="width: 120px">
+          <Column header="执行节点" style="width: 140px">
             <template #body="{ data }">
-              <Tag v-if="data.job_category" :value="data.job_category" severity="info" />
+              <span v-if="data.node_name" class="target-node">
+                <i class="pi pi-desktop" />
+                <span>{{ data.node_name }}</span>
+              </span>
               <span v-else class="text-gray-400">-</span>
             </template>
           </Column>
 
-          <Column header="状态" style="width: 100px" alignHeader="center" align="center">
+          <Column header="分组" style="width: 110px">
             <template #body="{ data }">
-              <span :class="['status-badge', `status-${data.status}`]">
+              <Tag v-if="data.job_category" :value="data.job_category" severity="info" :pt="{ 
+                root: { style: { height: '20px', padding: '0 6px' } },
+                label: { style: { fontWeight: 'normal', fontSize: '10px' } } 
+              }" />
+              <span v-else class="text-gray-400 text-xs">-</span>
+            </template>
+          </Column>
+
+          <Column header="状态" style="width: 120px" alignHeader="center" align="center">
+            <template #body="{ data }">
+              <span :class="['premium-badge', `badge-${data.status}`]">
                 <i v-if="data.status === 'success'" class="pi pi-check-circle"></i>
                 <i v-else-if="data.status === 'failed'" class="pi pi-times-circle"></i>
                 <i v-else-if="data.status === 'running'" class="pi pi-spin pi-spinner"></i>
@@ -250,7 +257,7 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column header="执行时间" style="width: 180px">
+          <Column header="执行时间" style="width: 200px">
             <template #body="{ data }">
               <div v-if="data.start_time" class="time-text">
                 <div>{{ new Date(data.start_time).toLocaleString('zh-CN') }}</div>
@@ -277,9 +284,12 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column field="cpu_percent" header="CPU" style="width: 100px" alignHeader="right" align="right">
+          <Column field="cpu_percent" header="CPU" style="width: 100px" alignHeader="center">
             <template #body="{ data }">
-              <span v-if="data.cpu_percent !== undefined">{{ data.cpu_percent.toFixed(1) }}%</span>
+              <div class="cpu-metric" v-if="data.cpu_percent !== undefined">
+                <ProgressBar :value="Math.min(data.cpu_percent, 100)" :showValue="false" class="mini-progress" />
+                <span class="metric-text">{{ data.cpu_percent.toFixed(1) }}%</span>
+              </div>
               <span v-else>-</span>
             </template>
           </Column>
@@ -287,8 +297,8 @@ onUnmounted(() => {
           <Column header="操作" frozen alignFrozen="right" style="width: 100px">
             <template #body="{ data }">
               <div class="action-buttons">
-                <Button v-tooltip.top="'日志'" size="small" icon="pi pi-eye" outlined severity="info" @click="viewDetail(data)" />
-                <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" outlined severity="danger" @click="handleAbort(data)" />
+                <Button v-tooltip.top="'日志'" size="small" icon="pi pi-eye" severity="info" class="btn-log" @click="viewDetail(data)" />
+                <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" severity="danger" class="btn-abort" @click="handleAbort(data)" />
               </div>
             </template>
           </Column>
@@ -317,16 +327,9 @@ onUnmounted(() => {
 
 <style scoped>
 .events {
-  padding: 24px;
-  max-width: 1400px;
+  padding: 16px 24px 24px 24px;
+  max-width: 1500px;
   margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  margin-bottom: 20px;
 }
 
 .filter-card {
@@ -349,10 +352,16 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
+.events-table :deep(.p-datatable-tbody > tr > td) {
+  padding: 8px 12px;
+  font-size: 11px;
+}
+
 .job-name-link {
-  font-size: 13px;
-  color: #2563eb;
+  color: var(--color-brand);
   cursor: pointer;
+  font-weight: 500;
+  font-size: 12px;
 }
 
 .job-name-link:hover {
@@ -381,62 +390,152 @@ onUnmounted(() => {
 .action-buttons {
   display: flex;
   gap: 4px;
+  justify-content: flex-start;
 }
 
 .action-buttons :deep(.p-button) {
-  padding: 6px;
+  padding: 0;
+  width: 28px;
+  height: 28px;
   margin: 0;
   transition: all 0.2s ease;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.action-buttons :deep(.p-button-outlined) {
-  border-color: #e2e8f0;
-  color: #64748b;
+.action-buttons :deep(.btn-log) {
+  background: #f0f9ff !important;
+  border: 1px solid #bae6fd !important;
+  color: #0284c7 !important;
 }
 
-.action-buttons :deep(.p-button-outlined:hover) {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #334155;
+.action-buttons :deep(.btn-log:hover) {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  transform: translateY(-1px);
 }
 
-.action-buttons :deep(.p-button-danger-outlined) {
-  border-color: #fecaca;
-  color: #dc2626;
+.action-buttons :deep(.btn-abort) {
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  color: #dc2626 !important;
 }
 
-.action-buttons :deep(.p-button-danger-outlined:hover) {
-  background: #fef2f2;
-  border-color: #f87171;
-  color: #b91c1c;
-}
-
-.action-buttons :deep(.p-button-info-outlined) {
-  border-color: #bfdbfe;
-  color: #2563eb;
-}
-
-.action-buttons :deep(.p-button-info-outlined:hover) {
-  background: #eff6ff;
-  border-color: #60a5fa;
-  color: #1d4ed8;
+.action-buttons :deep(.btn-abort:hover) {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1) !important;
 }
 
 .time-text {
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.time-text-end {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace;
   font-size: 11px;
   color: var(--color-text-muted);
 }
 
-.pagination {
-  margin-top: 20px;
-  display: flex;
-  justify-content: flex-end;
+.time-text-end {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  opacity: 0.8;
 }
+
+/* Premium Badges */
+.premium-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.badge-success {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #dcfce7;
+}
+
+.badge-failed {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fee2e2;
+}
+
+.badge-running {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #dbeafe;
+}
+
+.badge-queued, .badge-pending {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border-color: #ede9fe;
+}
+
+.badge-aborted {
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+.cpu-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.mini-progress {
+  height: 4px !important;
+  background: #f1f5f9 !important;
+}
+
+.mini-progress :deep(.p-progressbar-value) {
+  background: #0ea5e9;
+  border-radius: 2px;
+}
+
+.metric-text {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+.target-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #0284c7;
+  background: #f0f9ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid #bae6fd;
+  max-width: 140px;
+}
+
+.target-node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-node i {
+  font-size: 12px;
+  color: #0284c7;
+}
+
+.text-green { color: #16a34a; font-family: 'Fira Code', monospace; }
+.text-red { color: #dc2626; font-family: 'Fira Code', monospace; }
 
 @media (max-width: 768px) {
   .events {
