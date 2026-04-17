@@ -240,6 +240,12 @@ const getStatusText = (status: string) => {
             placeholder="全部分组"
             showClear
             class="group-select"
+            size="small"
+            :pt="{
+              root: { style: { width: '100px', height: '24px' } },
+              label: { style: { fontSize: '11px', padding: '0 8px', display: 'flex', alignItems: 'center' } },
+              option: { style: { padding: '2px 8px', fontSize: '10px' } }
+            }"
           />
         </div>
       </template>
@@ -349,14 +355,29 @@ const getStatusText = (status: string) => {
                 first: { style: { width: '26px', height: '26px' } },
                 last: { style: { width: '26px', height: '26px' } },
                 current: { style: { fontSize: '11px', height: '26px', justifySelf: 'center', display: 'flex', alignItems: 'center' } },
-                rppOptions: { root: { style: { height: '20px', fontSize: '10px', minWidth: '48px' } } }
+                pcRowsPerPageDropdown: {
+                  root: { style: { height: '24px', fontSize: '11px', minWidth: '54px' } },
+                  label: { style: { padding: '0 4px', fontSize: '11px', display: 'flex', alignItems: 'center' } },
+                  option: { style: { padding: '2px 6px', fontSize: '10px' } }
+                }
               }"
             />
           </div>
 
           <!-- 新建任务 -->
           <div class="create-action">
-            <Button severity="info" icon="pi pi-plus" @click="handleCreate" label="新建任务" size="small" />
+            <Button
+              severity="primary"
+              icon="pi pi-plus"
+              @click="handleCreate"
+              label="新建任务"
+              size="small"
+              class="create-btn"
+              :pt="{
+                root: { class: 'create-button-root' },
+                label: { class: 'create-button-label' }
+              }"
+            />
           </div>
 
           <div v-if="!isLoading && (!jobsData?.data || jobsData.data.length === 0)" class="text-center py-8 text-gray-400">
@@ -382,13 +403,36 @@ const getStatusText = (status: string) => {
 }
 
 .group-select {
-  width: 160px;
+  width: 100px;
 }
 
 .create-action {
   display: flex;
   justify-content: center;
-  margin-top: 12px;
+  margin-top: 20px;
+  padding: 16px 0;
+  border-top: 1px dashed var(--color-border-light);
+}
+
+.create-btn {
+  background: var(--p-primary-50) !important;
+  border: 1px solid var(--p-primary-100) !important;
+  color: var(--p-primary-600) !important;
+  padding: 8px 20px !important;
+  font-weight: 600 !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02) !important;
+}
+
+.create-btn:hover {
+  background: var(--p-primary-100) !important;
+  border-color: var(--p-primary-200) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+}
+
+.create-btn:active {
+  transform: translateY(0);
 }
 
 .group-section {
@@ -577,18 +621,18 @@ const getStatusText = (status: string) => {
   height: 24px;
 }
 
-.pagination :deep(.p-paginator-current) {
-  min-width: 90px;
-  justify-content: center;
+.pagination :deep(.p-select) {
+  height: 24px;
 }
 
-.pagination :deep(.p-paginator-rpp-options) {
-  margin-left: 4px;
+.pagination :deep(.p-select-label) {
+  font-size: 11px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
 }
 
-.pagination :deep(.p-paginator-rpp-options .p-paginator-page) {
-  min-width: 40px;
-  height: 22px;
-  font-size: 10px;
+.group-select :deep(.p-select-label) {
+  padding: 4px 8px;
 }
 </style>
