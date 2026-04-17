@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { RefreshRight, ArrowLeft, CircleCheckFilled, CircleCloseFilled, Loading, Clock } from '@element-plus/icons-vue'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Paginator from 'primevue/paginator'
 
 const wsStore = useWebSocketStore()
 const queryClient = useQueryClient()
@@ -14,19 +18,16 @@ const route = useRoute()
 
 const jobId = route.params.id as string
 
-// 获取任务信息
 const { data: jobData } = useQuery({
   queryKey: ['job', jobId],
   queryFn: () => jobsApi.get(jobId),
 })
 
-// 分页参数
 const pagination = ref({
   page: 1,
   pageSize: 20,
 })
 
-// 获取该任务的执行记录
 const { data: eventsDataRaw, isLoading, refetch } = useQuery({
   queryKey: ['job-events', jobId, pagination],
   queryFn: () => eventsApi.list({
@@ -37,10 +38,6 @@ const { data: eventsDataRaw, isLoading, refetch } = useQuery({
 })
 const eventsData = eventsDataRaw as unknown as { total: number; data: Event[] } | undefined
 
-// 状态标签类型
-
-
-// 状态文本
 const getStatusText = (status: string) => {
   const map: Record<string, string> = {
     success: '成功',
@@ -53,7 +50,6 @@ const getStatusText = (status: string) => {
   return map[status] || status
 }
 
-// 格式化持续时间
 const formatDuration = (seconds: number) => {
   if (!seconds) return '-'
   if (seconds < 60) return `${seconds.toFixed(2)}秒`
@@ -61,35 +57,36 @@ const formatDuration = (seconds: number) => {
   return `${(seconds / 3600).toFixed(2)}小时`
 }
 
-// 返回上一页
 const goBack = () => {
   router.push('/jobs')
 }
 
-// 查看日志
 const viewLog = (event: Event) => {
   router.push(`/logs/${event.id}`)
 }
 
-// 分页变化
-const handlePageChange = (page: number) => {
-  pagination.value.page = page
+const paginatorFirst = computed({
+  get: () => (pagination.value.page - 1) * pagination.value.pageSize,
+  set: (val: number) => {
+    pagination.value.page = Math.floor(val / pagination.value.pageSize) + 1
+  }
+})
+
+const onPageChange = (event: any) => {
+  pagination.value.page = Math.floor(event.first / event.rows) + 1
+  pagination.value.pageSize = event.rows
 }
 
-// WebSocket 任务状态更新处理
 const handleTaskStatus = (data: any) => {
-  // 如果是当前任务的执行记录更新，刷新数据
   if (data.job_id === jobId) {
     queryClient.invalidateQueries({ queryKey: ['job-events', jobId] })
   }
 }
 
-// 组件挂载 - 设置 WebSocket 监听
 onMounted(() => {
   wsStore.onMessage('task_status', handleTaskStatus)
 })
 
-// 组件卸载 - 移除 WebSocket 监听
 onUnmounted(() => {
   wsStore.offMessage('task_status', handleTaskStatus)
 })
@@ -99,81 +96,80 @@ onUnmounted(() => {
   <div class="job-history">
     <div class="page-header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="goBack">返回</el-button>
+        <Button icon="pi pi-arrow-left" text @click="goBack" label="返回" />
         <span class="page-title">{{ jobData?.data?.name || '任务' }} - 执行历史</span>
       </div>
-      <el-button :icon="RefreshRight" @click="refetch">刷新</el-button>
+      <Button icon="pi pi-refresh" text @click="() => refetch()" label="刷新" />
     </div>
 
-    <!-- 执行记录列表 -->
-    <el-card class="table-card" shadow="never">
-      <el-table
-        :data="eventsData?.data || []"
-        v-loading="isLoading"
-        stripe
-        class="events-table"
-        :row-key="(row: Event) => row.id"
-      >
-        <el-table-column prop="id" label="Event ID" min-width="180">
-          <template #default="{ row }">
-            <el-text type="primary" class="event-id" @click="viewLog(row)">{{ row.id.split('_').slice(-1)[0] }}</el-text>
-          </template>
-        </el-table-column>
+    <Card class="table-card">
+      <template #content>
+        <DataTable
+          :value="eventsData?.data || []"
+          :loading="isLoading"
+          stripedRows
+          class="events-table"
+        >
+          <Column field="id" header="Event ID" style="min-width: 180px">
+            <template #body="{ data }">
+              <span class="event-id" @click="viewLog(data)">{{ data.id.split('_').slice(-1)[0] }}</span>
+            </template>
+          </Column>
 
-        <el-table-column label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <span :class="['status-badge', `status-${row.status}`]">
-              <el-icon v-if="row.status === 'success'"><CircleCheckFilled /></el-icon>
-              <el-icon v-else-if="row.status === 'failed'"><CircleCloseFilled /></el-icon>
-              <el-icon v-else-if="row.status === 'running'" class="is-loading"><Loading /></el-icon>
-              <el-icon v-else><Clock /></el-icon>
-              <span>{{ getStatusText(row.status) }}</span>
-            </span>
-          </template>
-        </el-table-column>
+          <Column header="状态" style="width: 100px" alignHeader="center" align="center">
+            <template #body="{ data }">
+              <span :class="['status-badge', `status-${data.status}`]">
+                <i v-if="data.status === 'success'" class="pi pi-check-circle"></i>
+                <i v-else-if="data.status === 'failed'" class="pi pi-times-circle"></i>
+                <i v-else-if="data.status === 'running'" class="pi pi-spin pi-spinner"></i>
+                <i v-else class="pi pi-clock"></i>
+                <span>{{ getStatusText(data.status) }}</span>
+              </span>
+            </template>
+          </Column>
 
-        <el-table-column label="开始时间" width="180">
-          <template #default="{ row }">
-            {{ row.start_time ? new Date(row.start_time).toLocaleString('zh-CN') : '-' }}
-          </template>
-        </el-table-column>
+          <Column header="开始时间" style="width: 180px">
+            <template #body="{ data }">
+              {{ data.start_time ? new Date(data.start_time).toLocaleString('zh-CN') : '-' }}
+            </template>
+          </Column>
 
-        <el-table-column label="持续时间" width="120">
-          <template #default="{ row }">
-            {{ formatDuration(row.duration) }}
-          </template>
-        </el-table-column>
+          <Column header="持续时间" style="width: 120px">
+            <template #body="{ data }">
+              {{ formatDuration(data.duration) }}
+            </template>
+          </Column>
 
-        <el-table-column label="退出码" width="100" align="center">
-          <template #default="{ row }">
-            <span v-if="row.exit_code !== undefined" :class="row.exit_code === 0 ? 'text-green' : 'text-red'">
-              {{ row.exit_code }}
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+          <Column header="退出码" style="width: 100px" alignHeader="center" align="center">
+            <template #body="{ data }">
+              <span v-if="data.exit_code !== undefined" :class="data.exit_code === 0 ? 'text-green' : 'text-red'">
+                {{ data.exit_code }}
+              </span>
+              <span v-else>-</span>
+            </template>
+          </Column>
 
-        <el-table-column prop="node_name" label="执行节点" width="120" show-overflow-tooltip />
+          <Column field="node_name" header="执行节点" style="width: 120px" />
+        </DataTable>
 
-              </el-table>
+        <div v-if="eventsData && eventsData.total > 0" class="pagination">
+          <Paginator
+            v-model:first="paginatorFirst"
+            :rows="pagination.pageSize"
+            :totalRecords="eventsData.total"
+            :rowsPerPageOptions="[10, 20, 50, 100]"
+            @page="onPageChange"
+            template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+            currentPageReportTemplate="第 {first} 到 {last} 条，共 {totalRecords} 条"
+          />
+        </div>
 
-      <!-- 分页 -->
-      <div class="pagination">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="eventsData?.total || 0"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handlePageChange"
-        />
-      </div>
-
-      <el-empty
-        v-if="!isLoading && (!eventsData?.data || (eventsData?.data?.length || 0) === 0)"
-        description="暂无执行记录"
-      />
-    </el-card>
+        <div v-if="!isLoading && (!eventsData?.data || (eventsData?.data?.length || 0) === 0)" class="text-center py-8 text-gray-400">
+          <i class="pi pi-inbox text-4xl mb-2 block"></i>
+          <p>暂无执行记录</p>
+        </div>
+      </template>
+    </Card>
   </div>
 </template>
 
@@ -215,6 +211,7 @@ onUnmounted(() => {
 .event-id {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 13px;
+  color: #409eff;
   cursor: pointer;
 }
 

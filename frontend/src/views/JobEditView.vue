@@ -2,8 +2,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { jobsApi, nodesApi, type Node } from '@/api'
-import { ArrowLeft, Plus, Delete, QuestionFilled } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { showToast } from '@/utils/toast'
+import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
+import InputNumber from 'primevue/inputnumber'
+import ToggleSwitch from 'primevue/toggleswitch'
+import Select from 'primevue/select'
+import SelectButton from 'primevue/selectbutton'
+import Button from 'primevue/button'
+import Card from 'primevue/card'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
 import 'codemirror/mode/shell/shell.js'
@@ -11,7 +18,6 @@ import 'codemirror/mode/shell/shell.js'
 const router = useRouter()
 const route = useRoute()
 
-// 表单数据
 const formData = ref({
   name: '',
   description: '',
@@ -27,7 +33,6 @@ const formData = ref({
   strict_mode: false,
 })
 
-// CodeMirror 配置
 const cmOptions = {
   mode: 'text/x-sh',
   theme: 'default',
@@ -36,10 +41,7 @@ const cmOptions = {
   tabSize: 2,
 }
 
-// 常用分组列表
 const commonGroups = ['默认分组', '系统任务', '数据同步', '定时清理', '监控告警', '数据备份']
-
-// 获取可用分组（从已有任务中获取）
 const availableGroups = ref<string[]>([...commonGroups])
 
 const loadGroups = async () => {
@@ -48,23 +50,18 @@ const loadGroups = async () => {
     const groups = result?.data?.map((job: any) => job.category).filter(Boolean) || []
     availableGroups.value = Array.from(new Set([...commonGroups, ...groups])).sort()
   } catch {
-    // 加载失败使用默认分组
     availableGroups.value = [...commonGroups]
   }
 }
 
-// 节点列表
 const nodes = ref<Node[]>([])
 const loadingNodes = ref(false)
-
-// 可用标签列表（从节点标签中获取）
 const availableTags = ref<string[]>([])
 const loadingTags = ref(false)
 
 const parseEnvString = (value: unknown): Array<{ key: string; value: string }> => {
   if (!value) return []
   if (typeof value !== 'string') return []
-
   try {
     const parsed = JSON.parse(value) as Record<string, string>
     return Object.entries(parsed).map(([key, v]) => ({ key, value: String(v) }))
@@ -73,7 +70,6 @@ const parseEnvString = (value: unknown): Array<{ key: string; value: string }> =
   }
 }
 
-// Cron表达式构建器
 const cron = ref({
   minute: '*',
   hour: '*',
@@ -82,7 +78,6 @@ const cron = ref({
   dayOfWeek: '*',
 })
 
-// 预设Cron表达式
 const cronPresets = [
   { label: '每分钟', value: '* * * * *' },
   { label: '每小时', value: '0 * * * *' },
@@ -93,61 +88,55 @@ const cronPresets = [
   { label: '每30分钟', value: '*/30 * * * *' },
 ]
 
-// 是否为编辑模式
 const isEdit = computed(() => !!route.params.id)
 const title = computed(() => isEdit.value ? '编辑任务' : '新建任务')
 
-// 加载节点列表（过滤掉 master 节点）
+// Target type options for SelectButton
+const targetTypeOptions = [
+  { label: '指定节点', value: 'node_id' },
+  { label: '匹配标签', value: 'tags' },
+]
+
 const loadNodes = async () => {
   try {
     loadingNodes.value = true
     const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
-    nodes.value = (allNodes || []).filter((node: Node) => 
+    nodes.value = (allNodes || []).filter((node: Node) =>
       !String(node.tags || '').includes('master')
     )
-    console.log('Nodes loaded:', nodes.value.length)
-  } catch (error) {
-    console.error('加载节点列表失败:', error)
-    ElMessage.warning('加载节点列表失败')
+  } catch {
+    showToast({ severity: 'warn', summary: '加载节点列表失败', life: 3000 })
   } finally {
     loadingNodes.value = false
   }
 }
 
-// 加载所有可用标签
 const loadTags = async () => {
   try {
     loadingTags.value = true
     const tags = await nodesApi.listTags() as unknown as string[]
     availableTags.value = tags || []
-  } catch (error) {
-    console.error('加载标签列表失败:', error)
+  } catch {
   } finally {
     loadingTags.value = false
   }
 }
 
-// 加载任务数据
 const loadJob = async () => {
   if (!isEdit.value) return
 
   try {
     const job = await jobsApi.get(route.params.id as string) as any
-    // 处理后端可能返回的 tags 字段
     let tags: string[] = Array.isArray(job.tags) ? job.tags : (typeof job.tags === 'string' ? job.tags.split(',').filter(Boolean) : [])
 
-    // 处理 target_value 如果是 JSON 数组
     let targetValue = job.target_value
     if (job.target_type === 'tags' && targetValue) {
       try {
         const parsed = JSON.parse(targetValue)
         if (Array.isArray(parsed)) {
-          // 如果后端存储的是 JSON 数组，将其转换为逗号分隔或直接给 tags
           tags = parsed
         }
-      } catch (e) {
-        // 不是 JSON，按普通字符串处理
-      }
+      } catch {}
     }
 
     formData.value = {
@@ -165,7 +154,6 @@ const loadJob = async () => {
       strict_mode: job.strict_mode || false,
     }
 
-    // 解析Cron表达式
     const parts = job.cron_expr.split(/\s+/)
     if (parts.length === 5) {
       cron.value = {
@@ -176,13 +164,12 @@ const loadJob = async () => {
         dayOfWeek: parts[4],
       }
     }
-  } catch (error) {
-    ElMessage.error('加载任务失败')
+  } catch {
+    showToast({ severity: 'error', summary: '加载任务失败', life: 5000 })
     router.back()
   }
 }
 
-// 构建Cron表达式
 const buildCronExpr = () => {
   formData.value.cron_expr = [
     cron.value.minute,
@@ -194,7 +181,6 @@ const buildCronExpr = () => {
   validateCronExpr()
 }
 
-// 从表达式更新Cron组件
 const updateCronFromExpr = (value: string) => {
   const parts = value.split(/\s+/)
   if (parts.length === 5) {
@@ -208,14 +194,12 @@ const updateCronFromExpr = (value: string) => {
   }
 }
 
-// 选择预设Cron
 const selectPreset = (value: string) => {
   formData.value.cron_expr = value
   updateCronFromExpr(value)
   validateCronExpr()
 }
 
-// Cron表达式校验
 const cronError = ref('')
 
 const validateCronField = (value: string, min: number, max: number): boolean => {
@@ -227,7 +211,6 @@ const validateCronField = (value: string, min: number, max: number): boolean => 
     const n = parseInt(value.split('/')[1])
     return n >= 1
   }
-  // N/M：从 N 开始每 M 单位执行，如 2/3
   if (/^\d+\/\d+$/.test(value)) {
     const [start, step] = value.split('/').map(Number)
     return start >= min && start <= max && step >= 1
@@ -267,54 +250,47 @@ const validateCronExpr = (): boolean => {
   return true
 }
 
-// 切换运行方式时清空已选值
 const onTargetTypeChange = () => {
   formData.value.target_value = ''
   formData.value.tags = []
 }
 
-// 添加环境变量
 const addEnv = () => {
   formData.value.env.push({ key: '', value: '' })
 }
 
-// 删除环境变量
 const removeEnv = (index: number) => {
   formData.value.env.splice(index, 1)
 }
 
-// 保存任务
 const save = async () => {
-  // 验证表单
   if (!formData.value.name.trim()) {
-    ElMessage.warning('请输入任务名称')
+    showToast({ severity: 'warn', summary: '请输入任务名称', life: 3000 })
     return
   }
   if (!validateCronExpr()) {
-    ElMessage.warning(cronError.value)
+    showToast({ severity: 'warn', summary: cronError.value, life: 3000 })
     return
   }
   if (!formData.value.command.trim()) {
-    ElMessage.warning('请输入命令')
+    showToast({ severity: 'warn', summary: '请输入命令', life: 3000 })
     return
   }
 
-  // 验证目标服务器配置
   if (!formData.value.target_type) {
-    ElMessage.warning('请选择运行节点方式')
+    showToast({ severity: 'warn', summary: '请选择运行节点方式', life: 3000 })
     return
   }
   if (formData.value.target_type === 'node_id' && !formData.value.target_value) {
-    ElMessage.warning('请选择执行服务器')
+    showToast({ severity: 'warn', summary: '请选择执行服务器', life: 3000 })
     return
   }
   if (formData.value.target_type === 'tags' && formData.value.tags.length === 0) {
-    ElMessage.warning('请至少添加一个标签')
+    showToast({ severity: 'warn', summary: '请至少添加一个标签', life: 3000 })
     return
   }
 
   try {
-    // 转换环境变量格式
     const env: Record<string, string> = {}
     formData.value.env.forEach(({ key, value }) => {
       if (key.trim()) {
@@ -332,24 +308,22 @@ const save = async () => {
       enabled: formData.value.enabled,
       env: JSON.stringify(env),
       target_type: formData.value.target_type,
-      // 如果按标签选择，target_value 存储标签的 JSON 数组
-      target_value: formData.value.target_type === 'tags' 
-        ? JSON.stringify(formData.value.tags) 
+      target_value: formData.value.target_type === 'tags'
+        ? JSON.stringify(formData.value.tags)
         : formData.value.target_value,
       strict_mode: formData.value.strict_mode,
     }
 
     if (isEdit.value) {
       await jobsApi.update(route.params.id as string, payload)
-      ElMessage.success('保存成功')
+      showToast({ severity: 'success', summary: '保存成功', life: 3000 })
     } else {
       await jobsApi.create(payload)
-      ElMessage.success('创建成功')
+      showToast({ severity: 'success', summary: '创建成功', life: 3000 })
     }
     router.back()
   } catch (error: any) {
-    console.error('保存任务失败:', error)
-    ElMessage.error(error.response?.data?.error || '保存失败')
+    showToast({ severity: 'error', summary: '保存失败', detail: error.response?.data?.error || '保存失败', life: 5000 })
   }
 }
 
@@ -363,7 +337,6 @@ onMounted(() => {
   loadTags()
   loadJob()
 
-  // 如果没有分组，设置默认值
   if (!formData.value.category) {
     formData.value.category = '默认分组'
   }
@@ -373,220 +346,201 @@ onMounted(() => {
 <template>
   <div class="job-edit">
     <div class="page-header">
-      <el-button :icon="ArrowLeft" @click="cancel" class="back-btn">返回</el-button>
+      <Button icon="pi pi-arrow-left" text @click="cancel" class="back-btn" label="返回" />
       <h2 class="page-title">{{ title }}</h2>
     </div>
 
-    <el-card class="form-card">
-      <el-form label-width="100px" label-position="right" class="compact-form">
-        <!-- 基本信息 -->
-        <div class="form-section">
-          <h3 class="section-title">基本信息</h3>
+    <Card class="form-card">
+      <template #content>
+        <div class="form-content">
+          <!-- 基本信息 -->
+          <div class="form-section">
+            <h3 class="section-title">基本信息</h3>
 
-          <el-row :gutter="16">
-            <el-col :span="14">
-              <el-form-item label="任务名称" required>
-                <el-input
-                  v-model="formData.name"
-                  placeholder="输入任务名称"
-                  maxlength="100"
-                  show-word-limit
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="10">
-              <el-form-item label="任务分组">
-                <el-select
-                  v-model="formData.category"
-                  filterable
-                  allow-create
-                  default-first-option
-                  placeholder="选择或输入分组"
-                  style="width: 100%"
-                >
-                  <el-option
-                    v-for="group in availableGroups"
-                    :key="group"
-                    :label="group"
-                    :value="group"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-          </el-row>
+            <div class="grid grid-cols-24 gap-4 mb-4">
+              <div class="col-span-14">
+                <div class="flex flex-col gap-1">
+                  <label class="font-medium text-sm">任务名称 <span class="text-red-500">*</span></label>
+                  <InputText v-model="formData.name" placeholder="输入任务名称" class="w-full" />
+                </div>
+              </div>
+              <div class="col-span-10">
+                <div class="flex flex-col gap-1">
+                  <label class="font-medium text-sm">任务分组</label>
+                  <Select v-model="formData.category" :options="availableGroups" filterable editable placeholder="选择或输入分组" class="w-full" />
+                </div>
+              </div>
+            </div>
 
-          <el-form-item label="任务描述">
-            <el-input
-              v-model="formData.description"
-              type="textarea"
-              placeholder="简要说明此任务的功能和用途..."
-              :rows="2"
-              maxlength="500"
-              show-word-limit
-            />
-          </el-form-item>
-
-        </div>
-
-        <!-- Cron表达式 -->
-        <div class="form-section">
-          <div class="section-header">
-            <h3 class="section-title">调度规则</h3>
-            <el-switch v-model="formData.enabled" active-text="启用任务" />
+            <div class="flex flex-col gap-1 mb-4">
+              <label class="font-medium text-sm">任务描述</label>
+              <Textarea v-model="formData.description" placeholder="简要说明此任务的功能和用途..." rows="2" autoResize class="w-full" />
+            </div>
           </div>
 
-          <el-form-item label="快速预设">
-            <el-radio-group v-model="formData.cron_expr" @change="selectPreset" size="small">
-              <el-radio-button v-for="preset in cronPresets" :key="preset.value" :value="preset.value">
-                {{ preset.label }}
-              </el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-
-          <el-form-item label="自定义规则">
-            <div class="cron-builder">
-              <div class="cron-grid">
-                <div class="cron-part">
-                  <span class="part-label">分</span>
-                  <el-input v-model="cron.minute" @input="buildCronExpr" placeholder="*" size="small" />
-                </div>
-                <div class="cron-part">
-                  <span class="part-label">时</span>
-                  <el-input v-model="cron.hour" @input="buildCronExpr" placeholder="*" size="small" />
-                </div>
-                <div class="cron-part">
-                  <span class="part-label">日</span>
-                  <el-input v-model="cron.dayOfMonth" @input="buildCronExpr" placeholder="*" size="small" />
-                </div>
-                <div class="cron-part">
-                  <span class="part-label">月</span>
-                  <el-input v-model="cron.month" @input="buildCronExpr" placeholder="*" size="small" />
-                </div>
-                <div class="cron-part">
-                  <span class="part-label">周</span>
-                  <el-input v-model="cron.dayOfWeek" @input="buildCronExpr" placeholder="*" size="small" />
-                </div>
-              </div>
-              <div class="cron-raw">
-                <span class="raw-label">表达式:</span>
-                <el-input v-model="formData.cron_expr" placeholder="* * * * *" size="small" class="raw-input" readonly />
+          <!-- Cron表达式 -->
+          <div class="form-section">
+            <div class="section-header">
+              <h3 class="section-title">调度规则</h3>
+              <div class="flex items-center gap-2">
+                <ToggleSwitch v-model="formData.enabled" />
+                <span class="text-sm">启用任务</span>
               </div>
             </div>
-            <div v-if="cronError" class="cron-error" style="margin-top: 8px">
-              {{ cronError }}
-            </div>
-            <div v-else class="field-hint" style="margin-top: 8px">
-              格式：分 时 日 月 周 (5位标准版)。使用 * 表示通配，*/N 表示频率。
-            </div>
-          </el-form-item>
-        </div>
 
-        <!-- 执行配置 -->
-        <div class="form-section">
-          <h3 class="section-title">执行配置</h3>
-
-          <el-form-item label="运行节点" required>
-            <div class="target-row">
-              <el-radio-group v-model="formData.target_type" size="small" class="target-radio" @change="onTargetTypeChange">
-                <el-radio-button value="node_id">指定节点</el-radio-button>
-                <el-radio-button value="tags">匹配标签</el-radio-button>
-              </el-radio-group>
-              
-              <el-select
-                v-if="formData.target_type === 'node_id'"
-                v-model="formData.target_value"
-                placeholder="选择执行节点"
-                :loading="loadingNodes"
-                class="target-select"
-              >
-                <el-option
-                  v-for="node in nodes"
-                  :key="node.id"
-                  :label="`${node.hostname} (${node.ip})`"
-                  :value="node.id"
-                />
-              </el-select>
-
-              <el-select
-                v-else
-                v-model="formData.tags"
-                multiple
-                filterable
-                placeholder="选择匹配标签"
-                :loading="loadingTags"
-                class="target-select"
-              >
-                <el-option
-                  v-for="tag in availableTags"
-                  :key="tag"
-                  :label="tag"
-                  :value="tag"
-                />
-              </el-select>
-            </div>
-          </el-form-item>
-
-          <el-row :gutter="24">
-            <el-col :span="10">
-              <el-form-item label="超时限制 (s)">
-                <el-input-number
-                  v-model="formData.timeout"
-                  :min="1"
-                  :max="86400"
-                  :step="60"
-                  controls-position="right"
-                  style="width: 100%"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="14">
-              <el-form-item label="严格模式">
-                <div class="strict-wrap">
-                  <el-switch v-model="formData.strict_mode" />
-                  <el-tooltip placement="top">
-                    <template #content>
-                      ✓ 启用：命令失败立即终止<br/>
-                      ✗ 禁用：继续执行后续命令
-                    </template>
-                    <el-icon class="help-mini"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                  <span class="field-hint">开启后脚本遇错即停</span>
-                </div>
-              </el-form-item>
-            </el-col>
-          </el-row>
-
-          <el-form-item label="执行脚本" required>
-            <div class="command-editor-wrapper">
-              <Codemirror
-                v-model:value="formData.command"
-                :options="cmOptions"
-                :placeholder="'输入 Shell 脚本...'"
-                :height="'240px'"
+            <div class="flex flex-col gap-1 mb-4">
+              <label class="font-medium text-sm">快速预设</label>
+              <SelectButton
+                v-model="formData.cron_expr"
+                :options="cronPresets"
+                optionLabel="label"
+                optionValue="value"
+                @change="(e: any) => selectPreset(e.value)"
               />
             </div>
-          </el-form-item>
 
-          <el-form-item label="环境变量">
-            <div class="env-container">
-              <div v-for="(envVar, index) in formData.env" :key="index" class="env-row">
-                <el-input v-model="envVar.key" placeholder="Key" style="width: 180px" />
-                <span class="env-eq">=</span>
-                <el-input v-model="envVar.value" placeholder="Value" style="flex: 1" />
-                <el-button :icon="Delete" type="danger" link @click="removeEnv(index)" />
+            <div class="flex flex-col gap-1 mb-2">
+              <label class="font-medium text-sm">自定义规则</label>
+              <div class="cron-builder">
+                <div class="cron-grid">
+                  <div class="cron-part">
+                    <span class="part-label">分</span>
+                    <InputText v-model="cron.minute" @input="buildCronExpr" placeholder="*" size="small" class="w-full text-center" />
+                  </div>
+                  <div class="cron-part">
+                    <span class="part-label">时</span>
+                    <InputText v-model="cron.hour" @input="buildCronExpr" placeholder="*" size="small" class="w-full text-center" />
+                  </div>
+                  <div class="cron-part">
+                    <span class="part-label">日</span>
+                    <InputText v-model="cron.dayOfMonth" @input="buildCronExpr" placeholder="*" size="small" class="w-full text-center" />
+                  </div>
+                  <div class="cron-part">
+                    <span class="part-label">月</span>
+                    <InputText v-model="cron.month" @input="buildCronExpr" placeholder="*" size="small" class="w-full text-center" />
+                  </div>
+                  <div class="cron-part">
+                    <span class="part-label">周</span>
+                    <InputText v-model="cron.dayOfWeek" @input="buildCronExpr" placeholder="*" size="small" class="w-full text-center" />
+                  </div>
+                </div>
+                <div class="cron-raw">
+                  <span class="raw-label">表达式:</span>
+                  <InputText :modelValue="formData.cron_expr" placeholder="* * * * *" size="small" class="raw-input" readonly />
+                </div>
               </div>
-              <el-button :icon="Plus" text type="primary" size="small" @click="addEnv">添加变量</el-button>
+              <div v-if="cronError" class="cron-error mt-2">
+                {{ cronError }}
+              </div>
+              <div v-else class="field-hint mt-2">
+                格式：分 时 日 月 周 (5位标准版)。使用 * 表示通配，*/N 表示频率。
+              </div>
             </div>
-          </el-form-item>
-        </div>
+          </div>
 
-        <!-- 操作按钮 -->
-        <div class="form-actions">
-          <el-button @click="cancel">取消</el-button>
-          <el-button type="primary" @click="save">保存</el-button>
+          <!-- 执行配置 -->
+          <div class="form-section">
+            <h3 class="section-title">执行配置</h3>
+
+            <div class="flex flex-col gap-1 mb-4">
+              <label class="font-medium text-sm">运行节点 <span class="text-red-500">*</span></label>
+              <div class="target-row">
+                <SelectButton
+                  v-model="formData.target_type"
+                  :options="targetTypeOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  @change="onTargetTypeChange"
+                  class="target-radio"
+                />
+
+                <Select
+                  v-if="formData.target_type === 'node_id'"
+                  v-model="formData.target_value"
+                  :options="nodes"
+                  optionLabel="hostname"
+                  optionValue="id"
+                  placeholder="选择执行节点"
+                  :loading="loadingNodes"
+                  class="target-select flex-1"
+                >
+                  <template #value="{ value }">
+                    <span v-if="value">{{ nodes.find(n => n.id === value)?.hostname }} ({{ nodes.find(n => n.id === value)?.ip }})</span>
+                  </template>
+                  <template #option="{ option }">
+                    <div class="flex justify-between items-center w-full">
+                      <span class="font-medium">{{ option.hostname }}</span>
+                      <span class="text-gray-400 text-xs ml-2">{{ option.ip }}</span>
+                    </div>
+                  </template>
+                </Select>
+
+                <Select
+                  v-else
+                  v-model="formData.tags"
+                  :options="availableTags"
+                  multiple
+                  filterable
+                  placeholder="选择匹配标签"
+                  :loading="loadingTags"
+                  class="target-select flex-1"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-24 gap-6 mb-4">
+              <div class="col-span-10">
+                <div class="flex flex-col gap-1">
+                  <label class="font-medium text-sm">超时限制 (s)</label>
+                  <InputNumber v-model="formData.timeout" :min="1" :max="86400" :step="60" showButtons buttonLayout="horizontal" incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus" class="w-full" />
+                </div>
+              </div>
+              <div class="col-span-14">
+                <div class="flex flex-col gap-1">
+                  <label class="font-medium text-sm">严格模式</label>
+                  <div class="strict-wrap">
+                    <ToggleSwitch v-model="formData.strict_mode" />
+                    <i class="pi pi-question-circle help-mini cursor-help" v-tooltip.top="'启用：命令失败立即终止\n禁用：继续执行后续命令'"></i>
+                    <span class="field-hint">开启后脚本遇错即停</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-1 mb-4">
+              <label class="font-medium text-sm">执行脚本 <span class="text-red-500">*</span></label>
+              <div class="command-editor-wrapper">
+                <Codemirror
+                  v-model:value="formData.command"
+                  :options="cmOptions"
+                  :placeholder="'输入 Shell 脚本...'"
+                  :height="'240px'"
+                />
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-1 mb-4">
+              <label class="font-medium text-sm">环境变量</label>
+              <div class="env-container">
+                <div v-for="(envVar, index) in formData.env" :key="index" class="env-row">
+                  <InputText v-model="envVar.key" placeholder="Key" class="w-44" />
+                  <span class="env-eq">=</span>
+                  <InputText v-model="envVar.value" placeholder="Value" class="flex-1" />
+                  <Button icon="pi pi-trash" severity="danger" text rounded size="small" @click="removeEnv(index)" />
+                </div>
+                <Button icon="pi pi-plus" severity="info" text size="small" @click="addEnv" label="添加变量" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div class="form-actions">
+            <Button severity="secondary" @click="cancel" label="取消" />
+            <Button severity="info" @click="save" label="保存" />
+          </div>
         </div>
-      </el-form>
-    </el-card>
+      </template>
+    </Card>
   </div>
 </template>
 
@@ -616,13 +570,13 @@ onMounted(() => {
   border: 1px solid #e2e8f0;
 }
 
+.form-content {
+  padding: 0;
+}
+
 .form-section {
   padding: 16px 0;
   border-bottom: 1px solid #f1f5f9;
-}
-
-.form-section :deep(.el-form-item) {
-  margin-bottom: 16px;
 }
 
 .form-section:last-of-type {
@@ -674,17 +628,6 @@ onMounted(() => {
   flex: 1;
 }
 
-.node-option {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.node-ip {
-  color: #94a3b8;
-  font-size: 11px;
-}
-
 .strict-wrap {
   display: flex;
   align-items: center;
@@ -731,10 +674,6 @@ onMounted(() => {
   align-items: center;
 }
 
-.cron-part :deep(.el-input__inner) {
-  text-align: center;
-}
-
 .part-label {
   font-size: 12px;
   color: #64748b;
@@ -764,14 +703,6 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
-}
-
-.help-icon {
-  margin-left: 8px;
-  vertical-align: middle;
-  color: #94a3b8;
-  cursor: help;
-  font-size: 16px;
 }
 
 .command-editor-wrapper {

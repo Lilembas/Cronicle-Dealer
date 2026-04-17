@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
+import { showToast } from '@/utils/toast'
+import InputText from 'primevue/inputtext'
+import Password from 'primevue/password'
+import Button from 'primevue/button'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+
 
 const loginForm = ref({
   username: 'admin',
@@ -18,7 +21,7 @@ const loading = ref(false)
 
 const handleLogin = async () => {
   if (!loginForm.value.username || !loginForm.value.password) {
-    ElMessage.warning('请输入用户名和密码')
+    showToast({ severity: 'warn', summary: '提示', detail: '请输入用户名和密码', life: 3000 })
     return
   }
 
@@ -38,13 +41,12 @@ const handleLogin = async () => {
       fullName: resp.user.full_name,
     })
 
-    ElMessage.success('登录成功')
-    
-    // 使用 nextTick 确保状态更新后再跳转
+    showToast({ severity: 'success', summary: '登录成功', life: 3000 })
+
     await nextTick()
     await router.push('/dashboard')
   } catch {
-    ElMessage.error('登录失败，请检查用户名和密码')
+    showToast({ severity: 'error', summary: '登录失败', detail: '请检查用户名和密码', life: 5000 })
   } finally {
     loading.value = false
   }
@@ -61,39 +63,39 @@ const handleLogin = async () => {
       </div>
 
       <!-- 登录表单 -->
-      <el-form :model="loginForm" @submit.prevent="handleLogin">
-        <el-form-item>
-          <el-input
-            v-model="loginForm.username"
-            :prefix-icon="User"
-            placeholder="用户名"
-            size="large"
-          />
-        </el-form-item>
+      <form @submit.prevent="handleLogin">
+        <div class="mb-4">
+          <span class="p-input-icon-left w-full">
+            <i class="pi pi-user" />
+            <InputText v-model="loginForm.username" placeholder="用户名" class="w-full" />
+          </span>
+        </div>
 
-        <el-form-item>
-          <el-input
-            v-model="loginForm.password"
-            :prefix-icon="Lock"
-            type="password"
-            placeholder="密码"
-            size="large"
-            @keyup.enter="handleLogin"
-          />
-        </el-form-item>
+        <div class="mb-4">
+          <span class="p-input-icon-left w-full">
+            <i class="pi pi-lock" />
+            <Password
+              v-model="loginForm.password"
+              placeholder="密码"
+              :feedback="false"
+              :toggleMask="true"
+              class="w-full"
+              inputClass="w-full"
+              @keyup.enter="handleLogin"
+            />
+          </span>
+        </div>
 
-        <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
+        <div class="mb-4">
+          <Button
+            type="submit"
+            severity="info"
             :loading="loading"
-            class="w-full"
-            @click="handleLogin"
-          >
-            登录
-          </el-button>
-        </el-form-item>
-      </el-form>
+            class="w-full login-btn"
+            label="登录"
+          />
+        </div>
+      </form>
 
       <!-- 提示信息 -->
       <div class="text-center text-sm text-gray-500 mt-6">
@@ -104,12 +106,11 @@ const handleLogin = async () => {
 </template>
 
 <style scoped>
-.el-button--primary {
+.login-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
 }
-
-.el-button--primary:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+.login-btn:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%) !important;
 }
 </style>

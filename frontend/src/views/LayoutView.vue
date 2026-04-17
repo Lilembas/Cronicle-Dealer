@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { SwitchButton } from '@element-plus/icons-vue'
+import { showToast } from '@/utils/toast'
+import Button from 'primevue/button'
+import Menu from 'primevue/menu'
 import {
   Home,
   Calendar,
@@ -18,7 +19,7 @@ const authStore = useAuthStore()
 
 const timeNow = ref(new Date().toLocaleTimeString())
 let intervalId: number | null = null
-let isMounted = false // 添加挂载状态标志
+let isMounted = false
 
 // Tab 配置 - 使用 lucide-vue-next 图标组件
 const tabs = ref([
@@ -30,44 +31,49 @@ const tabs = ref([
 ])
 
 const activeTab = ref('')
+const menu = ref()
 
-// 更新时间 - 添加安全检查
+const userMenuItems = ref([
+  {
+    label: '退出登录',
+    icon: 'pi pi-sign-out',
+    command: handleLogout
+  }
+])
+
 function updateTime() {
-  if (isMounted) { // 只在组件仍然挂载时更新
+  if (isMounted) {
     timeNow.value = new Date().toLocaleTimeString()
   }
 }
 
-// 退出登录
 function handleLogout() {
-  ElMessage.success('已退出登录')
+  showToast({ severity: 'success', summary: '已退出登录', life: 3000 })
   authStore.logout()
   router.push('/login')
 }
 
-// Tab 切换
 function switchTab(tabId: string) {
   activeTab.value = tabId
   router.push(tabId)
 }
 
 onMounted(() => {
-  isMounted = true // 设置挂载标志
+  isMounted = true
   intervalId = setInterval(updateTime, 500) as unknown as number
   activeTab.value = route.path
 })
 
 onUnmounted(() => {
-  isMounted = false // 清除挂载标志
+  isMounted = false
   if (intervalId !== null) {
     clearInterval(intervalId)
     intervalId = null
   }
 })
 
-// 监听路由变化
 router.afterEach((to) => {
-  if (isMounted) { // 只在组件仍然挂载时更新
+  if (isMounted) {
     activeTab.value = to.path
   }
 })
@@ -87,17 +93,16 @@ router.afterEach((to) => {
         <div class="h1-head-home">Cronicle-Next</div>
       </div>
       <div class="head-user">
-        <el-dropdown trigger="click">
-          <span class="user-dropdown-trigger">{{ authStore.user?.fullName || 'Admin' }}</span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="handleLogout">
-                <el-icon><SwitchButton /></el-icon>
-                <span>退出登录</span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <Button
+          text
+          severity="secondary"
+          class="user-dropdown-trigger"
+          @click="menu.toggle($event)"
+        >
+          {{ authStore.user?.fullName || 'Admin' }}
+          <i class="pi pi-chevron-down ml-2" />
+        </Button>
+        <Menu ref="menu" :model="userMenuItems" :popup="true" />
       </div>
     </div>
 

@@ -2,13 +2,16 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { shellApi, nodesApi, eventsApi, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { VideoPlay, CircleClose, Delete, Loading, QuestionFilled, SwitchButton, Download } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { showToast } from '@/utils/toast'
+import Button from 'primevue/button'
+import Tag from 'primevue/tag'
+import Card from 'primevue/card'
+import Select from 'primevue/select'
+import Checkbox from 'primevue/checkbox'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
 import 'codemirror/mode/shell/shell.js'
 
-// 状态管理
 const command = ref('')
 const isExecuting = ref(false)
 const currentEventId = ref('')
@@ -17,14 +20,12 @@ const exitCode = ref<number>(0)
 const strictMode = ref(false)
 const wsStore = useWebSocketStore()
 
-// 目标服务器
 const selectedNodeId = ref('')
 const nodes = ref<Node[]>([])
 const loadingNodes = ref(false)
 
-// CodeMirror 配置
 const cmOptions = {
-  mode: 'text/x-sh',  // Shell 模式
+  mode: 'text/x-sh',
   theme: 'default',
   lineNumbers: false,
   autofocus: true,
@@ -32,12 +33,10 @@ const cmOptions = {
   tabSize: 2,
 }
 
-// CodeMirror 变化处理
 const onCommandChange = (value: string) => {
   command.value = value
 }
 
-// 快速命令示例
 const quickCommands = [
   { name: '当前目录', cmd: 'pwd' },
   { name: '列出文件', cmd: 'ls -la' },
@@ -49,82 +48,63 @@ const quickCommands = [
   { name: 'CPU 信息', cmd: 'cat /proc/cpuinfo | grep "model name" | head -1' },
 ]
 
-// 组件挂载时连接WebSocket
 onMounted(async () => {
-  // 加载节点列表
   await loadNodes()
 
-  // 注册消息处理器
   wsStore.onMessage('log', handleLogMessage)
   wsStore.onMessage('history_log', handleHistoryLog)
   wsStore.onMessage('task_status', handleTaskStatus)
   wsStore.onMessage('error', handleErrorMessage)
 })
 
-// 加载节点列表（过滤掉 master 节点）
 const loadNodes = async () => {
   try {
     loadingNodes.value = true
     const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
-    // 过滤掉 master 节点（tags 为 master 或包含 master）
     nodes.value = allNodes.filter((node: Node) => node.tags !== 'master' && !node.tags?.includes('master'))
 
-
-    // 单节点时自动选中
     if (nodes.value.length === 1) {
       selectedNodeId.value = nodes.value[0].id
     }
-  } catch (error) {
-    console.error('加载节点列表失败:', error)
-    ElMessage.warning('加载节点列表失败，请检查服务器连接')
+  } catch {
+    showToast({ severity: 'warn', summary: '加载节点列表失败，请检查服务器连接', life: 3000 })
   } finally {
     loadingNodes.value = false
   }
 }
 
-// 组件卸载时清理
 onUnmounted(() => {
-  // 取消订阅当前任务
   if (currentEventId.value) {
     wsStore.leaveRoom(`event:${currentEventId.value}`)
   }
 
-  // 移除消息处理器
   wsStore.offMessage('log', handleLogMessage)
   wsStore.offMessage('history_log', handleHistoryLog)
   wsStore.offMessage('task_status', handleTaskStatus)
   wsStore.offMessage('error', handleErrorMessage)
 })
 
-// 处理实时日志消息
 const handleLogMessage = (data: any) => {
   if (data.event_id === currentEventId.value) {
-    // 追加新日志内容
     logs.value += data.content
   }
 }
 
-// 处理历史日志消息
 const handleHistoryLog = (data: any) => {
   if (data.event_id === currentEventId.value) {
-    // 加载完整历史日志
     if (data.logs) {
       logs.value = data.logs
     }
   }
 }
 
-// 处理任务状态变化
 const handleTaskStatus = async (data: any) => {
   if (data.event_id === currentEventId.value && data.status !== 'running') {
-    // 任务完成
     isExecuting.value = false
     exitCode.value = data.exit_code
 
-    // 取消订阅
     wsStore.leaveRoom(`event:${currentEventId.value}`)
 
-    // 从后端重新加载完整日志（补全 WebSocket 断连期间丢失的日志）
     try {
       const res = (await shellApi.getLogs(currentEventId.value)) as any
       if (res.logs) {
@@ -132,30 +112,26 @@ const handleTaskStatus = async (data: any) => {
       }
     } catch {}
 
-    // 显示完成消息
     if (data.exit_code === 0) {
-      ElMessage.success('命令执行成功')
+      showToast({ severity: 'success', summary: '命令执行成功', life: 3000 })
     } else {
-      ElMessage.warning(`命令执行完成，退出码: ${data.exit_code}`)
+      showToast({ severity: 'warn', summary: `命令执行完成，退出码: ${data.exit_code}`, life: 3000 })
     }
   }
 }
 
-// 处理错误消息
 const handleErrorMessage = (data: any) => {
-  ElMessage.error('WebSocket错误: ' + data.message)
+  showToast({ severity: 'error', summary: 'WebSocket错误', detail: data.message, life: 5000 })
 }
 
-// 执行命令
 const executeCommand = async () => {
   if (!command.value.trim()) {
-    ElMessage.warning('请输入命令')
+    showToast({ severity: 'warn', summary: '请输入命令', life: 3000 })
     return
   }
 
-  // 检查是否选择了服务器（如果有多个节点）
   if (nodes.value.length > 1 && !selectedNodeId.value) {
-    ElMessage.warning('请选择执行服务器')
+    showToast({ severity: 'warn', summary: '请选择执行服务器', life: 3000 })
     return
   }
 
@@ -164,7 +140,6 @@ const executeCommand = async () => {
     logs.value = ''
     exitCode.value = 0
 
-    // 提交命令执行请求
     const response = await shellApi.execute({
       command: command.value,
       node_id: selectedNodeId.value,
@@ -172,45 +147,36 @@ const executeCommand = async () => {
       strict_mode: strictMode.value,
     })
 
-    // 处理API响应 - axios拦截器已经返回了response.data
     const result = (response as any).data || response
     currentEventId.value = result.event_id
 
-    console.log('命令已提交，事件ID:', currentEventId.value)
-
-    // 订阅任务日志
     wsStore.joinRoom(`event:${currentEventId.value}`)
   } catch (error: any) {
-    console.error('执行命令失败:', error)
-    ElMessage.error('执行命令失败: ' + (error.response?.data?.error || error.message))
+    showToast({ severity: 'error', summary: '执行命令失败', detail: error.response?.data?.error || error.message, life: 5000 })
     isExecuting.value = false
   }
 }
 
-// 中断执行
 const abortCommand = async () => {
   if (!currentEventId.value) return
   try {
     await eventsApi.abort(currentEventId.value)
-    ElMessage.success('已发送中断请求')
+    showToast({ severity: 'success', summary: '已发送中断请求', life: 3000 })
   } catch (error: any) {
-    ElMessage.error('中断失败: ' + (error.response?.data?.error || error.message))
+    showToast({ severity: 'error', summary: '中断失败', detail: error.response?.data?.error || error.message, life: 5000 })
   }
 }
 
-// 清空输出
 const clearOutput = () => {
   logs.value = ''
   exitCode.value = 0
   currentEventId.value = ''
 }
 
-// 使用快速命令
 const useQuickCommand = (cmd: string) => {
   command.value = cmd
 }
 
-// 获取节点名称
 const getNodeName = (nodeId: string) => {
   const node = nodes.value.find(n => n.id === nodeId)
   return node ? `${node.hostname} (${node.ip})` : nodeId
@@ -220,15 +186,13 @@ const LOG_LIMIT = 1000
 
 const totalLines = computed(() => {
   if (!logs.value) return 0
-  // 只计完整行（以 \n 结尾的）
   const text = logs.value.endsWith('\n') ? logs.value : logs.value.slice(0, logs.value.lastIndexOf('\n') + 1)
   if (!text) return 0
-  return text.split('\n').length - 1 // 末尾 \n 产生一个空元素
+  return text.split('\n').length - 1
 })
 
 const displayLogs = computed(() => {
   if (!logs.value) return ''
-  // 截断到上一个完整行（去掉末尾不完整的行）
   let text = logs.value
   if (!text.endsWith('\n')) {
     const lastNL = text.lastIndexOf('\n')
@@ -236,11 +200,10 @@ const displayLogs = computed(() => {
     text = text.slice(0, lastNL)
   }
   const lines = text.split('\n')
-  lines.pop() // 末尾 \n 产生的空元素
+  lines.pop()
   if (lines.length <= LOG_LIMIT) return lines.join('\n')
   return lines.slice(-LOG_LIMIT).join('\n')
 })
-
 
 const logSizeText = computed(() => {
   const bytes = new Blob([logs.value]).size
@@ -262,7 +225,7 @@ const downloadLog = async () => {
     a.click()
     URL.revokeObjectURL(url)
   } catch {
-    ElMessage.error('下载日志失败')
+    showToast({ severity: 'error', summary: '下载日志失败', life: 5000 })
   }
 }
 </script>
@@ -271,170 +234,172 @@ const downloadLog = async () => {
   <div class="shell-page">
     <div class="shell-container">
       <!-- 无节点提示 -->
-      <el-card v-if="!loadingNodes && nodes.length === 0" class="command-card" shadow="never">
-        <div class="no-nodes">
-          <el-icon :size="48"><CircleClose /></el-icon>
-          <h3>暂无可用服务器</h3>
-          <p>请确保至少有一个 Worker 节点在线</p>
-          <el-button type="primary" @click="loadNodes">重新加载</el-button>
-        </div>
-      </el-card>
-
-      <!-- 命令输入区域 -->
-      <el-card v-else class="command-card" shadow="never">
-        <template #header>
-          <div class="card-header">
-            <h3 class="card-title">命令输入</h3>
-            <el-tag v-if="isExecuting" type="warning">
-              <el-icon class="is-loading"><Loading /></el-icon>
-              执行中...
-            </el-tag>
+      <Card v-if="!loadingNodes && nodes.length === 0" class="command-card">
+        <template #content>
+          <div class="no-nodes">
+            <i class="pi pi-times-circle text-5xl text-gray-300 mb-4 block"></i>
+            <h3>暂无可用服务器</h3>
+            <p>请确保至少有一个 Worker 节点在线</p>
+            <Button severity="info" @click="loadNodes" label="重新加载" />
           </div>
         </template>
+      </Card>
 
-        <!-- 执行配置行 -->
-        <div class="shell-controls">
-          <div v-if="nodes.length > 0" class="control-item">
-            <span class="control-label">目标服务器:</span>
-            <el-select
-              v-model="selectedNodeId"
-              placeholder="选择服务器"
-              :loading="loadingNodes"
-              :disabled="isExecuting"
-              style="width: 280px"
-            >
-              <el-option
-                v-for="node in nodes"
-                :key="node.id"
-                :label="`${node.hostname} (${node.ip})`"
-                :value="node.id"
+      <!-- 命令输入区域 -->
+      <Card v-else class="command-card">
+        <template #title>
+          <div class="card-header">
+            <h3 class="card-title">命令输入</h3>
+            <Tag v-if="isExecuting" severity="warn">
+              <i class="pi pi-spin pi-spinner mr-1"></i>
+              执行中...
+            </Tag>
+          </div>
+        </template>
+        <template #content>
+          <!-- 执行配置行 -->
+          <div class="shell-controls">
+            <div v-if="nodes.length > 0" class="control-item">
+              <span class="control-label">目标服务器:</span>
+              <Select
+                v-model="selectedNodeId"
+                :options="nodes"
+                optionLabel="hostname"
+                optionValue="id"
+                placeholder="选择服务器"
+                :loading="loadingNodes"
+                :disabled="isExecuting"
+                class="w-72"
               >
-                <div style="display: flex; justify-content: space-between; align-items: center">
-                  <div>
-                    <span style="font-weight: 500">{{ node.hostname }}</span>
-                    <span style="color: #8492a6; font-size: 11px; margin-left: 8px">{{ node.ip }}</span>
+                <template #value="{ value }">
+                  <span v-if="value">{{ nodes.find(n => n.id === value)?.hostname }} ({{ nodes.find(n => n.id === value)?.ip }})</span>
+                </template>
+                <template #option="{ option }">
+                  <div class="flex justify-between items-center w-full">
+                    <div>
+                      <span class="font-medium">{{ option.hostname }}</span>
+                      <span class="text-gray-400 text-xs ml-2">{{ option.ip }}</span>
+                    </div>
+                    <Tag :value="`负载: ${option.running_jobs}`" :severity="option.running_jobs > 0 ? 'warn' : 'success'" />
                   </div>
-                  <el-tag size="small" :type="node.running_jobs > 0 ? 'warning' : 'success'">
-                    负载: {{ node.running_jobs }}
-                  </el-tag>
-                </div>
-              </el-option>
-            </el-select>
+                </template>
+              </Select>
+            </div>
+
+            <div class="control-item">
+              <div class="flex items-center gap-2">
+                <Checkbox v-model="strictMode" inputId="strictMode" binary />
+                <label for="strictMode" class="text-sm">严格模式</label>
+                <i class="pi pi-question-circle help-icon cursor-help" v-tooltip.top="'开启后，命令序列中任何一个命令失败都会立即停止执行'"></i>
+              </div>
+            </div>
           </div>
 
-          <div class="control-item">
-            <el-checkbox v-model="strictMode">
-              严格模式
-              <el-tooltip content="开启后，命令序列中任何一个命令失败都会立即停止执行" placement="top">
-                <el-icon class="help-icon"><QuestionFilled /></el-icon>
-              </el-tooltip>
-            </el-checkbox>
+          <!-- 命令输入框 -->
+          <div class="command-input-group">
+            <Codemirror
+              v-model:value="command"
+              :options="cmOptions"
+              :placeholder="'输入要执行的 Shell 命令'"
+              :height="'240px'"
+              @change="onCommandChange"
+            />
+            <div class="command-actions">
+              <Button
+                v-if="isExecuting"
+                severity="danger"
+                icon="pi pi-stop-circle"
+                @click="abortCommand"
+                label="中断"
+              />
+              <Button
+                severity="info"
+                icon="pi pi-play"
+                :loading="isExecuting"
+                :disabled="!command.trim()"
+                @click="executeCommand"
+                label="执行"
+              />
+            </div>
           </div>
-        </div>
 
-        <!-- 命令输入框 -->
-        <div class="command-input-group">
-          <Codemirror
-            v-model:value="command"
-            :options="cmOptions"
-            :placeholder="'输入要执行的 Shell 命令'"
-            :height="'240px'"
-            @change="onCommandChange"
-          />
-          <div class="command-actions">
-            <el-button
-              v-if="isExecuting"
-              type="danger"
-              :icon="SwitchButton"
-              @click="abortCommand"
-            >
-              中断
-            </el-button>
-            <el-button
-              type="primary"
-              :icon="VideoPlay"
-              :loading="isExecuting"
-              :disabled="!command.trim()"
-              @click="executeCommand"
-            >
-              执行
-            </el-button>
+          <!-- 快速命令 -->
+          <div class="quick-commands">
+            <div class="quick-commands-label">快速命令:</div>
+            <div class="quick-commands-list">
+              <Button
+                v-for="cmd in quickCommands"
+                :key="cmd.cmd"
+                size="small"
+                text
+                severity="secondary"
+                :disabled="isExecuting"
+                @click="useQuickCommand(cmd.cmd)"
+              >
+                {{ cmd.name }}
+              </Button>
+            </div>
           </div>
-        </div>
-
-        <!-- 快速命令 -->
-        <div class="quick-commands">
-          <div class="quick-commands-label">快速命令:</div>
-          <div class="quick-commands-list">
-            <el-button
-              v-for="cmd in quickCommands"
-              :key="cmd.cmd"
-              size="small"
-              :disabled="isExecuting"
-              @click="useQuickCommand(cmd.cmd)"
-            >
-              {{ cmd.name }}
-            </el-button>
-          </div>
-        </div>
-      </el-card>
+        </template>
+      </Card>
 
       <!-- 输出区域 -->
-      <el-card class="output-card" shadow="never">
-        <template #header>
+      <Card class="output-card">
+        <template #title>
           <div class="card-header">
             <div class="card-header-left">
               <h3 class="card-title">执行输出</h3>
               <span v-if="logs" class="logs-stats">{{ totalLines }} 行 · {{ logSizeText }}</span>
             </div>
             <div class="card-actions">
-              <el-tag v-if="exitCode !== 0" type="danger">退出码: {{ exitCode }}</el-tag>
-              <el-tag v-else-if="logs" type="success">退出码: 0</el-tag>
-              <el-button
+              <Tag v-if="exitCode !== 0" severity="danger">退出码: {{ exitCode }}</Tag>
+              <Tag v-else-if="logs" severity="success">退出码: 0</Tag>
+              <Button
                 v-if="!isExecuting && logs && currentEventId"
-                type="primary"
+                severity="info"
                 size="small"
-                :icon="Download"
+                icon="pi pi-download"
                 @click="downloadLog"
-              >
-                下载
-              </el-button>
-              <el-button
-                :icon="Delete"
+                label="下载"
+              />
+              <Button
+                icon="pi pi-trash"
                 size="small"
+                text
+                severity="secondary"
                 :disabled="isExecuting || !logs"
                 @click="clearOutput"
-              >
-                清空
-              </el-button>
+                label="清空"
+              />
             </div>
           </div>
         </template>
-
-        <!-- 日志输出 -->
-        <div class="logs-container">
-          <pre v-if="displayLogs" class="logs-content">{{ displayLogs }}</pre>
-          <div v-else class="logs-empty">
-            <el-icon :size="48"><CircleClose /></el-icon>
-            <p>暂无输出</p>
-            <p class="logs-empty-hint">输入命令并点击执行按钮查看结果</p>
+        <template #content>
+          <!-- 日志输出 -->
+          <div class="logs-container">
+            <pre v-if="displayLogs" class="logs-content">{{ displayLogs }}</pre>
+            <div v-else class="logs-empty">
+              <i class="pi pi-times-circle text-5xl text-gray-300"></i>
+              <p>暂无输出</p>
+              <p class="logs-empty-hint">输入命令并点击执行按钮查看结果</p>
+            </div>
           </div>
-        </div>
 
-        <!-- 状态信息 -->
-        <div v-if="currentEventId" class="status-bar">
-          <span class="status-item">
-            <strong>Event ID:</strong> {{ currentEventId }}
-          </span>
-          <span v-if="selectedNodeId" class="status-item">
-            <strong>执行节点:</strong> {{ getNodeName(selectedNodeId) }}
-          </span>
-          <span v-if="isExecuting" class="status-item status-running">
-            <el-icon class="is-loading"><Loading /></el-icon>
-            正在执行...
-          </span>
-        </div>
-      </el-card>
+          <!-- 状态信息 -->
+          <div v-if="currentEventId" class="status-bar">
+            <span class="status-item">
+              <strong>Event ID:</strong> {{ currentEventId }}
+            </span>
+            <span v-if="selectedNodeId" class="status-item">
+              <strong>执行节点:</strong> {{ getNodeName(selectedNodeId) }}
+            </span>
+            <span v-if="isExecuting" class="status-item status-running">
+              <i class="pi pi-spin pi-spinner"></i>
+              正在执行...
+            </span>
+          </div>
+        </template>
+      </Card>
     </div>
   </div>
 </template>
@@ -451,7 +416,6 @@ const downloadLog = async () => {
   gap: 20px;
 }
 
-/* 命令输入卡片 */
 .command-card {
   border-radius: 16px;
   border: 1px solid #e2e8f0;
@@ -465,11 +429,6 @@ const downloadLog = async () => {
   padding: 60px 20px;
   text-align: center;
   color: #64748b;
-}
-
-.no-nodes .el-icon {
-  margin-bottom: 16px;
-  opacity: 0.5;
 }
 
 .no-nodes h3 {
@@ -566,10 +525,7 @@ const downloadLog = async () => {
 }
 
 .help-icon {
-  margin-left: 4px;
-  vertical-align: middle;
   color: #94a3b8;
-  cursor: help;
 }
 
 .quick-commands {
@@ -592,7 +548,6 @@ const downloadLog = async () => {
   gap: 8px;
 }
 
-/* 输出卡片 */
 .output-card {
   border-radius: 16px;
   border: 1px solid #e2e8f0;
@@ -628,10 +583,6 @@ const downloadLog = async () => {
   gap: 12px;
 }
 
-.logs-empty .el-icon {
-  opacity: 0.5;
-}
-
 .logs-empty-hint {
   font-size: 13px;
   color: #94a3b8;
@@ -657,7 +608,6 @@ const downloadLog = async () => {
   color: #3b82f6;
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
   .shell-page {
     padding: 16px;

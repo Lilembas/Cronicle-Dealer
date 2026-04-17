@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { statsApi, nodesApi } from '@/api'
-import { RefreshRight, CircleCheck, CircleClose, Monitor, Clock } from '@element-plus/icons-vue'
+import Button from 'primevue/button'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Tag from 'primevue/tag'
+import ProgressBar from 'primevue/progressbar'
+import Card from 'primevue/card'
+import ProgressSpinner from 'primevue/progressspinner'
 import { useWebSocketStore } from '@/stores/websocket'
 
-// 本地状态管理
 const stats = ref<any>(null)
 const nodes = ref<any[]>([])
 const statsLoading = ref(true)
 const nodesLoading = ref(true)
 const wsStore = useWebSocketStore()
 
-// 初始加载数据
 const loadData = async () => {
   try {
     statsLoading.value = true
     nodesLoading.value = true
 
-    // 并行加载统计数据和节点列表
     const [statsData, nodesData] = await Promise.all([
       statsApi.get(),
       nodesApi.list()
@@ -33,16 +36,13 @@ const loadData = async () => {
   }
 }
 
-// 刷新数据
 const refetchStats = async () => {
   await loadData()
 }
 
-// 更新节点列表中的单个节点
 const updateNode = (nodeData: any) => {
   const index = nodes.value.findIndex(n => n.id === nodeData.node_id)
   if (index !== -1) {
-    // 更新现有节点
     nodes.value[index] = {
       ...nodes.value[index],
       status: nodeData.status,
@@ -51,48 +51,37 @@ const updateNode = (nodeData: any) => {
       running_jobs: nodeData.running_jobs
     }
   } else {
-    // 添加新节点（重新加载整个列表）
     loadData()
   }
 }
 
-// 处理任务状态变化
 const handleTaskStatus = (data: any) => {
-  // 当任务状态变化时，刷新统计数据
   statsApi.get().then(statsData => {
     stats.value = statsData
   })
 }
 
-// 处理节点状态变化
 const handleNodeStatus = (data: any) => {
   updateNode(data)
-  // 同时刷新统计数据（在线/离线节点数可能变化）
   statsApi.get().then(statsData => {
     stats.value = statsData
   })
 }
 
-// 进度条颜色
 const getProgressColor = (percentage: number) => {
   if (percentage < 60) return '#10b981'
   if (percentage < 80) return '#f59e0b'
   return '#ef4444'
 }
 
-// 组件挂载
 onMounted(async () => {
-  // 加载初始数据
   await loadData()
 
-  // 注册消息处理器
   wsStore.onMessage('task_status', handleTaskStatus)
   wsStore.onMessage('node_status', handleNodeStatus)
 })
 
-// 组件卸载
 onUnmounted(() => {
-  // 移除消息处理器
   wsStore.offMessage('task_status', handleTaskStatus)
   wsStore.offMessage('node_status', handleNodeStatus)
 })
@@ -102,70 +91,72 @@ onUnmounted(() => {
   <div class="dashboard">
     <!-- 页面操作 -->
     <div class="page-header">
-      <el-button
-        type="primary"
-        :icon="RefreshRight"
+      <Button
+        severity="info"
+        icon="pi pi-refresh"
         @click="refetchStats()"
         class="refresh-btn"
-      >
-        刷新
-      </el-button>
+        label="刷新"
+      />
     </div>
 
     <!-- 统计卡片网格 -->
-    <div class="stats-grid" v-loading="statsLoading">
-      <!-- 总任务数 -->
-      <div class="stat-card">
-        <div class="stat-card-inner">
-          <div class="stat-icon stat-icon-blue">
-            <el-icon :size="28"><Clock /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-label">总任务数</div>
-            <div class="stat-value">{{ stats?.total_jobs || 0 }}</div>
-            <div class="stat-sub">已启用: {{ stats?.enabled_jobs || 0 }}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 成功执行 -->
-      <div class="stat-card">
-        <div class="stat-card-inner">
-          <div class="stat-icon stat-icon-green">
-            <el-icon :size="28"><CircleCheck /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-label">成功执行</div>
-            <div class="stat-value stat-value-success">{{ stats?.success_events || 0 }}</div>
-            <div class="stat-sub">总执行: {{ stats?.total_events || 0 }}</div>
+    <div class="relative">
+      <ProgressSpinner v-if="statsLoading" style="width:40px;height:40px" strokeWidth="4" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10" />
+      <div class="stats-grid" :class="{ 'opacity-50 pointer-events-none': statsLoading }">
+        <!-- 总任务数 -->
+        <div class="stat-card">
+          <div class="stat-card-inner">
+            <div class="stat-icon stat-icon-blue">
+              <i class="pi pi-clock" style="font-size: 28px"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">总任务数</div>
+              <div class="stat-value">{{ stats?.total_jobs || 0 }}</div>
+              <div class="stat-sub">已启用: {{ stats?.enabled_jobs || 0 }}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 失败执行 -->
-      <div class="stat-card">
-        <div class="stat-card-inner">
-          <div class="stat-icon stat-icon-red">
-            <el-icon :size="28"><CircleClose /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-label">失败执行</div>
-            <div class="stat-value stat-value-failed">{{ stats?.failed_events || 0 }}</div>
-            <div class="stat-sub">运行中: {{ stats?.running_events || 0 }}</div>
+        <!-- 成功执行 -->
+        <div class="stat-card">
+          <div class="stat-card-inner">
+            <div class="stat-icon stat-icon-green">
+              <i class="pi pi-check-circle" style="font-size: 28px"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">成功执行</div>
+              <div class="stat-value stat-value-success">{{ stats?.success_events || 0 }}</div>
+              <div class="stat-sub">总执行: {{ stats?.total_events || 0 }}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 在线节点 -->
-      <div class="stat-card">
-        <div class="stat-card-inner">
-          <div class="stat-icon stat-icon-purple">
-            <el-icon :size="28"><Monitor /></el-icon>
+        <!-- 失败执行 -->
+        <div class="stat-card">
+          <div class="stat-card-inner">
+            <div class="stat-icon stat-icon-red">
+              <i class="pi pi-times-circle" style="font-size: 28px"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">失败执行</div>
+              <div class="stat-value stat-value-failed">{{ stats?.failed_events || 0 }}</div>
+              <div class="stat-sub">运行中: {{ stats?.running_events || 0 }}</div>
+            </div>
           </div>
-          <div class="stat-content">
-            <div class="stat-label">在线节点</div>
-            <div class="stat-value stat-value-nodes">{{ stats?.online_nodes || 0 }}</div>
-            <div class="stat-sub">离线: {{ stats?.offline_nodes || 0 }}</div>
+        </div>
+
+        <!-- 在线节点 -->
+        <div class="stat-card">
+          <div class="stat-card-inner">
+            <div class="stat-icon stat-icon-purple">
+              <i class="pi pi-desktop" style="font-size: 28px"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-label">在线节点</div>
+              <div class="stat-value stat-value-nodes">{{ stats?.online_nodes || 0 }}</div>
+              <div class="stat-sub">离线: {{ stats?.offline_nodes || 0 }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -173,68 +164,73 @@ onUnmounted(() => {
 
     <!-- 节点状态列表 -->
     <div class="nodes-section">
-      <el-card class="nodes-card" shadow="never">
-        <template #header>
+      <Card class="nodes-card">
+        <template #title>
           <div class="card-header">
             <h3 class="card-title">节点状态</h3>
-            <el-tag size="small">{{ nodes?.length || 0 }} 个节点</el-tag>
+            <Tag :value="`${nodes?.length || 0} 个节点`" severity="info" />
           </div>
         </template>
-
-        <div v-loading="nodesLoading">
-          <el-table
-            :data="nodes || []"
-            stripe
+        <template #content>
+          <DataTable
+            :value="nodes || []"
+            stripedRows
             class="nodes-table"
-            :empty-text="'暂无节点数据'"
+            :loading="nodesLoading"
+            emptyMessage="暂无节点数据"
           >
-            <el-table-column prop="hostname" label="主机名" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="ip" label="IP 地址" width="140" />
-            <el-table-column label="状态" width="100" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.status === 'online' ? 'success' : 'info'" size="small">
-                  {{ row.status === 'online' ? '在线' : '离线' }}
-                </el-tag>
+            <Column field="hostname" header="主机名" style="min-width: 160px">
+              <template #body="{ data }">
+                <span class="truncate block">{{ data.hostname }}</span>
               </template>
-            </el-table-column>
-            <el-table-column label="CPU 使用率" width="160">
-              <template #default="{ row }">
+            </Column>
+            <Column field="ip" header="IP 地址" style="width: 140px" />
+            <Column header="状态" style="width: 100px" alignHeader="center" align="center">
+              <template #body="{ data }">
+                <Tag :value="data.status === 'online' ? '在线' : '离线'" :severity="data.status === 'online' ? 'success' : 'secondary'" />
+              </template>
+            </Column>
+            <Column header="CPU 使用率" style="width: 160px">
+              <template #body="{ data }">
                 <div class="progress-cell">
-                  <el-progress
-                    :percentage="Math.round(row.cpu_usage)"
-                    :color="getProgressColor(row.cpu_usage)"
-                    :stroke-width="6"
+                  <ProgressBar
+                    :value="Math.round(data.cpu_usage)"
+                    :showValue="false"
+                    style="height: 6px"
+                    :style="{ '--progress-color': getProgressColor(data.cpu_usage) }"
                   />
                 </div>
               </template>
-            </el-table-column>
-            <el-table-column label="内存使用率" width="160">
-              <template #default="{ row }">
+            </Column>
+            <Column header="内存使用率" style="width: 160px">
+              <template #body="{ data }">
                 <div class="progress-cell">
-                  <el-progress
-                    :percentage="Math.round(row.memory_percent)"
-                    :color="getProgressColor(row.memory_percent)"
-                    :stroke-width="6"
+                  <ProgressBar
+                    :value="Math.round(data.memory_percent)"
+                    :showValue="false"
+                    style="height: 6px"
+                    :style="{ '--progress-color': getProgressColor(data.memory_percent) }"
                   />
                 </div>
               </template>
-            </el-table-column>
-            <el-table-column label="磁盘使用率" width="160">
-              <template #default="{ row }">
+            </Column>
+            <Column header="磁盘使用率" style="width: 160px">
+              <template #body="{ data }">
                 <div class="progress-cell">
-                  <el-progress
-                    :percentage="Math.round(row.disk_percent)"
-                    :color="getProgressColor(row.disk_percent)"
-                    :stroke-width="6"
+                  <ProgressBar
+                    :value="Math.round(data.disk_percent)"
+                    :showValue="false"
+                    style="height: 6px"
+                    :style="{ '--progress-color': getProgressColor(data.disk_percent) }"
                   />
                 </div>
               </template>
-            </el-table-column>
-            <el-table-column prop="running_jobs" label="运行任务" width="100" align="center" />
-            <el-table-column prop="version" label="版本" width="100" />
-          </el-table>
-        </div>
-      </el-card>
+            </Column>
+            <Column field="running_jobs" header="运行任务" style="width: 100px" alignHeader="center" align="center" />
+            <Column field="version" header="版本" style="width: 100px" />
+          </DataTable>
+        </template>
+      </Card>
     </div>
   </div>
 </template>
@@ -248,7 +244,6 @@ onUnmounted(() => {
   min-height: calc(100vh - 60px);
 }
 
-/* 页面标题 */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -257,25 +252,10 @@ onUnmounted(() => {
   gap: 16px;
 }
 
-.page-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 4px 0;
-  line-height: 1.2;
-}
-
-.page-subtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin: 0;
-}
-
 .refresh-btn {
   flex-shrink: 0;
 }
 
-/* 统计卡片网格 */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -304,7 +284,6 @@ onUnmounted(() => {
   gap: 20px;
 }
 
-/* 统计图标 */
 .stat-icon {
   width: 64px;
   height: 64px;
@@ -333,7 +312,6 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
 }
 
-/* 统计内容 */
 .stat-content {
   flex: 1;
   min-width: 0;
@@ -373,7 +351,6 @@ onUnmounted(() => {
   color: #94a3b8;
 }
 
-/* 节点列表 */
 .nodes-section {
   margin-top: 24px;
 }
@@ -405,7 +382,10 @@ onUnmounted(() => {
   padding: 0 8px;
 }
 
-/* 响应式设计 */
+:deep(.p-progressbar-value) {
+  background: var(--progress-color, #10b981);
+}
+
 @media (max-width: 768px) {
   .dashboard {
     padding: 16px;
@@ -414,10 +394,6 @@ onUnmounted(() => {
   .page-header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .page-title {
-    font-size: 24px;
   }
 
   .stats-grid {
@@ -435,7 +411,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
-  .nodes-table :deep(.el-table__body-wrapper) {
+  .nodes-table :deep(.p-datatable-wrapper) {
     overflow-x: auto;
   }
 }

@@ -3,8 +3,11 @@ import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { eventsApi, shellApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { ArrowLeft, RefreshRight, Download } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { showToast } from '@/utils/toast'
+import Button from 'primevue/button'
+import Tag from 'primevue/tag'
+import Card from 'primevue/card'
+import ProgressSpinner from 'primevue/progressspinner'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,11 +22,11 @@ const eventId = () => route.params.id as string
 
 const LOG_LIMIT = 1000
 
-const getStatusType = (status: string) => {
-  const map: Record<string, any> = {
+const getStatusSeverity = (status: string) => {
+  const map: Record<string, string> = {
     success: 'success',
     failed: 'danger',
-    running: 'warning',
+    running: 'warn',
     queued: 'info',
     pending: 'info',
     aborted: 'info',
@@ -44,7 +47,6 @@ const loadLogs = async () => {
   const res = await shellApi.getLogs(id)
   logs.value = res.logs || ''
   exitCode.value = res.exit_code
-  // 如果日志内容为空但存在 error_message，将其追加到日志中展示
   if (!logs.value && res.error_message) {
     logs.value = `[错误] ${res.error_message}`
   }
@@ -52,15 +54,13 @@ const loadLogs = async () => {
 
 const totalLines = computed(() => {
   if (!logs.value) return 0
-  // 只计完整行（以 \n 结尾的）
   const text = logs.value.endsWith('\n') ? logs.value : logs.value.slice(0, logs.value.lastIndexOf('\n') + 1)
   if (!text) return 0
-  return text.split('\n').length - 1 // 末尾 \n 产生一个空元素
+  return text.split('\n').length - 1
 })
 
 const displayLogs = computed(() => {
   if (!logs.value) return ''
-  // 截断到上一个完整行（去掉末尾不完整的行）
   let text = logs.value
   if (!text.endsWith('\n')) {
     const lastNL = text.lastIndexOf('\n')
@@ -68,7 +68,7 @@ const displayLogs = computed(() => {
     text = text.slice(0, lastNL)
   }
   const lines = text.split('\n')
-  lines.pop() // 末尾 \n 产生的空元素
+  lines.pop()
   if (lines.length <= LOG_LIMIT) return lines.join('\n')
   return lines.slice(-LOG_LIMIT).join('\n')
 })
@@ -98,7 +98,7 @@ const downloadLog = async () => {
     a.click()
     URL.revokeObjectURL(url)
   } catch {
-    ElMessage.error('下载日志失败')
+    showToast({ severity: 'error', summary: '下载日志失败', life: 5000 })
   }
 }
 
@@ -107,7 +107,7 @@ const reloadAll = async () => {
     loading.value = true
     await Promise.all([loadEvent(), loadLogs()])
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || '加载日志失败')
+    showToast({ severity: 'error', summary: '加载日志失败', detail: error.response?.data?.error || '加载日志失败', life: 5000 })
   } finally {
     loading.value = false
   }
@@ -132,7 +132,6 @@ const handleTaskStatus = async (data: any) => {
     }
     if (data.status !== 'running') {
       exitCode.value = data.exit_code
-      // 任务完成后重新加载完整日志，补全 Pub/Sub 断连期间可能丢失的日志
       try {
         const res = await shellApi.getLogs(eventId())
         if (res.logs) {
@@ -161,55 +160,70 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="logs-page" v-loading="loading">
-    <div class="page-header">
-      <div class="left-area">
-        <el-button :icon="ArrowLeft" @click="router.back()">返回</el-button>
-        <h2 class="page-title">日志查看</h2>
-      </div>
-      <div class="right-area">
-        <el-button :icon="RefreshRight" @click="reloadAll">刷新</el-button>
-      </div>
+  <div class="logs-page">
+    <div v-if="loading" class="flex justify-center py-16">
+      <ProgressSpinner style="width:50px;height:50px" strokeWidth="4" />
     </div>
 
-    <el-card v-if="event" class="meta-card" shadow="never">
-      <el-descriptions :column="3" border>
-        <el-descriptions-item label="Event ID">{{ event.id }}</el-descriptions-item>
-        <el-descriptions-item label="Job ID">{{ event.job_id }}</el-descriptions-item>
-        <el-descriptions-item label="状态">
-          <el-tag size="small" :type="getStatusType(event.status)">
-            {{ event.status }}
-          </el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="节点">{{ event.node_name || event.node_id || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="退出码">{{ exitCode ?? '-' }}</el-descriptions-item>
-        <el-descriptions-item label="结束时间">{{ event.end_time ? new Date(event.end_time).toLocaleString('zh-CN') : '-' }}</el-descriptions-item>
-        <el-descriptions-item v-if="event.error_message" label="错误信息" :span="3">
-          <el-text type="danger">{{ event.error_message }}</el-text>
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-
-    <el-card class="logs-card" shadow="never">
-      <template #header>
-        <div class="logs-card-header">
-          <span class="logs-stats">
-            {{ totalLines }} 行 · {{ logSizeText }}
-          </span>
-          <el-button
-            v-if="isCompleted && logs"
-            type="primary"
-            size="small"
-            :icon="Download"
-            @click="downloadLog"
-          >
-            下载日志
-          </el-button>
+    <template v-else>
+      <div class="page-header">
+        <div class="left-area">
+          <Button icon="pi pi-arrow-left" text @click="router.back()" label="返回" />
+          <h2 class="page-title">日志查看</h2>
         </div>
-      </template>
-      <pre v-if="displayLogs" class="log-content">{{ displayLogs }}</pre>
-      <el-empty v-else description="暂无日志输出" />
-    </el-card>
+        <div class="right-area">
+          <Button icon="pi pi-refresh" text @click="reloadAll" label="刷新" />
+        </div>
+      </div>
+
+      <Card v-if="event" class="meta-card">
+        <template #content>
+          <div class="desc-grid">
+            <div class="desc-label">Event ID</div>
+            <div class="desc-value">{{ event.id }}</div>
+            <div class="desc-label">Job ID</div>
+            <div class="desc-value">{{ event.job_id }}</div>
+            <div class="desc-label">状态</div>
+            <div class="desc-value">
+              <Tag :value="event.status" :severity="getStatusSeverity(event.status)" />
+            </div>
+            <div class="desc-label">节点</div>
+            <div class="desc-value">{{ event.node_name || event.node_id || '-' }}</div>
+            <div class="desc-label">退出码</div>
+            <div class="desc-value">{{ exitCode ?? '-' }}</div>
+            <div class="desc-label">结束时间</div>
+            <div class="desc-value">{{ event.end_time ? new Date(event.end_time).toLocaleString('zh-CN') : '-' }}</div>
+            <div v-if="event.error_message" class="desc-label">错误信息</div>
+            <div v-if="event.error_message" class="desc-value col-span-2 text-red-500">{{ event.error_message }}</div>
+          </div>
+        </template>
+      </Card>
+
+      <Card class="logs-card">
+        <template #header>
+          <div class="logs-card-header">
+            <span class="logs-stats">
+              {{ totalLines }} 行 · {{ logSizeText }}
+            </span>
+            <Button
+              v-if="isCompleted && logs"
+              severity="info"
+              size="small"
+              icon="pi pi-download"
+              @click="downloadLog"
+              label="下载日志"
+            />
+          </div>
+        </template>
+        <template #content>
+          <pre v-if="displayLogs" class="log-content">{{ displayLogs }}</pre>
+          <div v-else class="text-center py-8 text-gray-400">
+            <i class="pi pi-inbox text-4xl mb-2 block"></i>
+            <p>暂无日志输出</p>
+          </div>
+        </template>
+      </Card>
+    </template>
   </div>
 </template>
 
@@ -242,6 +256,32 @@ onUnmounted(() => {
 .logs-card {
   border-radius: 12px;
   margin-bottom: 16px;
+}
+
+.desc-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr auto 1fr;
+  gap: 0;
+}
+
+.desc-label {
+  padding: 8px 16px;
+  background: #f8fafc;
+  font-weight: 500;
+  font-size: 13px;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+}
+
+.desc-value {
+  padding: 8px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.col-span-2 {
+  grid-column: span 2;
 }
 
 .logs-card-header {

@@ -1,6 +1,8 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse } from 'axios'
-import { ElMessage } from 'element-plus'
+
+// Toast 事件发射器，供非组件代码（如 axios 拦截器）触发 Toast
+export const toastEmitter = new EventTarget()
 
 // 创建 axios 实例
 const service: AxiosInstance = axios.create({
@@ -39,7 +41,9 @@ service.interceptors.response.use(
         }
 
         const message = errorMessage || errorMessages[response?.status] || '请求失败'
-        ElMessage.error(message)
+        toastEmitter.dispatchEvent(new CustomEvent('toast', {
+            detail: { severity: 'error', summary: '请求失败', detail: message, life: 5000 }
+        }))
 
         // 401 时清除 token 并跳转登录
         if (response?.status === 401) {

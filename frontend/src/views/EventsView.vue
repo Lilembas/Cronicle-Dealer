@@ -1,22 +1,29 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
-import { RefreshRight, View, Filter, SwitchButton, CircleCheckFilled, CircleCloseFilled, Loading, Clock } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { showToast } from '@/utils/toast'
+import { showConfirm } from '@/utils/confirm'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Select from 'primevue/select'
+import Card from 'primevue/card'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Tag from 'primevue/tag'
+import Paginator from 'primevue/paginator'
 
 const wsStore = useWebSocketStore()
 const queryClient = useQueryClient()
 
+
 const router = useRouter()
 const route = useRoute()
 
-// 高亮指定的 event_id
 const highlightId = ref(route.query.highlight as string || '')
 
-// 筛选条件
 const filters = ref({
   status: '',
   jobName: '',
@@ -25,13 +32,11 @@ const filters = ref({
   endDate: '',
 })
 
-// 分页参数
 const pagination = ref({
   page: 1,
   pageSize: 20,
 })
 
-// 获取执行记录列表
 const { data: eventsDataRaw, isLoading, refetch } = useQuery({
   queryKey: ['events', pagination, filters],
   queryFn: () => eventsApi.list({
@@ -45,7 +50,6 @@ const { data: eventsDataRaw, isLoading, refetch } = useQuery({
 const eventsData = eventsDataRaw as unknown as { total: number; data: Event[] } | undefined
 
 onMounted(() => {
-  // 如果 URL 带了 highlight 参数，自动将对应行高亮
   if (highlightId.value) {
     nextTick(() => {
       const el = document.getElementById(`event-row-${highlightId.value}`)
@@ -56,7 +60,6 @@ onMounted(() => {
   }
 })
 
-// 状态选项
 const statusOptions = [
   { label: '全部', value: '' },
   { label: '成功', value: 'success' },
@@ -65,7 +68,6 @@ const statusOptions = [
   { label: '已入队', value: 'queued' },
 ]
 
-// 分组选项（从 jobs 加载）
 const categoryOptions = ref<{ label: string; value: string }[]>([])
 const loadCategories = async () => {
   const { data } = await jobsApi.list({ page_size: 1000 }) as unknown as { data: any[] }
@@ -76,9 +78,6 @@ const loadCategories = async () => {
   ]
 }
 
-// 状态标签类型
-
-// 状态文本
 const getStatusText = (status: string) => {
   const map: Record<string, string> = {
     success: '成功',
@@ -91,7 +90,6 @@ const getStatusText = (status: string) => {
   return map[status] || status
 }
 
-// 格式化持续时间
 const formatDuration = (seconds: number) => {
   if (!seconds) return '-'
   if (seconds < 60) return `${seconds.toFixed(2)}秒`
@@ -99,7 +97,6 @@ const formatDuration = (seconds: number) => {
   return `${(seconds / 3600).toFixed(2)}小时`
 }
 
-// 查看详情
 const viewDetail = (event: Event) => {
   router.push(`/logs/${event.id}`)
 }
@@ -107,30 +104,29 @@ const viewDetail = (event: Event) => {
 const canAbort = (status: string) => status === 'running' || status === 'pending' || status === 'queued'
 
 const handleAbort = async (event: Event) => {
-  try {
-    await ElMessageBox.confirm(`确认中止任务 ${event.id} 吗？`, '中止确认', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-
-    await eventsApi.abort(event.id)
-    ElMessage.success('中止请求已提交')
-    refetch()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error('中止失败')
-    }
-  }
+  showConfirm({
+    message: `确认中止任务 ${event.id} 吗？`,
+    header: '中止确认',
+    icon: 'pi pi-exclamation-triangle',
+    acceptProps: { label: '确认', severity: 'danger' },
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    accept: async () => {
+      try {
+        await eventsApi.abort(event.id)
+        showToast({ severity: 'success', summary: '中止请求已提交', life: 3000 })
+        refetch()
+      } catch {
+        showToast({ severity: 'error', summary: '中止失败', life: 5000 })
+      }
+    },
+  })
 }
 
-// 应用筛选
 const applyFilter = () => {
   pagination.value.page = 1
   refetch()
 }
 
-// 重置筛选
 const resetFilter = () => {
   filters.value = {
     status: '',
@@ -143,24 +139,31 @@ const resetFilter = () => {
   refetch()
 }
 
-// 分页变化
-const handlePageChange = (page: number) => {
-  pagination.value.page = page
+const paginatorFirst = computed({
+  get: () => (pagination.value.page - 1) * pagination.value.pageSize,
+  set: (val: number) => {
+    pagination.value.page = Math.floor(val / pagination.value.pageSize) + 1
+  }
+})
+
+const onPageChange = (event: any) => {
+  pagination.value.page = Math.floor(event.first / event.rows) + 1
+  pagination.value.pageSize = event.rows
 }
 
-// WebSocket 任务状态更新处理
+const getRowClass = (data: Event) => {
+  return data.id === highlightId ? 'row-highlight' : ''
+}
+
 const handleTaskStatus = () => {
-  // 任何任务状态变化都刷新执行记录列表
   queryClient.invalidateQueries({ queryKey: ['events'] })
 }
 
-// 组件挂载 - 设置 WebSocket 监听
 onMounted(() => {
   loadCategories()
   wsStore.onMessage('task_status', handleTaskStatus)
 })
 
-// 组件卸载 - 移除 WebSocket 监听
 onUnmounted(() => {
   wsStore.offMessage('task_status', handleTaskStatus)
 })
@@ -169,168 +172,144 @@ onUnmounted(() => {
 <template>
   <div class="events">
     <div class="page-header">
-      <el-button :icon="RefreshRight" @click="refetch">刷新</el-button>
+      <Button icon="pi pi-refresh" text @click="() => refetch()" label="刷新" />
     </div>
 
     <!-- 筛选栏 -->
-    <el-card class="filter-card" shadow="never">
-      <el-form :inline="true" label-width="80px">
-        <el-form-item label="状态">
-          <el-select v-model="filters.status" placeholder="选择状态" style="width: 150px">
-            <el-option
-              v-for="option in statusOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-        </el-form-item>
+    <Card class="filter-card">
+      <template #content>
+        <div class="flex flex-wrap items-end gap-4">
+          <div class="flex flex-col gap-1">
+            <label class="font-medium text-sm">状态</label>
+            <Select v-model="filters.status" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="选择状态" class="w-36" showClear />
+          </div>
 
-        <el-form-item label="任务名称">
-          <el-input
-            v-model="filters.jobName"
-            placeholder="输入任务名称"
-            clearable
-            style="width: 200px"
-          />
-        </el-form-item>
+          <div class="flex flex-col gap-1">
+            <label class="font-medium text-sm">任务名称</label>
+            <InputText v-model="filters.jobName" placeholder="输入任务名称" class="w-48" />
+          </div>
 
-        <el-form-item label="任务分组">
-          <el-select v-model="filters.jobCategory" placeholder="选择分组" clearable style="width: 150px">
-            <el-option
-              v-for="option in categoryOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-        </el-form-item>
+          <div class="flex flex-col gap-1">
+            <label class="font-medium text-sm">任务分组</label>
+            <Select v-model="filters.jobCategory" :options="categoryOptions" optionLabel="label" optionValue="value" placeholder="选择分组" class="w-36" showClear />
+          </div>
 
-        <el-form-item>
-          <el-button type="primary" :icon="Filter" @click="applyFilter">筛选</el-button>
-          <el-button @click="resetFilter">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+          <Button severity="info" icon="pi pi-filter" @click="applyFilter" label="筛选" />
+          <Button severity="secondary" @click="resetFilter" label="重置" />
+        </div>
+      </template>
+    </Card>
 
     <!-- 执行记录列表 -->
-    <el-card class="table-card" shadow="never">
-      <el-table
-        :data="eventsData?.data || []"
-        v-loading="isLoading"
-        stripe
-        class="events-table"
-        :row-class-name="({ row }: { row: Event }) => row.id === highlightId ? 'row-highlight' : ''"
-        :row-key="(row: Event) => row.id"
-      >
-        <el-table-column prop="id" label="Event ID" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">
-            <el-tooltip :content="row.id" placement="top">
-              <el-text type="primary" class="event-id clickable" :id="`event-row-${row.id}`" @click="viewDetail(row)">{{ row.id.split('_').slice(-1)[0] }}</el-text>
-            </el-tooltip>
-          </template>
-        </el-table-column>
+    <Card class="table-card">
+      <template #content>
+        <DataTable
+          :value="eventsData?.data || []"
+          :loading="isLoading"
+          stripedRows
+          class="events-table"
+          :rowClass="getRowClass"
+          rowHover
+        >
+          <Column field="id" header="Event ID" style="min-width: 180px">
+            <template #body="{ data }">
+              <span
+                v-tooltip.top="data.id"
+                class="event-id clickable"
+                :id="`event-row-${data.id}`"
+                @click="viewDetail(data)"
+              >{{ data.id.split('_').slice(-1)[0] }}</span>
+            </template>
+          </Column>
 
-        <el-table-column prop="job_name" label="任务名称" min-width="150" show-overflow-tooltip>
-          <template #default="{ row }">
-            <el-text v-if="row.job_id" type="primary" class="clickable" @click="router.push(`/jobs/${row.job_id}/detail`)">{{ row.job_name || row.job_id }}</el-text>
-            <span v-else>{{ row.job_name || row.job_id }}</span>
-          </template>
-        </el-table-column>
+          <Column field="job_name" header="任务名称" style="min-width: 150px">
+            <template #body="{ data }">
+              <span v-if="data.job_id" class="text-primary-500 cursor-pointer hover:underline" @click="router.push(`/jobs/${data.job_id}/detail`)">{{ data.job_name || data.job_id }}</span>
+              <span v-else>{{ data.job_name || data.job_id }}</span>
+            </template>
+          </Column>
 
-        <el-table-column label="分组" width="120" show-overflow-tooltip>
-          <template #default="{ row }">
-            <el-tag v-if="row.job_category" size="small" type="info">{{ row.job_category }}</el-tag>
-            <span v-else class="text-gray">-</span>
-          </template>
-        </el-table-column>
+          <Column header="分组" style="width: 120px">
+            <template #body="{ data }">
+              <Tag v-if="data.job_category" :value="data.job_category" severity="info" />
+              <span v-else class="text-gray-400">-</span>
+            </template>
+          </Column>
 
-        <el-table-column label="状态" width="100" align="center">
-          <template #default="{ row }">
-            <span :class="['status-badge', `status-${row.status}`]">
-              <el-icon v-if="row.status === 'success'"><CircleCheckFilled /></el-icon>
-              <el-icon v-else-if="row.status === 'failed'"><CircleCloseFilled /></el-icon>
-              <el-icon v-else-if="row.status === 'running'" class="is-loading"><Loading /></el-icon>
-              <el-icon v-else><Clock /></el-icon>
-              <span>{{ getStatusText(row.status) }}</span>
-            </span>
-          </template>
-        </el-table-column>
+          <Column header="状态" style="width: 100px" alignHeader="center" align="center">
+            <template #body="{ data }">
+              <span :class="['status-badge', `status-${data.status}`]">
+                <i v-if="data.status === 'success'" class="pi pi-check-circle"></i>
+                <i v-else-if="data.status === 'failed'" class="pi pi-times-circle"></i>
+                <i v-else-if="data.status === 'running'" class="pi pi-spin pi-spinner"></i>
+                <i v-else class="pi pi-clock"></i>
+                <span>{{ getStatusText(data.status) }}</span>
+              </span>
+            </template>
+          </Column>
 
-        <el-table-column label="执行时间" width="180">
-          <template #default="{ row }">
-            <div v-if="row.start_time">
-              <div>{{ new Date(row.start_time).toLocaleString('zh-CN') }}</div>
-              <div v-if="row.end_time" class="text-sm text-gray">
-                至 {{ new Date(row.end_time).toLocaleString('zh-CN') }}
+          <Column header="执行时间" style="width: 180px">
+            <template #body="{ data }">
+              <div v-if="data.start_time">
+                <div>{{ new Date(data.start_time).toLocaleString('zh-CN') }}</div>
+                <div v-if="data.end_time" class="text-sm text-gray-400">
+                  至 {{ new Date(data.end_time).toLocaleString('zh-CN') }}
+                </div>
               </div>
-            </div>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+              <span v-else>-</span>
+            </template>
+          </Column>
 
-        <el-table-column label="持续时间" width="120">
-          <template #default="{ row }">
-            {{ formatDuration(row.duration) }}
-          </template>
-        </el-table-column>
+          <Column header="持续时间" style="width: 120px">
+            <template #body="{ data }">
+              {{ formatDuration(data.duration) }}
+            </template>
+          </Column>
 
-        <el-table-column label="退出码" width="100" align="center">
-          <template #default="{ row }">
-            <span v-if="row.exit_code !== undefined" :class="row.exit_code === 0 ? 'text-green' : 'text-red'">
-              {{ row.exit_code }}
-            </span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+          <Column header="退出码" style="width: 100px" alignHeader="center" align="center">
+            <template #body="{ data }">
+              <span v-if="data.exit_code !== undefined" :class="data.exit_code === 0 ? 'text-green' : 'text-red'">
+                {{ data.exit_code }}
+              </span>
+              <span v-else>-</span>
+            </template>
+          </Column>
 
-        <el-table-column prop="cpu_percent" label="CPU" width="100" align="right">
-          <template #default="{ row }">
-            <span v-if="row.cpu_percent !== undefined">{{ row.cpu_percent.toFixed(1) }}%</span>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+          <Column field="cpu_percent" header="CPU" style="width: 100px" alignHeader="right" align="right">
+            <template #body="{ data }">
+              <span v-if="data.cpu_percent !== undefined">{{ data.cpu_percent.toFixed(1) }}%</span>
+              <span v-else>-</span>
+            </template>
+          </Column>
 
-        <el-table-column label="操作" width="210" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              type="primary"
-              size="small"
-              :icon="View"
-              @click="viewDetail(row)"
-            >
-              日志
-            </el-button>
-            <el-button
-              v-if="canAbort(row.status)"
-              type="danger"
-              size="small"
-              :icon="SwitchButton"
-              @click="handleAbort(row)"
-            >
-              中止
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+          <Column header="操作" frozen alignFrozen="right" style="width: 180px">
+            <template #body="{ data }">
+              <div class="flex gap-2">
+                <Button severity="info" size="small" icon="pi pi-eye" @click="viewDetail(data)" label="日志" />
+                <Button v-if="canAbort(data.status)" severity="danger" size="small" icon="pi pi-stop-circle" @click="handleAbort(data)" label="中止" />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
 
-      <!-- 分页 -->
-      <div class="pagination">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :total="eventsData?.total || 0"
-          :page-sizes="[10, 20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper"
-          @current-change="handlePageChange"
-        />
-      </div>
+        <div v-if="eventsData && eventsData.total > 0" class="pagination">
+          <Paginator
+            v-model:first="paginatorFirst"
+            :rows="pagination.pageSize"
+            :totalRecords="eventsData.total"
+            :rowsPerPageOptions="[10, 20, 50, 100]"
+            @page="onPageChange"
+            template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+            currentPageReportTemplate="第 {first} 到 {last} 条，共 {totalRecords} 条"
+          />
+        </div>
 
-      <el-empty
-        v-if="!isLoading && (!eventsData?.data || (eventsData?.data?.length || 0) === 0)"
-        description="暂无执行记录"
-      />
-    </el-card>
+        <div v-if="!isLoading && (!eventsData?.data || (eventsData?.data?.length || 0) === 0)" class="text-center py-8 text-gray-400">
+          <i class="pi pi-inbox text-4xl mb-2 block"></i>
+          <p>暂无执行记录</p>
+        </div>
+      </template>
+    </Card>
   </div>
 </template>
 
@@ -346,13 +325,6 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
-}
-
-.page-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
 }
 
 .filter-card {
@@ -383,7 +355,6 @@ onUnmounted(() => {
   text-decoration: underline;
 }
 
-/* 触发跳转高亮行 */
 :deep(.row-highlight) {
   background-color: #fef9c3 !important;
   transition: background-color 2s ease;
@@ -391,10 +362,6 @@ onUnmounted(() => {
 
 .text-sm {
   font-size: 12px;
-}
-
-.text-gray {
-  color: #64748b;
 }
 
 .text-green {
@@ -413,26 +380,12 @@ onUnmounted(() => {
   justify-content: flex-end;
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
   .events {
     padding: 16px;
   }
 
-  .page-title {
-    font-size: 24px;
-  }
-
-  .filter-card :deep(.el-form) {
-    flex-direction: column;
-  }
-
-  .filter-card :deep(.el-form-item) {
-    width: 100%;
-    margin-right: 0;
-  }
-
-  .events-table :deep(.el-table__body-wrapper) {
+  .events-table :deep(.p-datatable-wrapper) {
     overflow-x: auto;
   }
 }
