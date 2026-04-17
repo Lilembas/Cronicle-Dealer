@@ -102,7 +102,9 @@ function handleGlobalRefresh() {
     <div class="head-tab">
       <Tabs :value="activeTab">
         <TabList>
-          <Tab v-for="tab in tabs" :key="tab.id" :value="tab.id">
+          <Tab v-for="tab in tabs" :key="tab.id" :value="tab.id" :pt="{ 
+            root: { style: { padding: 0 } }
+          }">
             <router-link v-slot="{ href, navigate }" :to="tab.id" custom>
               <a :href="href" @click="navigate" class="tab-link">
                 <i :class="tab.icon" />
@@ -155,10 +157,50 @@ function handleGlobalRefresh() {
   gap: 8px;
   color: inherit;
   text-decoration: none;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .tab-link i {
   font-size: 14px;
+}
+
+/* Tab Hover & Active Styling */
+:deep(.p-tab) {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+:deep(.p-tab:not(.p-tab-active):hover) {
+  background: #f8fafc !important; /* slate-50 */
+  transform: translateY(-1px);
+}
+
+:deep(.p-tab:not(.p-tab-active):hover .tab-link) {
+  color: #3b82f6 !important; /* blue-500 */
+}
+
+:deep(.p-tab-active) {
+  background: #eff6ff !important; /* blue-50 */
+}
+
+:deep(.p-tab-active .tab-link) {
+  font-weight: 600;
+  color: #2563eb !important; /* blue-600 */
+  transform: scale(1.02);
+}
+
+:deep(.p-tab-active)::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  right: 15%;
+  height: 3px;
+  background: #3b82f6 !important; /* blue-500 */
+  border-radius: 3px 3px 0 0;
+  box-shadow: 0 -2px 10px rgba(59, 130, 246, 0.3);
 }
 
 .page-fade-enter-active,

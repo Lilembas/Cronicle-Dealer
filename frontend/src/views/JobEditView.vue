@@ -8,6 +8,7 @@ import Textarea from 'primevue/textarea'
 import InputNumber from 'primevue/inputnumber'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Select from 'primevue/select'
+import MultiSelect from 'primevue/multiselect'
 import SelectButton from 'primevue/selectbutton'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -457,32 +458,54 @@ onMounted(() => {
                   :options="nodes"
                   optionLabel="hostname"
                   optionValue="id"
-                  placeholder="选择执行节点"
+                  placeholder="选择特定执行节点"
                   :loading="loadingNodes"
                   class="target-select flex-1"
                 >
                   <template #value="{ value }">
-                    <span v-if="value">{{ nodes.find(n => n.id === value)?.hostname }} ({{ nodes.find(n => n.id === value)?.ip }})</span>
+                    <div v-if="value" class="target-value">
+                      <i class="pi pi-desktop mr-2 text-primary"></i>
+                      <span class="font-semibold">{{ nodes.find(n => n.id === value)?.hostname }}</span>
+                      <span class="ml-2 text-xs text-gray-500">({{ nodes.find(n => n.id === value)?.ip }})</span>
+                    </div>
                   </template>
                   <template #option="{ option }">
                     <div class="flex justify-between items-center w-full">
-                      <span class="font-medium">{{ option.hostname }}</span>
-                      <span class="text-gray-400 text-xs ml-2">{{ option.ip }}</span>
+                      <div class="flex items-center gap-2">
+                        <i class="pi pi-desktop text-xs"></i>
+                        <span class="font-medium">{{ option.hostname }}</span>
+                      </div>
+                      <span class="text-gray-400 text-xs font-mono">{{ option.ip }}</span>
                     </div>
                   </template>
                 </Select>
 
-                <Select
+                <MultiSelect
                   v-else
                   v-model="formData.tags"
                   :options="availableTags"
-                  multiple
-                  filterable
-                  placeholder="选择匹配标签"
+                  placeholder="选择节点标签"
+                  display="chip"
                   :loading="loadingTags"
                   class="target-select flex-1"
-                />
+                >
+                  <template #chip="{ value }">
+                    <div class="flex items-center gap-1">
+                      <i class="pi pi-server text-[10px]"></i>
+                      <span>{{ value }}</span>
+                    </div>
+                  </template>
+                </MultiSelect>
               </div>
+              <p class="field-hint pt-2">
+                <i :class="formData.target_type === 'node_id' ? 'pi pi-desktop' : 'pi pi-server'" class="mr-1"></i>
+                <template v-if="formData.target_type === 'node_id'">
+                  任务将仅在选定的这台特定服务器上运行。
+                </template>
+                <template v-else>
+                  任务将在匹配任意一个所选标签的**所有**节点上运行。
+                </template>
+              </p>
             </div>
 
             <div class="flex flex-col gap-2 mb-8">
@@ -617,8 +640,38 @@ onMounted(() => {
 
 .target-row {
   display: flex;
+  align-items: center;
   gap: 12px;
   width: 100%;
+}
+
+.target-value {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+}
+
+.target-select :deep(.p-multiselect-label) {
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 38px;
+}
+
+.target-select :deep(.p-select-label) {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+}
+
+.target-select :deep(.p-multiselect-chip) {
+  background: var(--p-primary-50);
+  color: var(--p-primary-700);
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--p-primary-100);
 }
 
 .target-radio {

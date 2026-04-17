@@ -5,7 +5,6 @@ import { useWebSocketStore } from '@/stores/websocket'
 import { showToast } from '@/utils/toast'
 import { showConfirm } from '@/utils/confirm'
 import Button from 'primevue/button'
-import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -197,6 +196,62 @@ onUnmounted(() => {
 
 <template>
   <div class="workers-page">
+    <!-- 概览统计 -->
+    <div class="stats-grid mb-6">
+      <Card class="stat-card">
+        <template #content>
+          <div class="flex items-center gap-4">
+            <div class="stat-icon bg-blue-50 text-blue-500">
+              <i class="pi pi-server text-xl"></i>
+            </div>
+            <div>
+              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">总节点</div>
+              <div class="text-2xl font-bold">{{ nodes.length }}</div>
+            </div>
+          </div>
+        </template>
+      </Card>
+      <Card class="stat-card">
+        <template #content>
+          <div class="flex items-center gap-4">
+            <div class="stat-icon bg-green-50 text-green-500">
+              <i class="pi pi-check-circle text-xl"></i>
+            </div>
+            <div>
+              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">在线节点</div>
+              <div class="text-2xl font-bold">{{ nodes.filter(n => n.status === 'online').length }}</div>
+            </div>
+          </div>
+        </template>
+      </Card>
+      <Card class="stat-card">
+        <template #content>
+          <div class="flex items-center gap-4">
+            <div class="stat-icon bg-amber-50 text-amber-500">
+              <i class="pi pi-bolt text-xl"></i>
+            </div>
+            <div>
+              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">运行任务</div>
+              <div class="text-2xl font-bold">{{ nodes.reduce((acc, n) => acc + (n.running_jobs || 0), 0) }}</div>
+            </div>
+          </div>
+        </template>
+      </Card>
+      <Card class="stat-card">
+        <template #content>
+          <div class="flex items-center gap-4">
+            <div class="stat-icon bg-purple-50 text-purple-500">
+              <i class="pi pi-microchip text-xl"></i>
+            </div>
+            <div>
+              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">负载均衡</div>
+              <div class="text-2xl font-bold">Safe</div>
+            </div>
+          </div>
+        </template>
+      </Card>
+    </div>
+
     <!-- 节点列表 -->
     <Card class="table-card">
       <template #content>
@@ -211,74 +266,83 @@ onUnmounted(() => {
           class="workers-table"
         >
           <Column selectionMode="multiple" headerStyle="width: 3rem" />
-          <Column field="hostname" header="Hostname" style="min-width: 200px">
+          <Column field="hostname" header="节点信息" style="min-width: 200px">
             <template #body="{ data }">
               <div class="hostname-cell">
-                <span :class="['status-dot', data.status === 'online' ? 'status-online' : 'status-offline']"></span>
-                <i :class="[isMasterNode(data) ? 'pi pi-shield text-amber-500' : 'pi pi-desktop text-blue-400']" class="node-icon"></i>
-                <span class="hostname-text">{{ data.hostname }}</span>
+                <div class="status-indicator">
+                  <span :class="['status-dot', data.status === 'online' ? 'status-online' : 'status-offline']"></span>
+                  <span v-if="data.status === 'online'" class="status-pulse"></span>
+                </div>
+                <div class="flex flex-col">
+                  <div class="flex items-center gap-2">
+                    <span class="hostname-text">{{ data.hostname }}</span>
+                    <i :class="[isMasterNode(data) ? 'pi pi-shield text-amber-500' : 'pi pi-desktop text-blue-400']" class="node-icon-mini"></i>
+                  </div>
+                  <span class="ip-text">{{ data.ip }}</span>
+                </div>
               </div>
             </template>
           </Column>
-          <Column field="ip" header="IP Address" style="width: 140px" />
           <Column header="PID" style="width: 80px" alignHeader="center" align="center">
             <template #body="{ data }">
-              {{ data.pid || '-' }}
+              <span class="pid-text">{{ data.pid || '-' }}</span>
             </template>
           </Column>
-          <Column header="Status" style="width: 100px" alignHeader="center" align="center">
+          <Column header="角色" style="width: 110px" alignHeader="center" align="center">
             <template #body="{ data }">
-              <Tag v-if="isMasterNode(data)" value="Master" severity="warn" />
-              <Tag v-else value="Worker" severity="info" />
+              <span :class="['premium-badge', isMasterNode(data) ? 'badge-master' : 'badge-worker']">
+                <i :class="isMasterNode(data) ? 'pi pi-shield' : 'pi pi-desktop'"></i>
+                <span>{{ isMasterNode(data) ? 'Master' : 'Worker' }}</span>
+              </span>
             </template>
           </Column>
-          <Column header="Active Jobs" style="width: 100px" alignHeader="center" align="center">
+          <Column header="并行任务" style="width: 100px" alignHeader="center" align="center">
             <template #body="{ data }">
-              <Tag v-if="data.running_jobs > 0" :value="String(data.running_jobs)" severity="success" />
-              <span v-else class="text-none">(None)</span>
+              <span v-if="data.running_jobs > 0" class="premium-badge badge-running-mini">
+                <i class="pi pi-spin pi-spinner text-[10px]"></i>
+                <span>{{ data.running_jobs }}</span>
+              </span>
+              <span v-else class="text-gray-300">-</span>
             </template>
           </Column>
-          <Column header="Uptime" style="width: 100px">
+          <Column header="上线时间" style="width: 110px">
             <template #body="{ data }">
-              {{ formatUptime(data.registered_at) }}
+              <span class="uptime-text">{{ formatUptime(data.registered_at) }}</span>
             </template>
           </Column>
-          <Column header="CPU" style="width: 120px" alignHeader="center">
+          <Column header="CPU 负载" style="width: 130px" alignHeader="center">
             <template #body="{ data }">
               <div class="usage-metric" v-if="data.status === 'online'">
                 <ProgressBar :value="Math.min(data.cpu_usage || 0, 100)" :showValue="false" class="mini-progress" :class="getUsageClass(data.cpu_usage)" />
                 <span class="usage-text">{{ (data.cpu_usage || 0).toFixed(1) }}%</span>
               </div>
-              <span v-else>-</span>
+              <span v-else class="text-gray-300">-</span>
             </template>
           </Column>
-          <Column header="Memory" style="width: 120px" alignHeader="center">
+          <Column header="内存占用" style="width: 130px" alignHeader="center">
             <template #body="{ data }">
               <div class="usage-metric" v-if="data.status === 'online'">
                 <ProgressBar :value="Math.min(data.memory_percent || 0, 100)" :showValue="false" class="mini-progress" :class="getUsageClass(data.memory_percent)" />
                 <span class="usage-text">{{ (data.memory_percent || 0).toFixed(1) }}%</span>
               </div>
-              <span v-else>-</span>
+              <span v-else class="text-gray-300">-</span>
             </template>
           </Column>
           <Column header="操作" frozen alignFrozen="right" style="width: 100px">
             <template #body="{ data }">
-              <div class="action-row">
+              <div class="action-buttons">
                 <Button
                   v-if="!isMasterNode(data) && data.id !== getMasterNodeId()"
-                  size="small"
+                  v-tooltip.top="'编辑标签'"
                   icon="pi pi-pencil"
-                  text
-                  rounded
+                  class="btn-edit"
                   @click="handleEdit(data)"
                 />
                 <Button
                   v-if="!isMasterNode(data) && data.id !== getMasterNodeId()"
-                  size="small"
+                  v-tooltip.top="'移除节点'"
                   icon="pi pi-trash"
-                  severity="danger"
-                  text
-                  rounded
+                  class="btn-delete"
                   @click="handleDelete(data)"
                 />
               </div>
@@ -320,9 +384,37 @@ onUnmounted(() => {
 
 <style scoped>
 .workers-page {
-  padding: 24px;
-  max-width: 1400px;
+  padding: 16px 24px 24px 24px;
+  max-width: 1500px;
   margin: 0 auto;
+}
+
+/* Stats Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.stat-card {
+  border-radius: 12px;
+  border: 1px solid var(--color-border-light);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .table-card {
@@ -333,32 +425,67 @@ onUnmounted(() => {
 .hostname-cell {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.status-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .status-online {
   background: #22c55e;
-  box-shadow: 0 0 8px #22c55e;
+}
+
+.status-pulse {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: rgba(34, 197, 94, 0.4);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.5); opacity: 1; }
+  100% { transform: scale(2.5); opacity: 0; }
 }
 
 .status-offline {
   background: #94a3b8;
 }
 
-.node-icon {
-  font-size: 14px;
+.node-icon-mini {
+  font-size: 11px;
 }
 
 .hostname-text {
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.ip-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--p-surface-400);
+}
+
+.pid-text, .uptime-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
 }
 
 .usage-metric {
@@ -369,31 +496,108 @@ onUnmounted(() => {
 }
 
 .mini-progress {
-  height: 6px !important;
+  height: 5px !important;
   background: #f1f5f9 !important;
+  border-radius: 3px;
 }
 
 .usage-text {
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
-  color: var(--p-surface-600);
+  color: var(--p-surface-400);
   text-align: right;
+  font-weight: 500;
 }
 
-.usage-low :deep(.p-progressbar-value) { background: #22c55e; }
+.usage-low :deep(.p-progressbar-value) { background: #10b981; }
 .usage-medium :deep(.p-progressbar-value) { background: #f59e0b; }
 .usage-high :deep(.p-progressbar-value) { background: #ef4444; }
 
-.action-row {
-  display: flex;
-  gap: 4px;
+/* Premium Badges */
+.premium-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
 }
 
-.online-row :deep(.p-datatable-tbody > tr:hover) {
-  background: #f8fafc;
+.badge-master {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.badge-worker {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #dbeafe;
+}
+
+.badge-running-mini {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #dcfce7;
+  padding: 2px 8px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.action-buttons :deep(.p-button) {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.btn-edit {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.btn-edit:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0284c7 !important;
+  transform: translateY(-1px);
+}
+
+.btn-delete {
+  background: #fff1f2 !important;
+  border: 1px solid #fecdd3 !important;
+  color: #e11d48 !important;
+}
+
+.btn-delete:hover {
+  background: #ffe4e6 !important;
+  border-color: #fda4af !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(225, 29, 72, 0.1);
+}
+
+.workers-table :deep(.p-datatable-tbody > tr > td) {
+  padding: 12px 16px;
 }
 
 :deep(.offline-row) {
   opacity: 0.6;
+  filter: grayscale(0.5);
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>
