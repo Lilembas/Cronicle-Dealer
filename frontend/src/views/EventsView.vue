@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
 import { showConfirm } from '@/utils/confirm'
 import Button from 'primevue/button'
@@ -17,6 +18,7 @@ import Paginator from 'primevue/paginator'
 import ProgressBar from 'primevue/progressbar'
 
 const wsStore = useWebSocketStore()
+const systemStore = useSystemStore()
 const queryClient = useQueryClient()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
@@ -50,7 +52,7 @@ const { data: eventsDataRaw, isLoading, refetch } = useQuery({
 })
 const eventsData = eventsDataRaw as unknown as { total: number; data: Event[] } | undefined
 
-onMounted(() => {
+onMounted(async () => {
   if (highlightId.value) {
     nextTick(() => {
       const el = document.getElementById(`event-row-${highlightId.value}`)
@@ -62,6 +64,9 @@ onMounted(() => {
   if (globalRefreshHandler) {
     globalRefreshHandler.value = () => refetch()
   }
+})
+
+onUnmounted(() => {
 })
 
 const statusOptions = [
@@ -269,9 +274,13 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column header="持续时间" style="width: 120px">
+          <Column header="时长" style="width: 140px" align="right">
             <template #body="{ data }">
-              <span class="time-text">{{ formatDuration(data.duration) }}</span>
+              <span v-if="data.status === 'running' && data.start_time" class="font-mono text-blue-500">
+                {{ formatDuration(Math.max(0, Math.floor((systemStore.currentTime - new Date(data.start_time).getTime()) / 1000))) }}
+              </span>
+              <span v-else-if="data.duration" class="font-mono">{{ formatDuration(data.duration) }}</span>
+              <span v-else class="text-gray-400 font-mono">-</span>
             </template>
           </Column>
 

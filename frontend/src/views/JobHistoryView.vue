@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
 import { showConfirm } from '@/utils/confirm'
 import Button from 'primevue/button'
@@ -15,6 +16,7 @@ import Breadcrumb from 'primevue/breadcrumb'
 import { type Job } from '@/api'
 
 const wsStore = useWebSocketStore()
+const systemStore = useSystemStore()
 const queryClient = useQueryClient()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
@@ -182,9 +184,12 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column header="持续时间" style="width: 120px">
+          <Column header="持续时长" style="width: 120px">
             <template #body="{ data }">
-              <span class="time-text">{{ formatDuration(data.duration) }}</span>
+              <span v-if="data.status === 'running' && data.start_time" class="time-text text-blue-500 font-bold">
+                {{ formatDuration(Math.max(0, Math.floor((systemStore.currentTime - new Date(data.start_time).getTime()) / 1000))) }}
+              </span>
+              <span v-else class="time-text">{{ formatDuration(data.duration) }}</span>
             </template>
           </Column>
 

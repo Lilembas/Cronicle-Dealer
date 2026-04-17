@@ -9,6 +9,7 @@ import ProgressBar from 'primevue/progressbar'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useSystemStore } from '@/stores/system'
 
 const stats = ref<any>(null)
 const nodes = ref<any[]>([])
@@ -17,6 +18,7 @@ const upcomingJobs = ref<any[]>([])
 const statsLoading = ref(true)
 const nodesLoading = ref(true)
 const wsStore = useWebSocketStore()
+const systemStore = useSystemStore()
 const router = useRouter()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
@@ -42,9 +44,8 @@ const loadData = async () => {
     runningEvents.value = (runningData as any).data || []
     
     // Process upcoming jobs
-    const now = new Date().getTime()
     upcomingJobs.value = ((jobsData as any).data || [])
-      .filter((j: any) => j.enabled && j.next_run_time && new Date(j.next_run_time).getTime() > now)
+      .filter((j: any) => j.enabled && j.next_run_time && new Date(j.next_run_time).getTime() > systemStore.currentTime)
       .sort((a: any, b: any) => new Date(a.next_run_time).getTime() - new Date(b.next_run_time).getTime())
       .slice(0, 5)
   } catch (error) {
@@ -75,20 +76,7 @@ const updateNode = (nodeData: any) => {
 }
 
 const handleTaskStatus = () => {
-  statsApi.get().then(statsData => {
-    stats.value = statsData
-  })
-  eventsApi.list({ status: 'running', page_size: 5 }).then(data => {
-    runningEvents.value = (data as any).data || []
-  })
-  // ALSO refresh upcoming jobs
-  jobsApi.list({ page_size: 100, enabled: true }).then(data => {
-    const now = new Date().getTime()
-    upcomingJobs.value = ((data as any).data || [])
-      .filter((j: any) => j.enabled && j.next_run_time && new Date(j.next_run_time).getTime() > now)
-      .sort((a: any, b: any) => new Date(a.next_run_time).getTime() - new Date(b.next_run_time).getTime())
-      .slice(0, 5)
-  })
+  refetchStats()
 }
 
 const handleAbort = async (event: any) => {
@@ -342,7 +330,9 @@ onUnmounted(() => {
               </Column>
               <Column header="已耗时" style="width: 90px">
                 <template #body="{ data }">
-                  <span class="font-mono text-[10px] text-gray-500">{{ Math.floor((new Date().getTime() - new Date(data.start_time).getTime()) / 1000) }}s</span>
+                  <span class="font-mono text-[10px] text-gray-500">
+                    {{ Math.max(0, Math.floor((systemStore.currentTime - new Date(data.start_time).getTime()) / 1000)) }}s
+                  </span>
                 </template>
               </Column>
               <Column style="width: 40px" align="center">

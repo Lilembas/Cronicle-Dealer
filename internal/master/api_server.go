@@ -662,6 +662,7 @@ func (s *APIServer) getStats(c *gin.Context) {
 		FailedEvents   int64 `json:"failed_events"`
 		OnlineNodes    int64 `json:"online_nodes"`
 		OfflineNodes   int64 `json:"offline_nodes"`
+		ServerTime     int64 `json:"server_time"`
 	}
 	
 	storage.DB.Model(&models.Job{}).Count(&stats.TotalJobs)
@@ -672,6 +673,7 @@ func (s *APIServer) getStats(c *gin.Context) {
 	storage.DB.Model(&models.Event{}).Where("status = ?", eventStatusFailed).Count(&stats.FailedEvents)
 	storage.DB.Model(&models.Node{}).Where("status = ?", nodeStatusOnline).Count(&stats.OnlineNodes)
 	storage.DB.Model(&models.Node{}).Where("status = ?", nodeStatusOffline).Count(&stats.OfflineNodes)
+	stats.ServerTime = time.Now().UnixNano() / 1e6
 	
 	c.JSON(http.StatusOK, stats)
 }

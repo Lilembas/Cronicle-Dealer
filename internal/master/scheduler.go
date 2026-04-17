@@ -76,9 +76,28 @@ func (s *Scheduler) LoadJobs() error {
 // AddJob 添加任务到调度器
 func (s *Scheduler) AddJob(job *models.Job) error {
 	expr := job.CronExpr
-	// 如果是 5 位表达式，自动在前面加 0 变为 6 位（因为使用了 WithSeconds）
-	if fields := strings.Fields(expr); len(fields) == 5 {
-		expr = "0 " + expr
+	
+	// Support Timezone
+	if job.Timezone != "" && job.Timezone != "UTC" {
+		expr = "CRON_TZ=" + job.Timezone + " " + expr
+	}
+
+	// 自动补齐秒位：如果除去 CRON_TZ 前缀后只有 5 位，则补齐 0
+	checkExpr := expr
+	if strings.HasPrefix(expr, "CRON_TZ=") {
+		parts := strings.SplitN(expr, " ", 2)
+		if len(parts) > 1 {
+			checkExpr = parts[1]
+		}
+	}
+	
+	if fields := strings.Fields(checkExpr); len(fields) == 5 {
+		if strings.HasPrefix(expr, "CRON_TZ=") {
+			parts := strings.SplitN(expr, " ", 2)
+			expr = parts[0] + " 0 " + parts[1]
+		} else {
+			expr = "0 " + expr
+		}
 	}
 
 	entryID, err := s.cron.AddFunc(expr, func() {
@@ -149,6 +168,12 @@ func (s *Scheduler) triggerJob(jobID string) {
 	}
 
 	s.updateJobStats(jobID)
+	
+	// Update next run time in DB after this trigger
+	if entryIDVal, ok := s.entries.Load(jobID); ok {
+		s.updateNextRunTime(jobID, entryIDVal.(cron.EntryID))
+	}
+
 	s.enqueueTask(job, event)
 
 	logger.Info("任务已添加到 Redis 队列，等待 Worker 消费",

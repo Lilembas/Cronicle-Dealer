@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, inject, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { jobsApi, eventsApi, type Job, type Event } from '@/api'
+import { jobsApi, eventsApi, statsApi, type Job, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
 import { showConfirm } from '@/utils/confirm'
 import Button from 'primevue/button'
@@ -14,8 +15,8 @@ import Skeleton from 'primevue/skeleton'
 import Breadcrumb from 'primevue/breadcrumb'
 
 const wsStore = useWebSocketStore()
+const systemStore = useSystemStore()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
-
 
 const route = useRoute()
 const router = useRouter()
@@ -36,12 +37,12 @@ const getStatusText = (status: string) => {
   return map[status] || status
 }
 
-const loadData = async () => {
+const loadData = async (silent = false) => {
   const id = route.params.id as string
   if (!id) return
 
   try {
-    loading.value = true
+    if (!silent) loading.value = true
     const [jobData, eventsData] = await Promise.all([
       jobsApi.get(id),
       eventsApi.list({ job_id: id, page: 1, page_size: 20 }),
@@ -70,7 +71,7 @@ const handleTrigger = async () => {
         triggering.value = true
         const result = await jobsApi.trigger(job.value!.id) as unknown as import('@/api').TriggerResponse
         showToast({ severity: 'success', summary: '任务已入队', detail: `Event ID: ${result.event_id}`, life: 5000 })
-        loadData()
+        loadData(true)
       } catch (error: any) {
         showToast({ severity: 'error', summary: '触发失败', detail: error.response?.data?.error || '任务触发失败', life: 5000 })
       } finally {
@@ -103,7 +104,7 @@ const handleAbort = async (event: Event) => {
       try {
         await eventsApi.abort(event.id)
         showToast({ severity: 'success', summary: '中止请求已提交', life: 3000 })
-        loadData()
+        loadData(true)
       } catch {
         showToast({ severity: 'error', summary: '中止失败', life: 5000 })
       }
@@ -118,7 +119,7 @@ const breadcrumbItems = ref([
 
 const handleTaskStatus = (data: any) => {
   if (job.value && data.job_id === job.value.id) {
-    loadData()
+    loadData(true)
   }
 }
 
@@ -126,7 +127,7 @@ onMounted(() => {
   loadData()
   wsStore.onMessage('task_status', handleTaskStatus)
   if (globalRefreshHandler) {
-    globalRefreshHandler.value = loadData
+    globalRefreshHandler.value = () => loadData(true)
   }
 })
 
@@ -136,6 +137,12 @@ onUnmounted(() => {
     globalRefreshHandler.value = null
   }
 })
+
+const formatDuration = (seconds: number) => {
+  if (!seconds && seconds !== 0) return '-'
+  if (seconds < 60) return `${seconds}秒`
+  return `${(seconds / 60).toFixed(1)}分`
+}
 </script>
 
 <template>
@@ -275,7 +282,10 @@ onUnmounted(() => {
             </Column>
             <Column header="持续时长" style="width: 100px" alignHeader="right" align="right">
               <template #body="{ data }">
-                <span class="time-text">{{ data.duration ? `${data.duration}秒` : '-' }}</span>
+                <span v-if="data.status === 'running' && data.start_time" class="time-text text-blue-500 font-bold">
+                  {{ formatDuration(Math.max(0, Math.floor((systemStore.currentTime - new Date(data.start_time).getTime()) / 1000))) }}
+                </span>
+                <span v-else class="time-text">{{ data.duration ? formatDuration(data.duration) : '-' }}</span>
               </template>
             </Column>
             <Column header="退出码" style="width: 100px" alignHeader="center" align="center">

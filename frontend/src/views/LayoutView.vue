@@ -10,10 +10,21 @@ import Tab from 'primevue/tab'
 import ScrollTop from 'primevue/scrolltop'
 import Tooltip from 'primevue/tooltip'
 import { useAuthStore } from '@/stores/auth'
+import { useSystemStore } from '@/stores/system'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const systemStore = useSystemStore()
+
+onMounted(() => {
+  systemStore.syncTime()
+  systemStore.startClock()
+})
+
+onUnmounted(() => {
+  systemStore.stopClock()
+})
 
 const globalRefreshHandler = ref<(() => void) | null>(null)
 provide('globalRefreshHandler', globalRefreshHandler)
