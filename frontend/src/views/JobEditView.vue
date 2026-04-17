@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useQueryClient } from '@tanstack/vue-query'
 import { jobsApi, nodesApi, type Node } from '@/api'
 import { showToast } from '@/utils/toast'
 import InputText from 'primevue/inputtext'
@@ -13,8 +12,6 @@ import SelectButton from 'primevue/selectbutton'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import FloatLabel from 'primevue/floatlabel'
-import InputGroup from 'primevue/inputgroup'
-import InputGroupAddon from 'primevue/inputgroupaddon'
 import Breadcrumb from 'primevue/breadcrumb'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
@@ -361,18 +358,18 @@ onMounted(() => {
           <div class="form-section">
             <h3 class="section-title">基本信息</h3>
 
-            <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="grid grid-cols-2 gap-8 mb-8 pt-2">
               <FloatLabel>
                 <InputText v-model="formData.name" id="job-name" class="w-full" />
                 <label for="job-name">任务名称 <span class="text-red-500">*</span></label>
               </FloatLabel>
               <FloatLabel>
-                <Select v-model="formData.category" id="job-category" :options="availableGroups" filterable editable class="w-full" />
+                <Select v-model="formData.category" id="job-category" :options="availableGroups" filterable class="w-full" />
                 <label for="job-category">任务分组</label>
               </FloatLabel>
             </div>
 
-            <FloatLabel class="mb-4">
+            <FloatLabel class="mb-8 pt-2">
               <Textarea v-model="formData.description" id="job-desc" rows="2" autoResize class="w-full" />
               <label for="job-desc">任务描述</label>
             </FloatLabel>
@@ -388,7 +385,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="flex flex-col gap-1 mb-4">
+            <div class="flex flex-col gap-2 mb-8">
               <label class="font-medium text-sm">快速预设</label>
               <SelectButton
                 v-model="formData.cron_expr"
@@ -442,7 +439,7 @@ onMounted(() => {
           <div class="form-section">
             <h3 class="section-title">执行配置</h3>
 
-            <div class="flex flex-col gap-1 mb-4">
+            <div class="flex flex-col gap-2 mb-8">
               <label class="font-medium text-sm">运行节点 <span class="text-red-500">*</span></label>
               <div class="target-row">
                 <SelectButton
@@ -488,31 +485,14 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-6 mb-4">
-              <FloatLabel>
-                <InputGroup>
-                  <InputGroupAddon>
-                    <i class="pi pi-clock" />
-                  </InputGroupAddon>
-                  <InputNumber v-model="formData.timeout" id="job-timeout" :min="1" :max="86400" :step="60" showButtons buttonLayout="horizontal" incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus" class="w-full" />
-                </InputGroup>
-                <label for="job-timeout">超时限制 (s)</label>
-              </FloatLabel>
-              <div class="flex items-center gap-2">
-                <ToggleSwitch v-model="formData.strict_mode" />
-                <span class="text-sm">严格模式</span>
-                <i class="pi pi-question-circle help-mini cursor-help" v-tooltip.top="'启用：命令失败立即终止\n禁用：继续执行后续命令'"></i>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-1 mb-4">
+            <div class="flex flex-col gap-2 mb-8">
               <label class="font-medium text-sm mb-2">执行脚本 <span class="text-red-500">*</span></label>
               <div class="command-editor-wrapper">
                 <Codemirror
                   v-model:value="formData.command"
                   :options="cmOptions"
                   :placeholder="'输入 Shell 脚本...'"
-                  :height="'240px'"
+                  :height="'400px'"
                 />
               </div>
             </div>
@@ -529,12 +509,24 @@ onMounted(() => {
                 <Button icon="pi pi-plus" severity="info" text size="small" @click="addEnv" label="添加变量" />
               </div>
             </div>
+
+            <div class="grid grid-cols-2 gap-8 mb-8 pt-4">
+              <FloatLabel class="mt-2">
+                <InputNumber v-model="formData.timeout" id="job-timeout" :min="1" :max="86400" :step="60" showButtons buttonLayout="horizontal" incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus" class="w-full" />
+                <label for="job-timeout">超时限制 (s)</label>
+              </FloatLabel>
+              <div class="flex items-center gap-2">
+                <ToggleSwitch v-model="formData.strict_mode" />
+                <span class="text-sm">严格模式</span>
+                <i class="pi pi-question-circle help-mini cursor-help" v-tooltip.top="'启用：命令失败立即终止\n禁用：继续执行后续命令'"></i>
+              </div>
+            </div>
           </div>
 
           <!-- 操作按钮 -->
           <div class="form-actions">
-            <Button severity="secondary" @click="cancel" label="取消" />
-            <Button severity="info" @click="save" label="保存" />
+            <Button class="btn-cancel" @click="cancel" label="取消" />
+            <Button class="btn-save" @click="save" label="保存" />
           </div>
         </div>
       </template>
@@ -573,24 +565,35 @@ onMounted(() => {
 }
 
 .form-section {
-  padding: 20px 0;
+  padding: 32px 0;
   border-bottom: 1px solid var(--color-border-light);
 }
 
 .form-section:last-of-type {
-  border-bottom: none;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .section-title {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--color-text-primary);
   margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: var(--p-primary-500);
+  border-radius: 2px;
 }
 
 .field-hint {
-  margin-left: 12px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-muted);
 }
 
@@ -703,6 +706,39 @@ onMounted(() => {
   margin-top: 24px;
 }
 
+.form-actions :deep(.p-button) {
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+}
+
+.btn-save {
+  background: #f0f9ff !important;
+  color: #0284c7 !important;
+  border-color: #bae6fd !important;
+}
+
+.btn-save:hover {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.1) !important;
+}
+
+.btn-cancel {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-color: #e2e8f0 !important;
+}
+
+.btn-cancel:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  transform: translateY(-1px);
+}
+
 .command-editor-wrapper {
   width: 100%;
   display: block;
@@ -713,9 +749,15 @@ onMounted(() => {
   border-radius: 8px;
   background-color: #fff !important;
   width: 100% !important;
-  height: 240px !important;
+  height: 400px !important;
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 14px;
-  padding: 4px;
+  font-size: 13px;
+  padding: 8px;
+  transition: border-color 0.2s;
+}
+
+.command-editor-wrapper :deep(.CodeMirror-focused) {
+  border-color: var(--p-primary-500) !important;
+  box-shadow: 0 0 0 2px var(--p-primary-100) !important;
 }
 </style>
