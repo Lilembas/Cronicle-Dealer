@@ -206,7 +206,7 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 
 		// 通过 WebSocket 广播任务状态变更
 		if tc.wsServer != nil {
-			if err := tc.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, 1); err != nil {
+			if err := tc.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, event.NodeID, event.NodeName, 1); err != nil {
 				logger.Warn("广播任务失败状态失败",
 					zap.String("event_id", event.ID),
 					zap.Error(err))

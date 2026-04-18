@@ -310,7 +310,7 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 
 	// 通过WebSocket推送任务状态变化
 	if s.wsServer != nil {
-		if err := s.wsServer.BroadcastTaskStatus(req.EventId, req.JobId, status, int(req.ExitCode)); err != nil {
+		if err := s.wsServer.BroadcastTaskStatus(req.EventId, req.JobId, status, event.NodeID, event.NodeName, int(req.ExitCode)); err != nil {
 			logger.Error("WebSocket推送任务状态失败", zap.Error(err))
 		}
 	}

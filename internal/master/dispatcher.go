@@ -466,7 +466,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 
 	// 通过WebSocket推送任务状态变化（pending → running）
 	if d.wsServer != nil {
-		d.wsServer.BroadcastTaskStatus(event.ID, event.JobID, "running", 0)
+		d.wsServer.BroadcastTaskStatus(event.ID, event.JobID, "running", event.NodeID, event.NodeName, 0)
 	}
 
 	return nil

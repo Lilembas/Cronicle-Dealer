@@ -233,7 +233,7 @@ func (h *HealthChecker) cleanupOrphanedEvents(node models.Node) {
 			h.grpcServer.DownloadAndExpireLog(context.Background(), event.ID)
 		// WebSocket 广播事件状态变更
 		if h.wsServer != nil {
-			if err := h.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, 1); err != nil {
+			if err := h.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, node.ID, node.Hostname, 1); err != nil {
 				logger.Warn("推送孤儿事件状态失败",
 					zap.String("event_id", event.ID),
 					zap.Error(err))

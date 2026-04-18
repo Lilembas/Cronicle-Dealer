@@ -383,7 +383,7 @@ func (s *APIServer) triggerJob(c *gin.Context) {
 
 	// 通过WebSocket推送任务状态变化
 	if s.wsServer != nil {
-		s.wsServer.BroadcastTaskStatus(eventID, job.ID, eventStatusPending, 0)
+		s.wsServer.BroadcastTaskStatus(eventID, job.ID, eventStatusPending, "", "", 0)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -530,7 +530,7 @@ func (s *APIServer) abortEvent(c *gin.Context) {
 
 	// 通过WebSocket推送任务状态变化
 	if s.wsServer != nil {
-		s.wsServer.BroadcastTaskStatus(eventID, event.JobID, eventStatusAborted, -1)
+		s.wsServer.BroadcastTaskStatus(eventID, event.JobID, eventStatusAborted, event.NodeID, event.NodeName, -1)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

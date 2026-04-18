@@ -71,13 +71,15 @@ func (s *WebSocketServer) BroadcastLog(eventID, content string) error {
 }
 
 // BroadcastTaskStatus 广播任务状态变化
-func (s *WebSocketServer) BroadcastTaskStatus(eventID, jobID, status string, exitCode int) error {
+func (s *WebSocketServer) BroadcastTaskStatus(eventID, jobID, status, nodeID, nodeName string, exitCode int) error {
 	msg := ServerMessage{
 		Type: "task_status",
 		Data: map[string]interface{}{
 			"event_id":  eventID,
 			"job_id":    jobID,
 			"status":    status,
+			"node_id":   nodeID,
+			"node_name": nodeName,
 			"exit_code": exitCode,
 		},
 	}

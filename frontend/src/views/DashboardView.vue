@@ -99,8 +99,55 @@ const updateNode = (nodeData: any) => {
   }
 }
 
-const handleTaskStatus = () => {
-  loadData(true)
+const dispatchingTasks = ref<any[]>([])
+
+const handleTaskStatus = (data: any) => {
+  // 检查是否为刚派发变为运行的任务，并且携带了节点信息
+  if (data && data.status === 'running' && data.node_id) {
+    triggerFlight(data)
+  } else {
+    loadData(true)
+  }
+}
+
+const triggerFlight = (data: any) => {
+  const sourceEl = document.getElementById(`upcoming-${data.job_id}`)
+  const targetEl = document.getElementById(`node-card-${data.node_id}`)
+
+  if (sourceEl && targetEl) {
+    const sourceRect = sourceEl.getBoundingClientRect()
+    const targetRect = targetEl.getBoundingClientRect()
+
+    // 寻找在内存中（还未消失）的任务名称，用于动画展示
+    let taskName = '任务'
+    let taskCategory = ''
+    const upcomingMatch = upcomingJobs.value.find((j: any) => j.id === data.job_id)
+    if (upcomingMatch) {
+      taskName = upcomingMatch.name
+      taskCategory = upcomingMatch.category || ''
+    }
+
+    const flightTask = {
+      id: data.event_id,
+      name: taskName,
+      category: taskCategory,
+      startX: sourceRect.left,
+      startY: sourceRect.top + sourceRect.height / 2,
+      endX: targetRect.left + 20, // 飞入卡片左侧
+      endY: targetRect.top + targetRect.height / 2,
+    }
+
+    dispatchingTasks.value.push(flightTask)
+
+    // 等待 800ms 动画结束后更新数据并移除动画实例
+    setTimeout(() => {
+      dispatchingTasks.value = dispatchingTasks.value.filter(t => t.id !== data.event_id)
+      loadData(true)
+    }, 800)
+  } else {
+    // 找不到 DOM 时降级处理：直接更新
+    loadData(true)
+  }
 }
 
 const handleAbort = async (event: any) => {
@@ -275,6 +322,7 @@ onUnmounted(() => {
             <div
               v-for="node in workerNodes"
               :key="node.id"
+              :id="`node-card-${node.id}`"
               :class="['node-card', 'worker-card', node.status !== 'online' && 'node-offline']"
             >
               <div class="nc-header">
@@ -378,7 +426,7 @@ onUnmounted(() => {
               <span>暂无待运行任务</span>
             </div>
             <div v-else class="task-list">
-              <div v-for="job in upcomingJobs" :key="job.id" class="task-item upcoming-item">
+              <div v-for="job in upcomingJobs" :key="job.id" :id="`upcoming-${job.id}`" class="task-item upcoming-item">
                 <div class="upcoming-dot"></div>
                 <div class="task-info">
                   <div class="task-name-row">
@@ -398,6 +446,21 @@ onUnmounted(() => {
         </Card>
       </div>
     </div>
+
+    <!-- 飞行载体容器 (Teleported overlay effectively) -->
+    <Teleport to="body">
+      <div v-for="ft in dispatchingTasks" :key="ft.id" class="vessel-container" :style="{
+        '--startX': `${ft.startX}px`,
+        '--startY': `${ft.startY}px`,
+        '--endX': `${ft.endX}px`,
+        '--endY': `${ft.endY}px`
+      }">
+        <div class="vessel-entity">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="vessel-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span class="vessel-name">{{ ft.name }}</span>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -504,6 +567,49 @@ onUnmounted(() => {
 .cron-text { font-family: 'JetBrains Mono', monospace; color: #94a3b8; font-size: 9px; }
 .empty-tasks { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 0; color: #94a3b8; font-size: 11px; }
 .empty-icon-sm { width: 20px; height: 20px; opacity: 0.4; margin-bottom: 2px; }
+
+/* Flight Vessel Animation */
+.vessel-container {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 9999;
+  pointer-events: none;
+  animation: vesselFly 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+.vessel-entity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 99px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4), inset 0 1px 1px rgba(255,255,255,0.3);
+  transform: translate(-50%, -50%); /* Center on coordinate */
+}
+
+.vessel-icon { width: 12px; height: 12px; }
+.vessel-name { font-size: 10px; font-weight: 700; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@keyframes vesselFly {
+  0% {
+    transform: translate(var(--startX), var(--startY)) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+    transform: translate(var(--startX), var(--startY)) scale(1.1);
+  }
+  90% {
+    opacity: 1;
+    transform: translate(var(--endX), var(--endY)) scale(0.9);
+  }
+  100% {
+    transform: translate(var(--endX), var(--endY)) scale(0.5);
+    opacity: 0;
+  }
+}
 
 @media (max-width: 1200px) { .nodes-dispatch-layout { grid-template-columns: 1fr; } .tasks-col { flex-direction: row; gap: 12px; } .task-panel { flex: 1; } }
 @media (max-width: 1024px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
