@@ -59,12 +59,7 @@ const handleLogin = async () => {
       <!-- Logo 和标题 -->
       <div class="text-center mb-8">
         <div class="login-logo">
-          <svg class="logo-img" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="3" y="3" width="7" height="7" rx="1.5" fill="#3b82f6" />
-            <rect x="14" y="3" width="7" height="7" rx="1.5" fill="#8b5cf6" />
-            <rect x="3" y="14" width="7" height="7" rx="1.5" fill="#10b981" />
-            <rect x="14" y="14" width="7" height="7" rx="1.5" fill="#f59e0b" />
-          </svg>
+          <img src="@/assets/logo.svg" class="logo-img" alt="Cronicle-Next" />
         </div>
         <h1 class="text-2xl font-bold text-gray-800 mb-1">Cronicle-Next</h1>
         <p class="text-gray-400 text-sm">分布式任务调度平台</p>

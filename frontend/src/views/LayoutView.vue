@@ -87,12 +87,7 @@ function handleGlobalRefresh() {
     <!-- Header with Logo and User -->
     <div class="head-home">
       <div class="container">
-        <svg class="logo-img" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="3" y="3" width="7" height="7" rx="1.5" fill="#3b82f6" />
-          <rect x="14" y="3" width="7" height="7" rx="1.5" fill="#8b5cf6" />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" fill="#10b981" />
-          <rect x="14" y="14" width="7" height="7" rx="1.5" fill="#f59e0b" />
-        </svg>
+        <img src="@/assets/logo.svg" class="logo-img" alt="Cronicle-Next" />
         <div class="h1-head-home">Cronicle-Next</div>
       </div>
       <div class="head-user">
