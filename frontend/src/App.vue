@@ -2,15 +2,16 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { useWebSocketStore } from '@/stores/websocket'
-import ToastService from 'primevue/toastservice'
 import { toastEmitter } from '@/api/request'
+import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
 
 const wsStore = useWebSocketStore()
+const toast = useToast()
 
 const handleToastEvent = ((e: CustomEvent) => {
-    ToastService.emit('add', e.detail)
+    toast.add(e.detail)
 }) as EventListener
 
 onMounted(() => {

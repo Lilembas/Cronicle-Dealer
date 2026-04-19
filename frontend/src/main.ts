@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
+import ToastService from 'primevue/toastservice'
 import Tooltip from 'primevue/tooltip'
 import { VueQueryPlugin } from '@tanstack/vue-query'
 import CroniclePreset from './theme'
@@ -38,6 +39,9 @@ app.use(PrimeVue, {
         }
     }
 })
+
+// 注册 ToastService
+app.use(ToastService)
 
 // 注册 Tooltip 指令
 app.directive('tooltip', Tooltip)

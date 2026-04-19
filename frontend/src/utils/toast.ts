@@ -1,5 +1,5 @@
-import ToastEventBus from 'primevue/toasteventbus'
+import { toastEmitter } from '@/api/request'
 
 export function showToast(options: { severity: string; summary: string; detail?: string; life?: number }) {
-    ToastEventBus.emit('add', options)
+    toastEmitter.dispatchEvent(new CustomEvent('toast', { detail: options }))
 }

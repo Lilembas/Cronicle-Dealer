@@ -74,6 +74,7 @@ const parseEnvString = (value: unknown): Array<{ key: string; value: string }> =
 }
 
 const cron = ref({
+  second: '0',
   minute: '*',
   hour: '*',
   dayOfMonth: '*',
@@ -82,13 +83,16 @@ const cron = ref({
 })
 
 const cronPresets = [
-  { label: '每分钟', value: '* * * * *' },
-  { label: '每小时', value: '0 * * * *' },
-  { label: '每天0点', value: '0 0 * * *' },
-  { label: '每周一0点', value: '0 0 * * 1' },
-  { label: '每月1号0点', value: '0 0 1 * *' },
-  { label: '每5分钟', value: '*/5 * * * *' },
-  { label: '每30分钟', value: '*/30 * * * *' },
+  { label: '每秒', value: '* * * * * *' },
+  { label: '每10秒', value: '*/10 * * * * *' },
+  { label: '每30秒', value: '*/30 * * * * *' },
+  { label: '每分钟', value: '0 * * * * *' },
+  { label: '每5分钟', value: '0 */5 * * * *' },
+  { label: '每30分钟', value: '0 */30 * * * *' },
+  { label: '每小时', value: '0 0 * * * *' },
+  { label: '每天0点', value: '0 0 0 * * *' },
+  { label: '每周一0点', value: '0 0 0 * * 1' },
+  { label: '每月1号0点', value: '0 0 0 1 * *' },
 ]
 
 const isEdit = computed(() => !!route.params.id)
@@ -158,8 +162,18 @@ const loadJob = async () => {
     }
 
     const parts = job.cron_expr.split(/\s+/)
-    if (parts.length === 5) {
+    if (parts.length === 6) {
       cron.value = {
+        second: parts[0],
+        minute: parts[1],
+        hour: parts[2],
+        dayOfMonth: parts[3],
+        month: parts[4],
+        dayOfWeek: parts[5],
+      }
+    } else if (parts.length === 5) {
+      cron.value = {
+        second: '0',
         minute: parts[0],
         hour: parts[1],
         dayOfMonth: parts[2],
@@ -175,6 +189,7 @@ const loadJob = async () => {
 
 const buildCronExpr = () => {
   formData.value.cron_expr = [
+    cron.value.second,
     cron.value.minute,
     cron.value.hour,
     cron.value.dayOfMonth,
@@ -186,8 +201,18 @@ const buildCronExpr = () => {
 
 const updateCronFromExpr = (value: string) => {
   const parts = value.split(/\s+/)
-  if (parts.length === 5) {
+  if (parts.length === 6) {
     cron.value = {
+      second: parts[0],
+      minute: parts[1],
+      hour: parts[2],
+      dayOfMonth: parts[3],
+      month: parts[4],
+      dayOfWeek: parts[5],
+    }
+  } else if (parts.length === 5) {
+    cron.value = {
+      second: '0',
       minute: parts[0],
       hour: parts[1],
       dayOfMonth: parts[2],
@@ -239,11 +264,12 @@ const validateCronExpr = (): boolean => {
     return false
   }
   const parts = expr.split(/\s+/)
-  if (parts.length !== 5) {
-    cronError.value = 'Cron表达式须包含5个字段（分 时 日 月 周）'
+  if (parts.length !== 6) {
+    cronError.value = 'Cron表达式须包含6个字段（秒 分 时 日 月 周）'
     return false
   }
-  const [minute, hour, dom, month, dow] = parts
+  const [second, minute, hour, dom, month, dow] = parts
+  if (!validateCronField(second, 0, 59)) { cronError.value = '「秒」字段无效（范围 0-59）'; return false }
   if (!validateCronField(minute, 0, 59)) { cronError.value = '「分」字段无效（范围 0-59）'; return false }
   if (!validateCronField(hour, 0, 23)) { cronError.value = '「时」字段无效（范围 0-23）'; return false }
   if (!validateCronField(dom, 1, 31)) { cronError.value = '「日」字段无效（范围 1-31）'; return false }
@@ -402,6 +428,10 @@ onMounted(() => {
               <div class="cron-builder">
                 <div class="cron-grid">
                   <div class="cron-part">
+                    <span class="part-label">秒</span>
+                    <InputText v-model="cron.second" @input="buildCronExpr" placeholder="0" size="small" class="w-full text-center" />
+                  </div>
+                  <div class="cron-part">
                     <span class="part-label">分</span>
                     <InputText v-model="cron.minute" @input="buildCronExpr" placeholder="*" size="small" class="w-full text-center" />
                   </div>
@@ -424,14 +454,14 @@ onMounted(() => {
                 </div>
                 <div class="cron-raw">
                   <span class="raw-label">表达式:</span>
-                  <InputText :modelValue="formData.cron_expr" placeholder="* * * * *" size="small" class="raw-input" readonly />
+                  <InputText :modelValue="formData.cron_expr" placeholder="0 * * * * *" size="small" class="raw-input" readonly />
                 </div>
               </div>
               <div v-if="cronError" class="cron-error mt-2">
                 {{ cronError }}
               </div>
               <div v-else class="field-hint mt-2">
-                格式：分 时 日 月 周 (5位标准版)。使用 * 表示通配，*/N 表示频率。
+                格式：秒 分 时 日 月 周 (6位)。使用 * 表示通配，*/N 表示频率，秒级默认为 0。
               </div>
             </div>
           </div>
@@ -716,7 +746,7 @@ onMounted(() => {
 
 .cron-grid {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
@@ -749,7 +779,7 @@ onMounted(() => {
 }
 
 .raw-input {
-  width: 200px !important;
+  width: 220px !important;
 }
 
 .form-actions {

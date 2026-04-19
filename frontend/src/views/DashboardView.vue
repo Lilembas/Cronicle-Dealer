@@ -8,16 +8,88 @@ import Tag from 'primevue/tag'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useSystemStore } from '@/stores/system'
 
+interface DispatchAnimation {
+  id: string // event_id
+  sourceElId: string // DOM id of frozen card: frozen-${event_id}
+  targetNodeId: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  lineLength: number
+  phase: 'drawing' | 'drawn' | 'fading'
+}
+
+interface FrozenCard {
+  event_id: string
+  job_id: string
+  job_name: string
+  category: string
+}
+
 const stats = ref<any>(null)
 const nodes = ref<any[]>([])
 const runningEvents = ref<any[]>([])
 const upcomingJobs = ref<any[]>([])
+const frozenCards = ref<FrozenCard[]>([])
 const statsLoading = ref(false)
 const nodesLoading = ref(false)
 const wsStore = useWebSocketStore()
 const systemStore = useSystemStore()
 const router = useRouter()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
+
+const dispatchAnimations = ref<DispatchAnimation[]>([])
+const highlightedEventIds = ref(new Set<string>())
+const highlightedNodeIds = ref(new Set<string>())
+
+// Continuously update line positions to follow moving cards
+let rafId: number | null = null
+
+const edgePoint = (rect: DOMRect, towardX: number, towardY: number): [number, number] => {
+  const cx = rect.left + rect.width / 2
+  const cy = rect.top + rect.height / 2
+  const hw = rect.width / 2
+  const hh = rect.height / 2
+  const dx = towardX - cx
+  const dy = towardY - cy
+  if (dx === 0 && dy === 0) return [cx + hw, cy]
+  let t: number
+  if (dx === 0) t = hh / Math.abs(dy)
+  else if (dy === 0) t = hw / Math.abs(dx)
+  else t = Math.min(hw / Math.abs(dx), hh / Math.abs(dy))
+  return [cx + dx * t, cy + dy * t]
+}
+
+const updateLinePositions = () => {
+  if (dispatchAnimations.value.length === 0) {
+    rafId = null
+    return
+  }
+  for (const anim of dispatchAnimations.value) {
+    const sourceEl = document.getElementById(anim.sourceElId)
+    const targetEl = document.getElementById(`node-card-${anim.targetNodeId}`)
+    if (!sourceEl || !targetEl) continue
+
+    const sr = sourceEl.getBoundingClientRect()
+    const tr = targetEl.getBoundingClientRect()
+    const scx = sr.left + sr.width / 2, scy = sr.top + sr.height / 2
+    const tcx = tr.left + tr.width / 2, tcy = tr.top + tr.height / 2
+    const [x1, y1] = edgePoint(sr, tcx, tcy)
+    const [x2, y2] = edgePoint(tr, scx, scy)
+
+    anim.x1 = x1; anim.y1 = y1
+    anim.x2 = x2; anim.y2 = y2
+    anim.lineLength = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+  }
+  rafId = requestAnimationFrame(updateLinePositions)
+}
+
+const startTracking = () => {
+  if (rafId === null && dispatchAnimations.value.length > 0) {
+    rafId = requestAnimationFrame(updateLinePositions)
+  }
+}
 
 const isMasterNode = (node: any) => {
   if (!node || !node.tags) return false
@@ -40,7 +112,7 @@ const sortedNodes = computed(() => {
   })
 })
 
-// Get running tasks for a specific node  
+// Get running tasks for a specific node
 const getNodeRunningJobs = (nodeId: string) => {
   return runningEvents.value.filter(e => e.node_id === nodeId || e.node_name === getNodeHostname(nodeId))
 }
@@ -69,7 +141,11 @@ const loadData = async (isBackground = false) => {
     runningEvents.value = (runningData as any).data || []
 
     upcomingJobs.value = ((jobsData as any).data || [])
-      .filter((j: any) => j.enabled && j.next_run_time && new Date(j.next_run_time).getTime() > systemStore.currentTime)
+      .filter((j: any) => {
+        if (!j.enabled || !j.next_run_time) return false
+        const diff = new Date(j.next_run_time).getTime() - systemStore.currentTime
+        return diff > 0 && diff <= 2 * 60 * 60 * 1000
+      })
       .sort((a: any, b: any) => new Date(a.next_run_time).getTime() - new Date(b.next_run_time).getTime())
       .slice(0, 8)
   } catch (error) {
@@ -99,61 +175,93 @@ const updateNode = (nodeData: any) => {
   }
 }
 
-const dispatchingTasks = ref<any[]>([])
-
 const handleTaskStatus = (data: any) => {
-  // 检查是否为刚派发变为运行的任务，并且携带了节点信息
   if (data && data.status === 'running' && data.node_id) {
-    triggerFlight(data)
+    triggerConnection(data)
   } else {
     loadData(true)
   }
 }
 
-const triggerFlight = (data: any) => {
+const triggerConnection = (data: any) => {
   const sourceEl = document.getElementById(`upcoming-${data.job_id}`)
   const targetEl = document.getElementById(`node-card-${data.node_id}`)
 
-  if (sourceEl && targetEl) {
-    const sourceRect = sourceEl.getBoundingClientRect()
-    const targetRect = targetEl.getBoundingClientRect()
-
-    // 寻找在内存中（还未消失）的任务名称，用于动画展示
-    let taskName = '任务'
-    let taskCategory = ''
-    const upcomingMatch = upcomingJobs.value.find((j: any) => j.id === data.job_id)
-    if (upcomingMatch) {
-      taskName = upcomingMatch.name
-      taskCategory = upcomingMatch.category || ''
-    }
-
-    const flightTask = {
-      id: data.event_id,
-      name: taskName,
-      category: taskCategory,
-      startX: sourceRect.left,
-      startY: sourceRect.top + sourceRect.height / 2,
-      endX: targetRect.left + 20, // 飞入卡片左侧
-      endY: targetRect.top + targetRect.height / 2,
-    }
-
-    dispatchingTasks.value.push(flightTask)
-
-    // 等待 800ms 动画结束后更新数据并移除动画实例
-    setTimeout(() => {
-      dispatchingTasks.value = dispatchingTasks.value.filter(t => t.id !== data.event_id)
-      loadData(true)
-    }, 800)
-  } else {
-    // 找不到 DOM 时降级处理：直接更新
+  if (!sourceEl || !targetEl) {
     loadData(true)
+    return
   }
+
+  // Freeze the card data and remove from upcomingJobs immediately
+  // Look up job name from upcomingJobs since backend broadcast doesn't include it
+  const sourceJob = upcomingJobs.value.find(j => j.id === data.job_id)
+  const frozenCard: FrozenCard = {
+    event_id: data.event_id,
+    job_id: data.job_id,
+    job_name: sourceJob?.name || data.job_id,
+    category: sourceJob?.category || ''
+  }
+  frozenCards.value.push(frozenCard)
+  upcomingJobs.value = upcomingJobs.value.filter(j => j.id !== data.job_id)
+
+  const sourceElId = `frozen-${data.event_id}`
+  const sourceRect = sourceEl.getBoundingClientRect()
+  const targetRect = targetEl.getBoundingClientRect()
+  const scx = sourceRect.left + sourceRect.width / 2, scy = sourceRect.top + sourceRect.height / 2
+  const tcx = targetRect.left + targetRect.width / 2, tcy = targetRect.top + targetRect.height / 2
+  const [x1, y1] = edgePoint(sourceRect, tcx, tcy)
+  const [x2, y2] = edgePoint(targetRect, scx, scy)
+  const lineLength = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+  const animId = data.event_id
+  const nodeId = data.node_id
+
+  dispatchAnimations.value.push({
+    id: animId,
+    sourceElId,
+    targetNodeId: nodeId,
+    x1, y1, x2, y2,
+    lineLength,
+    phase: 'drawing'
+  })
+
+  highlightedEventIds.value = new Set([...highlightedEventIds.value, animId])
+  highlightedNodeIds.value = new Set([...highlightedNodeIds.value, nodeId])
+
+  startTracking()
+
+  // Phase 1: Draw line
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const anim = dispatchAnimations.value.find(a => a.id === animId)
+      if (anim) anim.phase = 'drawn'
+    })
+  })
+
+  // Phase 2: Fade out
+  setTimeout(() => {
+    const anim = dispatchAnimations.value.find(a => a.id === animId)
+    if (anim) anim.phase = 'fading'
+  }, 1500)
+
+  // Phase 3: Clean up frozen card and reload
+  setTimeout(() => {
+    dispatchAnimations.value = dispatchAnimations.value.filter(a => a.id !== animId)
+    frozenCards.value = frozenCards.value.filter(c => c.event_id !== animId)
+    const newEvents = new Set(highlightedEventIds.value)
+    newEvents.delete(animId)
+    highlightedEventIds.value = newEvents
+    const newNodes = new Set(highlightedNodeIds.value)
+    newNodes.delete(nodeId)
+    highlightedNodeIds.value = newNodes
+    loadData(true)
+  }, 2500)
 }
 
 const handleAbort = async (event: any) => {
   try {
     await eventsApi.abort(event.id)
-    handleTaskStatus()
+    loadData(true)
   } catch (error) {
     console.error('中止任务失败:', error)
   }
@@ -193,6 +301,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (rafId !== null) cancelAnimationFrame(rafId)
   wsStore.offMessage('task_status', handleTaskStatus)
   wsStore.offMessage('node_status', handleNodeStatus)
   if (globalRefreshHandler) {
@@ -250,7 +359,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Row 2: Node Cards -->
+    <!-- Row 2: Node Cards + Side Panel -->
     <div class="nodes-dispatch-layout mb-6">
       <div class="nodes-col">
         <!-- Master Nodes -->
@@ -295,6 +404,49 @@ onUnmounted(() => {
               <div class="nc-offline-msg" v-else>节点离线</div>
             </div>
           </div>
+
+          <!-- Upcoming Tasks Section -->
+          <div v-if="upcomingJobs.length > 0 || frozenCards.length > 0" class="upcoming-section">
+            <div class="upcoming-section-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="upcoming-section-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span class="upcoming-section-title">即将安排的任务</span>
+              <span class="upcoming-section-count">{{ upcomingJobs.length + frozenCards.length }}</span>
+            </div>
+            <div class="upcoming-cards">
+              <!-- Frozen cards (dispatching) - sorted by dispatch order, first dispatched = first -->
+              <div
+                v-for="card in frozenCards"
+                :key="card.event_id"
+                :id="`frozen-${card.event_id}`"
+                :class="['upcoming-task-card', highlightedEventIds.has(card.event_id) && 'dispatch-source-highlight']"
+              >
+                <div class="utc-header">
+                  <div class="utc-dot dispatching-dot"></div>
+                  <div class="utc-name" @click="router.push(`/jobs/${card.job_id}/detail`)">{{ card.job_name }}</div>
+                </div>
+                <div class="utc-meta">
+                  <span class="utc-countdown font-mono dispatching-label">派发中</span>
+                  <span v-if="card.category" class="utc-category">{{ card.category }}</span>
+                </div>
+              </div>
+              <!-- Regular upcoming cards -->
+              <div
+                v-for="job in upcomingJobs"
+                :key="job.id"
+                :id="`upcoming-${job.id}`"
+                class="upcoming-task-card"
+              >
+                <div class="utc-header">
+                  <div class="utc-dot"></div>
+                  <div class="utc-name" @click="router.push(`/jobs/${job.id}/detail`)">{{ job.name }}</div>
+                </div>
+                <div class="utc-meta">
+                  <span class="utc-countdown font-mono">{{ formatCountdown(job.next_run_time) }}</span>
+                  <span v-if="job.category" class="utc-category">{{ job.category }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Worker Nodes -->
@@ -323,7 +475,7 @@ onUnmounted(() => {
               v-for="node in workerNodes"
               :key="node.id"
               :id="`node-card-${node.id}`"
-              :class="['node-card', 'worker-card', node.status !== 'online' && 'node-offline']"
+              :class="['node-card', 'worker-card', node.status !== 'online' && 'node-offline', highlightedNodeIds.has(node.id) && 'dispatch-target-highlight']"
             >
               <div class="nc-header">
                 <div class="nc-status-wrap">
@@ -353,7 +505,7 @@ onUnmounted(() => {
               </div>
               <div class="nc-offline-msg" v-else>节点离线</div>
 
-              <!-- Back to simple list style for card tasks -->
+              <!-- Running jobs on this node -->
               <div class="nc-running-jobs" v-if="getNodeRunningJobs(node.id).length > 0">
                 <div
                   class="running-job-item"
@@ -376,9 +528,9 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Right Panel -->
+      <!-- Right Panel: Running Events Only -->
       <div class="tasks-col">
-        <Card class="task-panel mb-4">
+        <Card class="task-panel">
           <template #title>
             <div class="panel-header">
               <div class="panel-accent amber-accent"></div>
@@ -411,55 +563,35 @@ onUnmounted(() => {
             </div>
           </template>
         </Card>
-
-        <Card class="task-panel">
-          <template #title>
-            <div class="panel-header">
-              <div class="panel-accent green-accent"></div>
-              <h3 class="panel-title">即将运行</h3>
-              <span class="panel-count upcoming-count">{{ upcomingJobs.length }}</span>
-            </div>
-          </template>
-          <template #content>
-            <div v-if="upcomingJobs.length === 0" class="empty-tasks">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="empty-icon-sm"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <span>暂无待运行任务</span>
-            </div>
-            <div v-else class="task-list">
-              <div v-for="job in upcomingJobs" :key="job.id" :id="`upcoming-${job.id}`" class="task-item upcoming-item">
-                <div class="upcoming-dot"></div>
-                <div class="task-info">
-                  <div class="task-name-row">
-                    <div class="task-name" @click="router.push(`/jobs/${job.id}/detail`)">{{ job.name }}</div>
-                    <span v-if="job.category" class="task-category-badge">{{ job.category }}</span>
-                  </div>
-                  <div class="task-meta">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="meta-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <span class="font-mono countdown">{{ formatCountdown(job.next_run_time) }}</span>
-                    <span class="sep">·</span>
-                    <span class="cron-text">{{ job.cron_expr }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </Card>
       </div>
     </div>
 
-    <!-- 飞行载体容器 (Teleported overlay effectively) -->
+    <!-- SVG Connection Lines Overlay -->
     <Teleport to="body">
-      <div v-for="ft in dispatchingTasks" :key="ft.id" class="vessel-container" :style="{
-        '--startX': `${ft.startX}px`,
-        '--startY': `${ft.startY}px`,
-        '--endX': `${ft.endX}px`,
-        '--endY': `${ft.endY}px`
-      }">
-        <div class="vessel-entity">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="vessel-icon"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          <span class="vessel-name">{{ ft.name }}</span>
-        </div>
-      </div>
+      <svg class="dispatch-svg-overlay" v-if="dispatchAnimations.length > 0">
+        <defs>
+          <filter id="dispatchGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <line
+          v-for="anim in dispatchAnimations"
+          :key="anim.id"
+          :x1="anim.x1" :y1="anim.y1"
+          :x2="anim.x2" :y2="anim.y2"
+          class="dispatch-line"
+          :style="{
+            strokeDasharray: anim.lineLength + 'px',
+            strokeDashoffset: anim.phase === 'drawing' ? anim.lineLength + 'px' : '0px',
+            opacity: anim.phase === 'fading' ? 0 : 1,
+          }"
+          filter="url(#dispatchGlow)"
+        />
+      </svg>
     </Teleport>
   </div>
 </template>
@@ -483,7 +615,8 @@ onUnmounted(() => {
 .text-purple { color: #8b5cf6 !important; }
 .text-red { color: #ef4444; }
 
-.nodes-dispatch-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
+/* Layout */
+.nodes-dispatch-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
 .group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .group-dot { width: 8px; height: 8px; border-radius: 50%; }
 .master-dot { background: #f59e0b; box-shadow: 0 0 6px #f59e0b88; }
@@ -491,6 +624,8 @@ onUnmounted(() => {
 .group-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
 .group-tag { font-size: 10px; padding: 2px 6px; }
 .node-cards-row { display: flex; flex-wrap: wrap; gap: 14px; }
+
+/* Node Cards */
 .node-card { background: white; border-radius: 14px; border: 1.5px solid #f1f5f9; padding: 14px 16px; min-width: 220px; max-width: 300px; flex: 1 1 220px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.25s ease; position: relative; overflow: hidden; }
 .master-card { border-color: #fef3c7; background: linear-gradient(135deg, #fffbeb 0%, #fff 60%); }
 .worker-card { border-color: #eff6ff; background: linear-gradient(135deg, #eff6ff 0%, #fff 60%); }
@@ -507,6 +642,7 @@ onUnmounted(() => {
 .worker-badge { background: #dbeafe; color: #1e40af; }
 .badge-svg { width: 10px; height: 10px; }
 
+/* Metrics */
 .nc-metrics { display: flex; flex-direction: column; gap: 8px; }
 .metric-row { display: flex; align-items: center; gap: 8px; }
 .metric-label { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #94a3b8; width: 28px; flex-shrink: 0; }
@@ -521,6 +657,7 @@ onUnmounted(() => {
 .metric-value.medium { color: #f59e0b; }
 .metric-value.high { color: #ef4444; }
 
+/* Running jobs in node card */
 .nc-running-jobs { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; display: flex; flex-direction: column; gap: 5px; }
 .running-job-item { display: flex; align-items: center; gap: 8px; font-size: 10px; justify-content: space-between; }
 .running-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; animation: runningPulse 1s ease-in-out infinite alternate; }
@@ -534,6 +671,7 @@ onUnmounted(() => {
 .task-category-tag { font-size: 8px; font-weight: 700; color: #64748b; background: #f1f5f9; padding: 0px 4px; border-radius: 4px; text-transform: uppercase; white-space: nowrap; }
 .task-category-badge { font-size: 9px; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0px 5px; border-radius: 4px; text-transform: uppercase; margin-left: 6px; }
 
+/* Skeleton & Empty */
 .skeleton-card { min-height: 120px; }
 .skeleton-line { background: #f1f5f9; border-radius: 4px; display: block; height: 12px; }
 @keyframes shimmer { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
@@ -541,21 +679,126 @@ onUnmounted(() => {
 .empty-nodes { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 0; color: #94a3b8; font-size: 12px; }
 .empty-icon { width: 28px; height: 28px; opacity: 0.5; }
 
+/* Upcoming Tasks Section (inside Master group) */
+.upcoming-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed #e2e8f0;
+}
+.upcoming-section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.upcoming-section-icon {
+  width: 13px;
+  height: 13px;
+  color: #10b981;
+  flex-shrink: 0;
+}
+.upcoming-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+.upcoming-section-count {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: #f0fdf4;
+  color: #166534;
+}
+.upcoming-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.upcoming-task-card {
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  min-width: 130px;
+  max-width: 170px;
+  flex: 1 1 130px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+  cursor: default;
+}
+.upcoming-task-card:hover {
+  border-color: #10b981aa;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
+}
+.utc-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.utc-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10b981;
+  flex-shrink: 0;
+}
+.dispatching-dot {
+  background: #3b82f6;
+  animation: runningPulse 1s ease-in-out infinite alternate;
+}
+.utc-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.utc-name:hover { color: #3b82f6; }
+.utc-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  padding-left: 10px;
+}
+.utc-countdown {
+  font-size: 10px;
+  font-weight: 600;
+  color: #10b981;
+}
+.utc-category {
+  font-size: 8px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.dispatching-label {
+  color: #3b82f6 !important;
+  font-weight: 700;
+}
+
+/* Right Panel - Running Events */
 .task-panel { border-radius: 14px !important; border: 1px solid #f1f5f9 !important; box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important; }
 .panel-header { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
 .panel-accent { width: 4px; height: 18px; border-radius: 2px; flex-shrink: 0; }
 .amber-accent { background: #f59e0b; }
-.green-accent { background: #10b981; }
 .panel-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #0f172a; margin: 0; flex: 1; }
 .panel-count { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
 .running-count { background: #fffbeb; color: #92400e; }
-.upcoming-count { background: #f0fdf4; color: #166534; }
 .task-list { display: flex; flex-direction: column; gap: 0; }
 .task-item { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid #f8fafc; transition: background 0.15s ease; position: relative; }
 .task-item:last-child { border-bottom: none; }
 .task-item:hover { background: #f8fafc; border-radius: 8px; }
 .task-pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink: 0; animation: runningPulse 1s ease-in-out infinite alternate; }
-.upcoming-dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
 .task-info { flex: 1; min-width: 0; }
 .task-name-row { display: flex; align-items: center; justify-content: flex-start; width: 100%; }
 .task-name { font-size: 12px; font-weight: 600; color: #3b82f6; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
@@ -563,55 +806,51 @@ onUnmounted(() => {
 .task-meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 10px; color: #94a3b8; }
 .meta-icon { width: 10px; height: 10px; flex-shrink: 0; }
 .font-mono { font-family: 'JetBrains Mono', monospace; }
-.countdown { color: #10b981; font-weight: 600; }
-.cron-text { font-family: 'JetBrains Mono', monospace; color: #94a3b8; font-size: 9px; }
 .empty-tasks { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 0; color: #94a3b8; font-size: 11px; }
 .empty-icon-sm { width: 20px; height: 20px; opacity: 0.4; margin-bottom: 2px; }
 
-/* Flight Vessel Animation */
-.vessel-container {
+/* Dispatch Connection Line Animation */
+.dispatch-svg-overlay {
   position: fixed;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 9999;
   pointer-events: none;
-  animation: vesselFly 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+.dispatch-line {
+  stroke: #3b82f6;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  fill: none;
+  transition: stroke-dashoffset 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 1s ease-out;
 }
 
-.vessel-entity {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-  padding: 4px 10px;
-  border-radius: 99px;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4), inset 0 1px 1px rgba(255,255,255,0.3);
-  transform: translate(-50%, -50%); /* Center on coordinate */
+/* Source (upcoming task card) highlight */
+.dispatch-source-highlight {
+  animation: sourceBorderPulse 2.5s ease-out forwards !important;
+}
+@keyframes sourceBorderPulse {
+  0% { border-color: #e2e8f0; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  8% { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), 0 0 14px rgba(59, 130, 246, 0.2); }
+  55% { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), 0 0 14px rgba(59, 130, 246, 0.2); }
+  100% { border-color: #e2e8f0; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
 }
 
-.vessel-icon { width: 12px; height: 12px; }
-.vessel-name { font-size: 10px; font-weight: 700; max-width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-@keyframes vesselFly {
-  0% {
-    transform: translate(var(--startX), var(--startY)) scale(1);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-    transform: translate(var(--startX), var(--startY)) scale(1.1);
-  }
-  90% {
-    opacity: 1;
-    transform: translate(var(--endX), var(--endY)) scale(0.9);
-  }
-  100% {
-    transform: translate(var(--endX), var(--endY)) scale(0.5);
-    opacity: 0;
-  }
+/* Target (worker node card) highlight */
+.dispatch-target-highlight {
+  animation: targetBorderPulse 2.5s ease-out forwards !important;
+}
+@keyframes targetBorderPulse {
+  0% { border-color: #eff6ff; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  8% { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), 0 0 14px rgba(59, 130, 246, 0.2); }
+  55% { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12), 0 0 14px rgba(59, 130, 246, 0.2); }
+  100% { border-color: #eff6ff; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
 }
 
-@media (max-width: 1200px) { .nodes-dispatch-layout { grid-template-columns: 1fr; } .tasks-col { flex-direction: row; gap: 12px; } .task-panel { flex: 1; } }
+/* Responsive */
+@media (max-width: 1200px) { .nodes-dispatch-layout { grid-template-columns: 1fr; } }
 @media (max-width: 1024px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 768px) { .dashboard { padding: 12px; } .tasks-col { flex-direction: column; } .node-card { min-width: 100%; } }
+@media (max-width: 768px) { .dashboard { padding: 12px; } .node-card { min-width: 100%; } .upcoming-task-card { min-width: 100%; max-width: 100%; } }
 </style>
