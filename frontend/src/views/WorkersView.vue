@@ -256,16 +256,13 @@ onUnmounted(() => {
     <Card class="table-card">
       <template #content>
         <DataTable
-          v-model:selection="selectedNodes"
           :value="filteredNodes"
           stripedRows
           :loading="loading"
           :rowClass="getRowClass"
-          :selectableRow="canSelectRow"
           dataKey="id"
           class="workers-table"
         >
-          <Column selectionMode="multiple" headerStyle="width: 3rem" />
           <Column field="hostname" header="节点信息" style="min-width: 200px">
             <template #body="{ data }">
               <div class="hostname-cell">

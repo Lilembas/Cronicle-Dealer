@@ -512,7 +512,7 @@ const getStatusText = (status: string) => {
 }
 
 .target-any i {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .target-node {
@@ -548,8 +548,8 @@ const getStatusText = (status: string) => {
 .target-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  gap: 6px;
+  font-size: 12px;
   color: #0ea5e9;
   background: #f0f9ff;
   padding: 4px 10px 4px 8px;
@@ -558,7 +558,7 @@ const getStatusText = (status: string) => {
 }
 
 .target-tag i {
-  font-size: 11px;
+  font-size: 12px;
   color: #0284c7;
 }
 

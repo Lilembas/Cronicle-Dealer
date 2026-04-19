@@ -683,7 +683,6 @@ onUnmounted(() => {
 .upcoming-section {
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px dashed #e2e8f0;
 }
 .upcoming-section-header {
   display: flex;

@@ -16,7 +16,7 @@ master:
   # 心跳检测
   heartbeat:
     timeout: 30  # 秒，超过此时间未收到心跳视为离线
-    check_interval: 10  # 秒
+    check_interval: 5  # 秒
 
   # 分发重试配置
   dispatch_retry:
@@ -36,7 +36,7 @@ worker:
   
   # 心跳配置
   heartbeat:
-    interval: 10  # 秒
+    interval: 5  # 秒
   
   # 任务执行配置
   executor:

@@ -9,9 +9,11 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"runtime"
 
 	"google.golang.org/grpc"
 	"go.uber.org/zap"
@@ -189,7 +191,7 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 
 	logger.Info("开始执行任务", zap.String("event_id", req.EventId))
 
-	exitCode, output, stderr, err := e.executeByType(req)
+	exitCode, output, stderr, cpuPercent, memoryBytes, err := e.executeByType(req)
 	endTime := time.Now()
 
 	status := taskStatusSuccess
@@ -201,16 +203,18 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 	}
 
 	storage.SetTaskStatus(ctx, taskKey, status)
-	e.recordTaskResult(ctx, taskKey, req, startTime, endTime, exitCode, output, stderr, err)
+	e.recordTaskResult(ctx, taskKey, req, startTime, endTime, exitCode, output, stderr, cpuPercent, memoryBytes, err)
 
 	logger.Info("任务执行完成",
 		zap.String("event_id", req.EventId),
 		zap.Int("exit_code", exitCode),
+		zap.Float64("cpu_percent", cpuPercent),
+		zap.Int64("memory_bytes", memoryBytes),
 		zap.Duration("duration", endTime.Sub(startTime)))
 }
 
 // executeByType 根据任务类型执行
-func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, string, error) {
+func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, string, float64, int64, error) {
 	switch req.Type {
 	case pb.TaskType_SHELL:
 		return e.executeShell(req)
@@ -219,12 +223,12 @@ func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, string, erro
 	case pb.TaskType_DOCKER:
 		return e.executeDocker(req)
 	default:
-		return 1, "", "", fmt.Errorf("不支持的任务类型: %v", req.Type)
+		return 1, "", "", 0, 0, fmt.Errorf("不支持的任务类型: %v", req.Type)
 	}
 }
 
 // executeShell 执行 Shell 脚本（日志直写 Redis + 文件，通过 Pub/Sub 实时推送）
-func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error) {
+func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, float64, int64, error) {
 	ctx := context.Background()
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -276,18 +280,23 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 	// 创建管道来捕获实时输出
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return 1, "", "", fmt.Errorf("创建stdout管道失败: %w", err)
+		return 1, "", "", 0, 0, fmt.Errorf("创建stdout管道失败: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return 1, "", "", fmt.Errorf("创建stderr管道失败: %w", err)
+		return 1, "", "", 0, 0, fmt.Errorf("创建stderr管道失败: %w", err)
 	}
 
 	// 启动命令
 	if err := cmd.Start(); err != nil {
-		return 1, "", "", fmt.Errorf("启动命令失败: %w", err)
+		return 1, "", "", 0, 0, fmt.Errorf("启动命令失败: %w", err)
 	}
 	e.runningJobs.Store(req.EventId, cmd)
+
+	// 启动进程资源采样
+	var stats processStats
+	monitorStop := make(chan struct{})
+	go monitorProcess(cmd.Process.Pid, monitorStop, &stats)
 
 	// 用于收集完整输出和 stderr
 	var fullOutput bytes.Buffer
@@ -314,12 +323,21 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 	// 关闭日志文件句柄，flush 到磁盘
 	storage.CloseLogHandle(req.EventId)
 
+	// 停止资源采样，等待命令完成
+	close(monitorStop)
+
 	// 等待命令执行完成（此时管道已读完，安全地 reap 子进程）
 	err = cmd.Wait()
 
+	// 计算平均资源使用
+	stats.mu.Lock()
+	avgCPU := calcAvgCPU(stats.cpuPercents)
+	avgMem := calcAvgMemory(stats.memoryBytes)
+	stats.mu.Unlock()
+
 	exitCode, _ := extractExitCode(err)
 	if reason, aborted := e.abortedJobs.Load(req.EventId); aborted {
-		return 137, fullOutput.String(), stderrBuffer.String(), fmt.Errorf("task aborted: %v", reason)
+		return 137, fullOutput.String(), stderrBuffer.String(), avgCPU, avgMem, fmt.Errorf("task aborted: %v", reason)
 	}
 
 	// 如果有错误且stderr不为空，增强错误消息
@@ -330,7 +348,7 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, error
 		}
 	}
 
-	return exitCode, fullOutput.String(), stderrBuffer.String(), err
+	return exitCode, fullOutput.String(), stderrBuffer.String(), avgCPU, avgMem, err
 }
 
 // readStreamAndStore 读取输出流，直写 Redis + 本地文件，发布 Pub/Sub 通知
@@ -370,19 +388,19 @@ func (e *Executor) readStreamAndStore(reader io.Reader, eventID, streamType stri
 }
 
 // executeHTTP 执行 HTTP 请求
-func (e *Executor) executeHTTP(req *pb.TaskRequest) (int, string, string, error) {
+func (e *Executor) executeHTTP(req *pb.TaskRequest) (int, string, string, float64, int64, error) {
 	logger.Warn("HTTP 任务执行器未实现", zap.String("event_id", req.EventId))
-	return 1, "", "", fmt.Errorf("HTTP 任务执行器未实现")
+	return 1, "", "", 0, 0, fmt.Errorf("HTTP 任务执行器未实现")
 }
 
 // executeDocker 执行 Docker 容器任务
-func (e *Executor) executeDocker(req *pb.TaskRequest) (int, string, string, error) {
+func (e *Executor) executeDocker(req *pb.TaskRequest) (int, string, string, float64, int64, error) {
 	logger.Warn("Docker 任务执行器未实现", zap.String("event_id", req.EventId))
-	return 1, "", "", fmt.Errorf("Docker 任务执行器未实现")
+	return 1, "", "", 0, 0, fmt.Errorf("Docker 任务执行器未实现")
 }
 
 // recordTaskResult 记录任务结果
-func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, output, stderr string, execErr error) {
+func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, output, stderr string, cpuPercent float64, memoryBytes int64, execErr error) {
 	result := map[string]interface{}{
 		"job_id":       req.JobId,
 		"event_id":     req.EventId,
@@ -392,8 +410,8 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 		"start_time":   startTime.Unix(),
 		"end_time":     endTime.Unix(),
 		"duration":     endTime.Sub(startTime).Seconds(),
-		"cpu_percent":  0.0, // TODO: 实际测量
-		"memory_bytes": 0,   // TODO: 实际测量
+		"cpu_percent":  cpuPercent,
+		"memory_bytes": memoryBytes,
 	}
 
 	if execErr != nil {
@@ -415,7 +433,7 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 
 	// 向Master报告任务结果（同步调用，确保 Master 收到后才返回）
 	if e.masterClient != nil {
-		e.reportToMaster(req, startTime, endTime, exitCode, execErr)
+		e.reportToMaster(req, startTime, endTime, exitCode, cpuPercent, memoryBytes, execErr)
 	} else {
 		logger.Warn("Master客户端未设置，无法主动报告任务结果",
 			zap.String("event_id", req.EventId))
@@ -428,7 +446,7 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 }
 
 // reportToMaster 向Master报告任务执行结果
-func (e *Executor) reportToMaster(req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, execErr error) {
+func (e *Executor) reportToMaster(req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, cpuPercent float64, memoryBytes int64, execErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -439,8 +457,8 @@ func (e *Executor) reportToMaster(req *pb.TaskRequest, startTime, endTime time.T
 		StartTime:  startTime.Unix(),
 		EndTime:    endTime.Unix(),
 		ResourceUsage: &pb.ResourceUsage{
-			CpuPercent:  0.0, // TODO: 实际测量
-			MemoryBytes: 0,   // TODO: 实际测量
+			CpuPercent:  cpuPercent,
+			MemoryBytes: memoryBytes,
 		},
 	}
 
@@ -476,4 +494,136 @@ func extractExitCode(err error) (int, error) {
 	}
 
 	return 1, err
+}
+
+// processStats 保存进程资源采样数据
+type processStats struct {
+	cpuPercents []float64
+	memoryBytes []int64
+	mu          sync.Mutex
+}
+
+// monitorProcess 采样进程 CPU 和 RSS：启动后立即采一次，之后每 1 秒采样，停止前再采一次
+func monitorProcess(pid int, stop <-chan struct{}, stats *processStats) {
+	const sampleInterval = 1 * time.Second
+	var prevUTime, prevSTime, prevTotal uint64
+	inited := false
+
+	sample := func() {
+		cpuPercent, rssBytes, totalDelta, uTime, sTime, ok := readProcessStat(pid, prevUTime, prevSTime, prevTotal, inited)
+		if !ok {
+			return
+		}
+		stats.mu.Lock()
+		if cpuPercent > 0 {
+			stats.cpuPercents = append(stats.cpuPercents, cpuPercent)
+		}
+		stats.memoryBytes = append(stats.memoryBytes, rssBytes)
+		stats.mu.Unlock()
+		prevUTime = uTime
+		prevSTime = sTime
+		prevTotal = totalDelta
+		inited = true
+	}
+
+	// 立即采样一次（初始化 prev 值 + 获取初始内存）
+	sample()
+
+	ticker := time.NewTicker(sampleInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stop:
+			// 停止前再采一次（进程可能仍在，捕获最后一次数据）
+			sample()
+			return
+		case <-ticker.C:
+			sample()
+		}
+	}
+}
+
+// readProcessStat 读取 /proc/<pid>/stat，返回 CPU% 和 RSS bytes
+func readProcessStat(pid int, prevUTime, prevSTime, prevTotal uint64, inited bool) (cpuPercent float64, rssBytes int64, total uint64, uTime, sTime uint64, ok bool) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, 0, 0, 0, 0, false
+	}
+
+	// /proc/<pid>/stat 格式：pid (comm) state ppid pgrp session tty_nr tpgid flags
+	//   minflt cminflt majflt cmajflt utime stime cutime cstime priority nice
+	//   num_threads itrealvalue starttime vsize rss ...
+	// comm 可能包含括号和空格，从最后一个 ')' 之后开始解析
+	content := string(data)
+	idx := strings.LastIndex(content, ")")
+	if idx < 0 {
+		return 0, 0, 0, 0, 0, false
+	}
+	fields := strings.Fields(content[idx+2:])
+	if len(fields) < 22 {
+		return 0, 0, 0, 0, 0, false
+	}
+
+	// fields 索引（从 ')' 之后算起，state=0）：utime=11, stime=12, rss=21
+	utime, err := strconv.ParseUint(fields[11], 10, 64)
+	if err != nil {
+		return 0, 0, 0, 0, 0, false
+	}
+	stime, err := strconv.ParseUint(fields[12], 10, 64)
+	if err != nil {
+		return 0, 0, 0, 0, 0, false
+	}
+	rss, err := strconv.ParseInt(fields[21], 10, 64)
+	if err != nil {
+		return 0, 0, 0, 0, 0, false
+	}
+
+	// 读取系统总 CPU 时间（同 /proc/stat 第一行）
+	sysTotal, _, err := readCPUStat()
+	if err != nil {
+		return 0, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
+	}
+
+	if !inited || prevTotal == 0 {
+		return 0, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
+	}
+
+	totalDelta := sysTotal - prevTotal
+	procDelta := (utime - prevUTime) + (stime - prevSTime)
+	if totalDelta == 0 {
+		return 0, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
+	}
+
+	cpuCores := uint64(runtime.NumCPU())
+	usage := float64(procDelta) / float64(totalDelta) * 100.0 * float64(cpuCores)
+	if usage < 0 {
+		usage = 0
+	}
+
+	return usage, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
+}
+
+// calcAvgCPU 计算平均 CPU 使用率
+func calcAvgCPU(samples []float64) float64 {
+	if len(samples) == 0 {
+		return 0
+	}
+	sum := 0.0
+	for _, v := range samples {
+		sum += v
+	}
+	return sum / float64(len(samples))
+}
+
+// calcAvgMemory 计算平均内存占用
+func calcAvgMemory(samples []int64) int64 {
+	if len(samples) == 0 {
+		return 0
+	}
+	sum := int64(0)
+	for _, v := range samples {
+		sum += v
+	}
+	return sum / int64(len(samples))
 }

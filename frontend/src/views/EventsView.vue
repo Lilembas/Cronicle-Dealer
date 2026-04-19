@@ -106,6 +106,11 @@ const formatDuration = (seconds: number) => {
   return `${(seconds / 3600).toFixed(2)}小时`
 }
 
+const formatBytes = (bytes: number) => {
+  const gb = bytes / (1024 * 1024 * 1024)
+  return `${gb.toFixed(2)} GB`
+}
+
 const viewDetail = (event: Event) => {
   router.push(`/logs/${event.id}`)
 }
@@ -295,10 +300,17 @@ onUnmounted(() => {
 
           <Column field="cpu_percent" header="CPU" style="width: 100px" alignHeader="center">
             <template #body="{ data }">
-              <div class="cpu-metric" v-if="data.cpu_percent !== undefined">
+              <div class="cpu-metric" v-if="data.cpu_percent !== undefined && data.cpu_percent !== null">
                 <ProgressBar :value="Math.min(data.cpu_percent, 100)" :showValue="false" class="mini-progress" />
                 <span class="metric-text">{{ data.cpu_percent.toFixed(1) }}%</span>
               </div>
+              <span v-else>-</span>
+            </template>
+          </Column>
+
+          <Column field="memory_bytes" header="内存" style="width: 100px" alignHeader="center">
+            <template #body="{ data }">
+              <span v-if="data.memory_bytes != null" class="metric-text">{{ formatBytes(data.memory_bytes) }}</span>
               <span v-else>-</span>
             </template>
           </Column>
