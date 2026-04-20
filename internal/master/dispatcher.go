@@ -21,6 +21,7 @@ import (
 
 const (
 	defaultWorkerPort = 9090
+	logTimeFormat     = "2006-01-02 15:04:05"
 )
 
 // Dispatcher 任务分发器
@@ -47,7 +48,7 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 		zap.String("event_id", event.ID),
 		zap.String("job_id", event.JobID))
 
-	// 关键改进：检查 Event 是否已经处理过（避免重试时重复处理）
+	// 检查 Event 是否已经处理过（避免重试时重复处理）
 	var existingEvent models.Event
 	err := storage.DB.Where("id = ?", event.ID).First(&existingEvent).Error
 
@@ -66,8 +67,7 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 				zap.String("current_status", existingEvent.Status))
 			return nil
 		}
-		// 如果是 pending 状态，继续处理
-			// 复用 DB 中已有的 StartTime，避免重试时重复初始化日志
+		// 复用 DB 中已有的 StartTime，避免重试时重复初始化日志
 			if existingEvent.StartTime != nil && !existingEvent.StartTime.IsZero() {
 				event.StartTime = existingEvent.StartTime
 				event.LogPath = existingEvent.LogPath
@@ -86,10 +86,9 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 				zap.Error(err))
 		}
 
-		// 记录调度开始日志
 		now := time.Now()
-		dispatchLog := fmt.Sprintf("[%s] [Master] 任务开始调度\n", now.Format("2006-01-02 15:04:05"))
-		dispatchLog += fmt.Sprintf("[%s] [Master] 任务ID: %s, 作业ID: %s\n", now.Format("2006-01-02 15:04:05"), event.ID, event.JobID)
+		dispatchLog := fmt.Sprintf("[%s] [Master] 任务开始调度\n", now.Format(logTimeFormat))
+		dispatchLog += fmt.Sprintf("[%s] [Master] 任务ID: %s, 作业ID: %s\n", now.Format(logTimeFormat), event.ID, event.JobID)
 
 		if logErr := storage.SaveLogChunk(context.Background(), event.ID, dispatchLog); logErr != nil {
 			logger.Warn("写入调度日志失败", zap.Error(logErr))
@@ -101,16 +100,17 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 	// 如果提供了 taskDetails（从 Redis），优先使用；否则从数据库查询
 	if len(taskDetails) > 0 {
 		job = &models.Job{
-			ID:         taskDetails["job_id"],
-			Name:       taskDetails["job_name"],
-			Command:    taskDetails["command"],
-			TaskType:   taskDetails["task_type"],
-			Timeout:    parseIntDefault(taskDetails["timeout"], 30),
-			TargetType: taskDetails["target_type"],
+			ID:          taskDetails["job_id"],
+			Name:        taskDetails["job_name"],
+			Command:     taskDetails["command"],
+			TaskType:    taskDetails["task_type"],
+			Timeout:     parseIntDefault(taskDetails["timeout"], 30),
+			TargetType:  taskDetails["target_type"],
 			TargetValue: taskDetails["target_value"],
-			StrictMode: parseBoolDefault(taskDetails["strict_mode"], false),
-			Env:        taskDetails["env"],
-			WorkingDir: taskDetails["working_dir"],
+			StrictMode:  parseBoolDefault(taskDetails["strict_mode"], false),
+			Env:         taskDetails["env"],
+			WorkingDir:  taskDetails["working_dir"],
+			StrategyID:  taskDetails["strategy_id"],
 		}
 		
 		// 诊断日志：打印完整的 Redis 任务详情
@@ -126,7 +126,7 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 		job, err = d.getJob(event.JobID)
 		if err != nil {
 			// 记录获取任务配置失败
-			errorLog := fmt.Sprintf("[%s] [Master] ❌ 获取任务配置失败: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
+			errorLog := fmt.Sprintf("[%s] [Master] ❌ 获取任务配置失败: %v\n", time.Now().Format(logTimeFormat), err)
 			storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
 			event.Status = "failed"
@@ -146,7 +146,7 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 
 	// 如果是重试调用，在日志中追加提示
 	if retryCount > 0 {
-		retryLog := fmt.Sprintf("[%s] [Master] 🔄 开始第 %d 次重试调度...\n", time.Now().Format("2006-01-02 15:04:05"), retryCount)
+		retryLog := fmt.Sprintf("[%s] [Master] 🔄 开始第 %d 次重试调度...\n", time.Now().Format(logTimeFormat), retryCount)
 		storage.SaveLogChunk(context.Background(), event.ID, retryLog)
 	}
 
@@ -160,11 +160,11 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 	node, err := d.selectNode(job)
 	if err != nil {
 		// 记录选择节点失败（仅写日志，不标记 failed — 临时性错误，可重试）
-		errorLog := fmt.Sprintf("[%s] [Master] ❌ 选择节点失败: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
-		errorLog += fmt.Sprintf("[%s] [Master] 可能原因：\n", time.Now().Format("2006-01-02 15:04:05"))
-		errorLog += fmt.Sprintf("[%s] [Master] - 没有在线的 Worker 节点\n", time.Now().Format("2006-01-02 15:04:05"))
-		errorLog += fmt.Sprintf("[%s] [Master] - 所有 Worker 节点都已满载\n", time.Now().Format("2006-01-02 15:04:05"))
-		errorLog += fmt.Sprintf("[%s] [Master] - 没有符合标签条件的节点\n", time.Now().Format("2006-01-02 15:04:05"))
+		errorLog := fmt.Sprintf("[%s] [Master] ❌ 选择节点失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog += fmt.Sprintf("[%s] [Master] 可能原因：\n", time.Now().Format(logTimeFormat))
+		errorLog += fmt.Sprintf("[%s] [Master] - 没有在线的 Worker 节点\n", time.Now().Format(logTimeFormat))
+		errorLog += fmt.Sprintf("[%s] [Master] - 所有 Worker 节点都已满载\n", time.Now().Format(logTimeFormat))
+		errorLog += fmt.Sprintf("[%s] [Master] - 没有符合标签条件的节点\n", time.Now().Format(logTimeFormat))
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
 		return fmt.Errorf("选择节点失败: %w", err)
@@ -199,25 +199,19 @@ func parseBoolDefault(s interface{}, defaultVal bool) bool {
 	}
 	switch v := s.(type) {
 	case bool:
-		return s.(bool)
+		return v
 	case string:
-		str := s.(string)
-		if str == "" {
+		if s.(string) == "" {
 			return defaultVal
 		}
-		// 解析字符串 "1", "true", "True", "TRUE" 为 true
-		if str == "1" || str == "true" || str == "True" || str == "TRUE" {
+		str := strings.ToLower(s.(string))
+		if str == "1" || str == "true" {
 			return true
 		}
-		// 解析字符串 "0", "false", "False", "FALSE" 为 false
-		if str == "0" || str == "false" || str == "False" || str == "FALSE" {
+		if str == "0" || str == "false" {
 			return false
 		}
-		// 默认返回
 		return defaultVal
-	case int, int32, int64, float32, float64:
-		// 数字类型：非零为 true
-		return fmt.Sprintf("%v", v) != "0"
 	default:
 		return defaultVal
 	}
@@ -299,6 +293,12 @@ func (d *Dispatcher) loadStrategy(strategyID string) *models.LoadBalanceStrategy
 		zap.Int("metrics_count", len(strings.Split(strategy.Metrics, ","))))
 	d.strategyCache.Store(strategyID, &strategy)
 	return &strategy
+}
+
+// ClearStrategyCache 清除策略缓存
+func (d *Dispatcher) ClearStrategyCache(strategyID string) {
+	d.strategyCache.Delete(strategyID)
+	logger.Info("已清除策略缓存", zap.String("strategy_id", strategyID))
 }
 
 // selectByStrategy 根据策略公式评估选择最优节点
@@ -461,6 +461,11 @@ func (d *Dispatcher) selectNode(job *models.Job) (*models.Node, error) {
 		return nil, fmt.Errorf("没有可用的节点")
 	}
 
+	logger.Debug("选择节点前的任务信息",
+		zap.String("job_id", job.ID),
+		zap.String("job_name", job.Name),
+		zap.String("strategy_id", job.StrategyID))
+
 	strategy := d.loadStrategy(job.StrategyID)
 	if strategy != nil {
 		return d.selectByStrategy(nodes, strategy)
@@ -497,16 +502,16 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 	event.Status = "running"
 
 	// 记录节点选择日志（在 DispatchEvent 已经记录了调度开始日志）
-	nodeLog := fmt.Sprintf("[%s] [Master] 目标节点: %s (%s)\n", time.Now().Format("2006-01-02 15:04:05"), node.Hostname, node.ID)
-	nodeLog += fmt.Sprintf("[%s] [Master] 节点地址: %s\n", time.Now().Format("2006-01-02 15:04:05"), node.IP)
+	nodeLog := fmt.Sprintf("[%s] [Master] 目标节点: %s (%s)\n", time.Now().Format(logTimeFormat), node.Hostname, node.ID)
+	nodeLog += fmt.Sprintf("[%s] [Master] 节点地址: %s\n", time.Now().Format(logTimeFormat), node.IP)
 	if node.GRPCAddress != "" {
-		nodeLog += fmt.Sprintf("[%s] [Master] gRPC 地址: %s\n", time.Now().Format("2006-01-02 15:04:05"), node.GRPCAddress)
+		nodeLog += fmt.Sprintf("[%s] [Master] gRPC 地址: %s\n", time.Now().Format(logTimeFormat), node.GRPCAddress)
 	}
 	storage.SaveLogChunk(context.Background(), event.ID, nodeLog)
 
 	if err := storage.DB.Save(event).Error; err != nil {
 		// 记录数据库更新失败
-		errorLog := fmt.Sprintf("[%s] [Master] ❌ 更新任务记录失败: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
+		errorLog := fmt.Sprintf("[%s] [Master] ❌ 更新任务记录失败: %v\n", time.Now().Format(logTimeFormat), err)
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 		return fmt.Errorf("更新任务记录失败: %w", err)
 	}
@@ -518,8 +523,8 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		storage.DB.Save(event)
 
 		// 记录连接失败日志
-		errorLog := fmt.Sprintf("[%s] [Master] ❌ 获取 gRPC 客户端失败: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
-		errorLog += fmt.Sprintf("[%s] [Master] 节点地址: %s, gRPC地址: %s\n", time.Now().Format("2006-01-02 15:04:05"), node.IP, node.GRPCAddress)
+		errorLog := fmt.Sprintf("[%s] [Master] ❌ 获取 gRPC 客户端失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog += fmt.Sprintf("[%s] [Master] 节点地址: %s, gRPC地址: %s\n", time.Now().Format(logTimeFormat), node.IP, node.GRPCAddress)
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
 		return fmt.Errorf("获取 gRPC 客户端失败: %w", err)
@@ -560,7 +565,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 	defer cancel()
 
 	// 记录任务发送日志
-	sendLog := fmt.Sprintf("[%s] [Master] 发送任务到 Worker...\n", time.Now().Format("2006-01-02 15:04:05"))
+	sendLog := fmt.Sprintf("[%s] [Master] 发送任务到 Worker...\n", time.Now().Format(logTimeFormat))
 	if err := storage.SaveLogChunk(context.Background(), event.ID, sendLog); err != nil {
 		logger.Warn("写入发送日志失败", zap.Error(err))
 	}
@@ -572,8 +577,8 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		storage.DB.Save(event)
 
 		// 记录发送失败日志
-		errorLog := fmt.Sprintf("[%s] [Master] ❌ 发送任务到 Worker 失败: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
-		errorLog += fmt.Sprintf("[%s] [Master] 任务已标记为失败状态\n", time.Now().Format("2006-01-02 15:04:05"))
+		errorLog := fmt.Sprintf("[%s] [Master] ❌ 发送任务到 Worker 失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog += fmt.Sprintf("[%s] [Master] 任务已标记为失败状态\n", time.Now().Format(logTimeFormat))
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
 		return fmt.Errorf("发送任务失败: %w", err)
@@ -585,8 +590,8 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		storage.DB.Save(event)
 
 		// 记录Worker拒绝日志
-		errorLog := fmt.Sprintf("[%s] [Master] ❌ Worker 拒绝任务: %s\n", time.Now().Format("2006-01-02 15:04:05"), resp.Message)
-		errorLog += fmt.Sprintf("[%s] [Master] 可能原因: Worker 已达到最大并发数或其他限制\n", time.Now().Format("2006-01-02 15:04:05"))
+		errorLog := fmt.Sprintf("[%s] [Master] ❌ Worker 拒绝任务: %s\n", time.Now().Format(logTimeFormat), resp.Message)
+		errorLog += fmt.Sprintf("[%s] [Master] 可能原因: Worker 已达到最大并发数或其他限制\n", time.Now().Format(logTimeFormat))
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
 		return fmt.Errorf("Worker 拒绝任务: %s", resp.Message)
@@ -598,7 +603,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 	storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).Update("start_time", now)
 
 	// 记录任务接受成功日志
-	successLog := fmt.Sprintf("[%s] [Master] ✅ Worker 已接受任务并开始执行\n", now.Format("2006-01-02 15:04:05"))
+	successLog := fmt.Sprintf("[%s] [Master] ✅ Worker 已接受任务并开始执行\n", now.Format(logTimeFormat))
 	storage.SaveLogChunk(context.Background(), event.ID, successLog)
 
 	// 通过WebSocket推送任务状态变化（pending → running）

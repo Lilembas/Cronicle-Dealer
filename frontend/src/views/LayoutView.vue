@@ -54,7 +54,7 @@ const tabs = [
   { id: '/jobs', label: '任务管理', icon: 'pi pi-calendar' },
   { id: '/events', label: '执行记录', icon: 'pi pi-list' },
   { id: '/workers', label: '节点管理', icon: 'pi pi-server' },
-  { id: '/shell', label: 'Shell 执行', icon: 'pi pi-terminal' },
+  { id: '/shell', label: 'Shell 执行', icon: 'pi pi-code' },
 ]
 
 const activeTab = computed(() => route.path)
@@ -97,7 +97,7 @@ function handleGlobalRefresh() {
           class="user-dropdown-trigger"
           @click="menu.toggle($event)"
         >
-          {{ authStore.user?.fullName || 'Admin' }}
+          {{ authStore.user?.username || 'Admin' }}
           <i class="pi pi-chevron-down ml-2" style="font-size: 12px" />
         </Button>
         <Menu ref="menu" :model="userMenuItems" :popup="true" />

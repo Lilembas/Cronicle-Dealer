@@ -306,6 +306,12 @@ func (s *APIServer) updateJob(c *gin.Context) {
 		return
 	}
 
+	// 重新查询更新后的记录（确保调度器收到最新数据）
+	if err := storage.DB.First(&existing, "id = ?", jobID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	// 更新调度器（需要完整记录）
 	if err := s.scheduler.UpdateJob(&existing); err != nil {
 		logger.Error("更新调度器任务失败", zap.Error(err))

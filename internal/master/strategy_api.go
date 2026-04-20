@@ -133,10 +133,12 @@ func (s *APIServer) updateStrategy(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		logger.Info("更新负载均衡策略", zap.String("id", id))
 	}
 
+	s.dispatcher.ClearStrategyCache(id)
+
 	storage.DB.Where("id = ?", id).First(&existing)
-	logger.Info("更新负载均衡策略", zap.String("id", id))
 	c.JSON(http.StatusOK, existing)
 }
 
