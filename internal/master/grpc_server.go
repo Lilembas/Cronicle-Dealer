@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -56,7 +58,9 @@ func (s *GRPCServer) Start() error {
 		return fmt.Errorf("监听端口失败: %w", err)
 	}
 
-	s.grpcServer = grpc.NewServer()
+	s.grpcServer = grpc.NewServer(
+		grpc.UnaryInterceptor(s.authTokenInterceptor),
+	)
 	pb.RegisterCronicleServiceServer(s.grpcServer, s)
 
 	logger.Info("gRPC 服务器启动", zap.String("address", addr))
@@ -76,6 +80,26 @@ func (s *GRPCServer) Stop() {
 		logger.Info("停止 gRPC 服务器...")
 		s.grpcServer.GracefulStop()
 	}
+}
+
+// authTokenInterceptor 校验 Worker gRPC 请求中的 auth token
+func (s *GRPCServer) authTokenInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	token := s.cfg.Security.AuthToken
+	if token == "" {
+		return handler(ctx, req)
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, grpc.Errorf(codes.Unauthenticated, "缺少认证信息")
+	}
+
+	values := md.Get("x-auth-token")
+	if len(values) == 0 || values[0] != token {
+		return nil, grpc.Errorf(codes.Unauthenticated, "auth token 无效")
+	}
+
+	return handler(ctx, req)
 }
 
 // RegisterNode Worker 注册
@@ -175,7 +199,7 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 		NodeId:        nodeID,
 		Success:       true,
 		Message:       "注册成功",
-		SecurityToken: s.cfg.Security.WorkerToken,
+		SecurityToken: "",
 	}, nil
 }
 

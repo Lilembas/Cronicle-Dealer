@@ -16,6 +16,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"go.uber.org/zap"
 
 	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
@@ -39,14 +40,13 @@ var (
 
 // Client Worker gRPC 客户端
 type Client struct {
-	cfg           *config.WorkerConfig
-	conn          *grpc.ClientConn
-	client        pb.CronicleServiceClient
-	nodeID        string
-	securityToken string
-	hostname      string
-	localIP       string
-	grpcAddress   string // executor gRPC 服务地址
+	cfg         *config.WorkerConfig
+	conn        *grpc.ClientConn
+	client      pb.CronicleServiceClient
+	nodeID      string
+	hostname    string
+	localIP     string
+	grpcAddress string // executor gRPC 服务地址
 }
 
 // NewClient 创建 Worker 客户端
@@ -56,6 +56,14 @@ func NewClient(cfg *config.WorkerConfig) *Client {
 	}
 }
 
+// authUnaryInterceptor 向所有 gRPC 请求注入 auth token
+func (c *Client) authUnaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	if c.cfg.AuthToken != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-auth-token", c.cfg.AuthToken)
+	}
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
 // Connect 连接到 Master
 func (c *Client) Connect() error {
 	logger.Info("连接到 Master", zap.String("address", c.cfg.MasterAddress))
@@ -63,6 +71,7 @@ func (c *Client) Connect() error {
 	conn, err := grpc.Dial(
 		c.cfg.MasterAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(c.authUnaryInterceptor),
 	)
 	if err != nil {
 		return fmt.Errorf("连接 Master 失败: %w", err)
@@ -126,7 +135,6 @@ func (c *Client) Register() error {
 	}
 
 	c.nodeID = resp.NodeId
-	c.securityToken = resp.SecurityToken
 
 	logger.Info("节点注册成功",
 		zap.String("node_id", c.nodeID),

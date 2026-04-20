@@ -58,6 +58,7 @@ type WorkerConfig struct {
 	Node          NodeConfig      `mapstructure:"node"`
 	Heartbeat     WorkerHeartbeat `mapstructure:"heartbeat"`
 	Executor      ExecutorConfig  `mapstructure:"executor"`
+	AuthToken     string          `mapstructure:"auth_token"`
 }
 
 // NodeConfig 节点配置
@@ -119,8 +120,8 @@ func (c *RedisConfig) Address() string {
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
-	JWT         JWTConfig `mapstructure:"jwt"`
-	WorkerToken string    `mapstructure:"worker_token"`
+	JWT       JWTConfig `mapstructure:"jwt"`
+	AuthToken string    `mapstructure:"auth_token"`
 }
 
 // JWTConfig JWT 配置

@@ -44,6 +44,9 @@ worker:
     max_concurrent_jobs: 10
     default_timeout: 3600  # 秒
 
+  # 认证 Token（必须与 Master 端 security.auth_token 一致）
+  auth_token: "change-me-in-production"
+
 # 数据库配置
 database:
   # 驱动类型: "sqlite" 或 "postgres"
@@ -75,8 +78,8 @@ security:
     secret: "change-me-in-production"
     expire_hours: 24
   
-  # Worker 通信 Token
-  worker_token: "change-me-in-production"
+  # Worker 通信认证 Token
+  auth_token: "change-me-in-production"
 
 # 日志配置
 logging:
