@@ -51,19 +51,19 @@ let validateTimer: ReturnType<typeof setTimeout> | null = null
 
 const isEditing = computed(() => !!currentStrategy.value.id)
 
-const isMasterNode = (node: Node) => {
-  return node.tags === 'master' || node.tags.includes('master')
+const isManagerNode = (node: Node) => {
+  return node.tags === 'manager' || node.tags.includes('manager')
 }
 
-const getMasterNodeId = () => {
+const getManagerNodeId = () => {
   const nodesWithId = nodes.value.map(node => ({
     ...node,
-    isMaster: isMasterNode(node)
+    isManager: isManagerNode(node)
   }))
 
-  const explicitMaster = nodesWithId.find(node => node.isMaster)
-  if (explicitMaster) {
-    return explicitMaster.id
+  const explicitManager = nodesWithId.find(node => node.isManager)
+  if (explicitManager) {
+    return explicitManager.id
   }
 
   if (nodesWithId.length > 0) {
@@ -102,10 +102,10 @@ const filteredNodes = computed(() => {
     if (a.status === 'online' && b.status !== 'online') return -1
     if (a.status !== 'online' && b.status === 'online') return 1
 
-    const aIsMaster = isMasterNode(a)
-    const bIsMaster = isMasterNode(b)
-    if (aIsMaster && !bIsMaster) return -1
-    if (!aIsMaster && bIsMaster) return 1
+    const aIsManager = isManagerNode(a)
+    const bIsManager = isManagerNode(b)
+    if (aIsManager && !bIsManager) return -1
+    if (!aIsManager && bIsManager) return 1
 
     return new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
   })
@@ -127,7 +127,7 @@ const getRowClass = (data: Node) => {
 }
 
 const canSelectRow = (node: Node) => {
-  return !(isMasterNode(node) || node.id === getMasterNodeId())
+  return !(isManagerNode(node) || node.id === getManagerNodeId())
 }
 
 const loadNodes = async () => {
@@ -144,8 +144,8 @@ const loadNodes = async () => {
 }
 
 const handleDelete = async (node: Node) => {
-  if (isMasterNode(node) || node.id === getMasterNodeId()) {
-    showToast({ severity: 'warn', summary: '不能删除 Master 节点', life: 3000 })
+  if (isManagerNode(node) || node.id === getManagerNodeId()) {
+    showToast({ severity: 'warn', summary: '不能删除 Manager 节点', life: 3000 })
     return
   }
 
@@ -458,7 +458,7 @@ onUnmounted(() => {
                 <div class="flex flex-col">
                   <div class="flex items-center gap-2">
                     <span class="hostname-text">{{ data.hostname }}</span>
-                    <i :class="[isMasterNode(data) ? 'pi pi-shield text-amber-500' : 'pi pi-desktop text-blue-400']" class="node-icon-mini"></i>
+                    <i :class="[isManagerNode(data) ? 'pi pi-shield text-amber-500' : 'pi pi-desktop text-blue-400']" class="node-icon-mini"></i>
                   </div>
                   <span class="ip-text">{{ data.ip }}</span>
                 </div>
@@ -472,9 +472,9 @@ onUnmounted(() => {
           </Column>
           <Column header="角色" style="width: 110px" alignHeader="center" align="center">
             <template #body="{ data }">
-              <span :class="['premium-badge', isMasterNode(data) ? 'badge-master' : 'badge-worker']">
-                <i :class="isMasterNode(data) ? 'pi pi-shield' : 'pi pi-desktop'"></i>
-                <span>{{ isMasterNode(data) ? 'Master' : 'Worker' }}</span>
+              <span :class="['premium-badge', isManagerNode(data) ? 'badge-manager' : 'badge-worker']">
+                <i :class="isManagerNode(data) ? 'pi pi-shield' : 'pi pi-desktop'"></i>
+                <span>{{ isManagerNode(data) ? 'Manager' : 'Worker' }}</span>
               </span>
             </template>
           </Column>
@@ -514,14 +514,14 @@ onUnmounted(() => {
             <template #body="{ data }">
               <div class="action-buttons">
                 <Button
-                  v-if="!isMasterNode(data) && data.id !== getMasterNodeId()"
+                  v-if="!isManagerNode(data) && data.id !== getManagerNodeId()"
                   v-tooltip.top="'编辑标签'"
                   icon="pi pi-pencil"
                   class="btn-edit"
                   @click="handleEdit(data)"
                 />
                 <Button
-                  v-if="!isMasterNode(data) && data.id !== getMasterNodeId()"
+                  v-if="!isManagerNode(data) && data.id !== getManagerNodeId()"
                   v-tooltip.top="'移除节点'"
                   icon="pi pi-trash"
                   class="btn-delete"
@@ -853,7 +853,7 @@ onUnmounted(() => {
   border: 1px solid transparent;
 }
 
-.badge-master {
+.badge-manager {
   background: #fffbeb;
   color: #b45309;
   border-color: #fde68a;

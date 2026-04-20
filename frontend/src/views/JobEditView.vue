@@ -112,7 +112,7 @@ const loadNodes = async () => {
     loadingNodes.value = true
     const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
     nodes.value = (allNodes || []).filter((node: Node) =>
-      !String(node.tags || '').includes('master')
+      !String(node.tags || '').includes('manager')
     )
   } catch {
     showToast({ severity: 'warn', summary: '加载节点列表失败', life: 3000 })

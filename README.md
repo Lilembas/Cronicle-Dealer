@@ -22,7 +22,7 @@
 
 ### 核心功能
 - 🚀 **高性能**：Go 语言实现，原生并发支持
-- 🔄 **分布式架构**：Master-Worker 模式，支持水平扩展
+- 🔄 **分布式架构**：Manager-Worker 模式，支持水平扩展
 - 🎯 **智能调度**：支持 Cron 表达式（6位，秒级精度），灵活的任务调度
 - 📊 **实时监控**：WebSocket 实时推送任务状态和日志
 - 📝 **日志流式传输**：实时日志推送，支持长任务
@@ -50,7 +50,7 @@
 └──────┬──────┘
        │ HTTP/WebSocket
 ┌──────▼──────────────────┐
-│    Master 节点           │
+│    Manager 节点           │
 │  - REST API (Gin)       │
 │  - 调度引擎 (Cron)       │
 │  - gRPC Server          │
@@ -120,8 +120,8 @@ cp config.example.yaml config.yaml
 # 启动 Redis（使用 Docker，可选）
 docker-compose up -d redis
 
-# 运行 Master
-make run-master
+# 运行 Manager
+make run-manager
 
 # 运行 Worker（新终端）
 make run-worker
@@ -173,7 +173,7 @@ docker-compose down
 
 ### 已完成 ✅
 - [x] 项目初始化和架构设计
-- [x] Master 核心功能实现（Scheduler, Dispatcher, TaskConsumer）
+- [x] Manager 核心功能实现（Scheduler, Dispatcher, TaskConsumer）
 - [x] Worker 核心功能实现（Client, Executor）
 - [x] WebSocket 实时通信
 - [x] Redis 任务队列集成

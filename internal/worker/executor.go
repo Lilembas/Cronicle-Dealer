@@ -40,7 +40,7 @@ type Executor struct {
 
 	cfg          *config.ExecutorConfig
 	grpcServer   *grpc.Server
-	masterClient pb.CronicleServiceClient // Master客户端，用于报告任务结果
+	managerClient pb.CronicleServiceClient // Manager客户端，用于报告任务结果
 	runningJobs  sync.Map                 // map[eventID]*exec.Cmd
 	abortedJobs  sync.Map                 // map[eventID]string
 	jobCount     int
@@ -54,9 +54,9 @@ func NewExecutor(cfg *config.ExecutorConfig) *Executor {
 	}
 }
 
-// SetMasterClient 设置Master客户端（用于报告任务结果）
-func (e *Executor) SetMasterClient(client pb.CronicleServiceClient) {
-	e.masterClient = client
+// SetManagerClient 设置Manager客户端（用于报告任务结果）
+func (e *Executor) SetManagerClient(client pb.CronicleServiceClient) {
+	e.managerClient = client
 }
 
 // Start 启动 gRPC 服务器（接收任务）
@@ -418,7 +418,7 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 		result["error_message"] = execErr.Error()
 	}
 
-	// 存储到Redis供Master查询
+	// 存储到Redis供Manager查询
 	storage.SetTaskResult(ctx, taskKey, result)
 
 	// 更新任务状态
@@ -431,11 +431,11 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 	}
 	storage.SetTaskStatus(ctx, taskKey, status)
 
-	// 向Master报告任务结果（同步调用，确保 Master 收到后才返回）
-	if e.masterClient != nil {
-		e.reportToMaster(req, startTime, endTime, exitCode, cpuPercent, memoryBytes, execErr)
+	// 向Manager报告任务结果（同步调用，确保 Manager 收到后才返回）
+	if e.managerClient != nil {
+		e.reportToManager(req, startTime, endTime, exitCode, cpuPercent, memoryBytes, execErr)
 	} else {
-		logger.Warn("Master客户端未设置，无法主动报告任务结果",
+		logger.Warn("Manager客户端未设置，无法主动报告任务结果",
 			zap.String("event_id", req.EventId))
 	}
 
@@ -445,8 +445,8 @@ func (e *Executor) recordTaskResult(ctx context.Context, taskKey string, req *pb
 		zap.Int("exit_code", exitCode))
 }
 
-// reportToMaster 向Master报告任务执行结果
-func (e *Executor) reportToMaster(req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, cpuPercent float64, memoryBytes int64, execErr error) {
+// reportToManager 向Manager报告任务执行结果
+func (e *Executor) reportToManager(req *pb.TaskRequest, startTime, endTime time.Time, exitCode int, cpuPercent float64, memoryBytes int64, execErr error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -466,19 +466,19 @@ func (e *Executor) reportToMaster(req *pb.TaskRequest, startTime, endTime time.T
 		result.ErrorMessage = execErr.Error()
 	}
 
-	ack, err := e.masterClient.ReportTaskResult(ctx, result)
+	ack, err := e.managerClient.ReportTaskResult(ctx, result)
 	if err != nil {
-		logger.Error("向Master报告任务结果失败",
+		logger.Error("向Manager报告任务结果失败",
 			zap.String("event_id", req.EventId),
 			zap.Error(err))
 		return
 	}
 
 	if !ack.Received {
-		logger.Warn("Master未正确接收任务结果",
+		logger.Warn("Manager未正确接收任务结果",
 			zap.String("event_id", req.EventId))
 	} else {
-		logger.Info("已成功向Master报告任务结果",
+		logger.Info("已成功向Manager报告任务结果",
 			zap.String("event_id", req.EventId))
 	}
 }

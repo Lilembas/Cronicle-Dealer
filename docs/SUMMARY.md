@@ -18,7 +18,7 @@ Cronicle-Next 已具备“可开发测试”的核心能力，但仍有少量高
 ### 未闭环
 
 - JWT 认证与鉴权中间件
-- 任务中止（Master API 与 Worker AbortTask 均未完成）
+- 任务中止（Manager API 与 Worker AbortTask 均未完成）
 - HTTP / Docker 任务执行器
 - 3 个占位页面（JobDetail / Nodes / Logs）
 

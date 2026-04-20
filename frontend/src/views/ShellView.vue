@@ -61,7 +61,7 @@ const loadNodes = async () => {
   try {
     loadingNodes.value = true
     const allNodes = await nodesApi.list({ status: 'online' }) as unknown as Node[]
-    nodes.value = allNodes.filter((node: Node) => node.tags !== 'master' && !node.tags?.includes('master'))
+    nodes.value = allNodes.filter((node: Node) => node.tags !== 'manager' && !node.tags?.includes('manager'))
 
     if (nodes.value.length === 1) {
       selectedNodeId.value = nodes.value[0].id

@@ -29,7 +29,7 @@ cd test && go run integration_test.go
 **测试内容：**
 - ✅ 数据库连接
 - ✅ Redis 连接
-- ✅ Master 节点启动
+- ✅ Manager 节点启动
 - ✅ Worker 节点注册和心跳
 - ✅ gRPC 通讯
 
@@ -46,7 +46,7 @@ cd test && go run worker_startup.go -duration 30s
 ```
 
 **测试内容：**
-- ✅ Worker 连接 Master
+- ✅ Worker 连接 Manager
 - ✅ 节点注册
 - ✅ 心跳机制
 - ✅ 执行器启动
@@ -60,11 +60,11 @@ cd test && go run worker_startup.go -duration 30s
 ./test/run_e2e_test.sh
 
 # 或自定义参数
-cd test && go run master_worker_e2e.go -jobs 5 -wait 120s
+cd test && go run manager_worker_e2e.go -jobs 5 -wait 120s
 ```
 
 **测试内容：**
-- ✅ Master + Worker 启动
+- ✅ Manager + Worker 启动
 - ✅ 任务创建和调度
 - ✅ 任务执行（通过 gRPC）
 - ✅ 结果验证
@@ -83,8 +83,8 @@ cd test && go run master_worker_e2e.go -jobs 5 -wait 120s
 🧪 Cronicle-Next E2E 测试
 ================================
 1️⃣ 初始化数据库和 Redis... ✅
-2️⃣ 启动 Master 服务... ✅
-3️⃣ 连接 Worker 到 Master... ✅
+2️⃣ 启动 Manager 服务... ✅
+3️⃣ 连接 Worker 到 Manager... ✅
 4️⃣ 创建测试任务... ✅
 5️⃣ 调度任务执行... ✅
 6️⃣ 监控任务执行... ✅

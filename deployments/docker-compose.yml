@@ -18,22 +18,22 @@ services:
     networks:
       - cronicle_network
 
-  # Master 节点
-  master:
+  # Manager 节点
+  manager:
     build:
       context: ../..
-      dockerfile: deployments/docker/master.Dockerfile
-    container_name: cronicle-master
+      dockerfile: deployments/docker/manager.Dockerfile
+    container_name: cronicle-manager
     ports:
       - "8080:8080"
       - "9090:9090"
     environment:
-      - SERVER_MODE=master
+      - SERVER_MODE=manager
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     volumes:
       - ./config.yaml:/app/config.yaml
-      - master_logs:/app/logs
+      - manager_logs:/app/logs
     depends_on:
       redis:
         condition: service_healthy
@@ -48,12 +48,12 @@ services:
       dockerfile: deployments/docker/worker.Dockerfile
     environment:
       - SERVER_MODE=worker
-      - MASTER_ADDRESS=master:9090
+      - MASTER_ADDRESS=manager:9090
       - WORKER_TAGS=["default","docker"]
     volumes:
       - worker_logs:/app/logs
     depends_on:
-      - master
+      - manager
     networks:
       - cronicle_network
     restart: unless-stopped
@@ -62,7 +62,7 @@ services:
 
 volumes:
   redis_data:
-  master_logs:
+  manager_logs:
   worker_logs:
 
 networks:

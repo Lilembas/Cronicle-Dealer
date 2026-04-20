@@ -64,17 +64,17 @@ func (c *Client) authUnaryInterceptor(ctx context.Context, method string, req, r
 	return invoker(ctx, method, req, reply, cc, opts...)
 }
 
-// Connect 连接到 Master
+// Connect 连接到 Manager
 func (c *Client) Connect() error {
-	logger.Info("连接到 Master", zap.String("address", c.cfg.MasterAddress))
+	logger.Info("连接到 Manager", zap.String("address", c.cfg.ManagerAddress))
 
 	conn, err := grpc.Dial(
-		c.cfg.MasterAddress,
+		c.cfg.ManagerAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithUnaryInterceptor(c.authUnaryInterceptor),
 	)
 	if err != nil {
-		return fmt.Errorf("连接 Master 失败: %w", err)
+		return fmt.Errorf("连接 Manager 失败: %w", err)
 	}
 
 	c.conn = conn
@@ -82,7 +82,7 @@ func (c *Client) Connect() error {
 	c.hostname = c.getHostname()
 	c.localIP = getLocalIP()
 
-	logger.Info("成功连接到 Master")
+	logger.Info("成功连接到 Manager")
 	return nil
 }
 
@@ -101,7 +101,7 @@ func (c *Client) SetGRPCAddress(host string, port int) {
 
 // Register 注册节点
 func (c *Client) Register() error {
-	logger.Info("向 Master 注册节点...")
+	logger.Info("向 Manager 注册节点...")
 
 	resources, err := getResourceInfo()
 	if err != nil {
@@ -224,19 +224,19 @@ func (c *Client) Close() error {
 		return nil
 	}
 
-	// 向Master发送下线通知
+	// 向Manager发送下线通知
 	if c.nodeID != "" && c.client != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
-		logger.Info("向Master发送下线通知", zap.String("node_id", c.nodeID))
+		logger.Info("向Manager发送下线通知", zap.String("node_id", c.nodeID))
 		if _, err := c.client.UnregisterNode(ctx, &pb.UnregisterNodeRequest{
 			NodeId: c.nodeID,
 		}); err != nil {
 			// 即使发送失败也继续关闭连接
 			logger.Warn("发送下线通知失败", zap.Error(err))
 		} else {
-			logger.Info("已成功通知Master下线")
+			logger.Info("已成功通知Manager下线")
 		}
 	}
 
@@ -254,8 +254,8 @@ func (c *Client) GetNodeID() string {
 	return c.nodeID
 }
 
-// GetMasterClient 获取Master gRPC客户端
-func (c *Client) GetMasterClient() pb.CronicleServiceClient {
+// GetManagerClient 获取Manager gRPC客户端
+func (c *Client) GetManagerClient() pb.CronicleServiceClient {
 	return c.client
 }
 

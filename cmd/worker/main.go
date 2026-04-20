@@ -50,7 +50,7 @@ func main() {
 	logger.Info("节点启动中...",
 		zap.String("node_type", nodeType),
 		zap.String("version", version),
-		zap.String("master_address", cfg.Worker.MasterAddress))
+		zap.String("manager_address", cfg.Worker.ManagerAddress))
 
 	logger.Info("连接 Redis...")
 	if err := storage.InitRedis(&cfg.Redis); err != nil {
@@ -69,11 +69,11 @@ func main() {
 		logger.Fatal("启动执行器失败", zap.Error(err))
 	}
 
-	logger.Info("连接 Master...")
+	logger.Info("连接 Manager...")
 	client := worker.NewClient(&cfg.Worker)
 	if err := client.Connect(); err != nil {
 		executor.Stop()
-		logger.Fatal("连接 Master 失败", zap.Error(err))
+		logger.Fatal("连接 Manager 失败", zap.Error(err))
 	}
 
 	// 设置 Worker 的 gRPC 地址（必须使用实际 IP，不能用 0.0.0.0）
@@ -85,13 +85,13 @@ func main() {
 		logger.Fatal("注册失败", zap.Error(err))
 	}
 
-	executor.SetMasterClient(client.GetMasterClient())
-	logger.Info("已设置Master客户端")
+	executor.SetManagerClient(client.GetManagerClient())
+	logger.Info("已设置Manager客户端")
 
 	go client.StartHeartbeat()
 
 	logger.Info("节点启动成功",
-		zap.String("master_address", cfg.Worker.MasterAddress),
+		zap.String("manager_address", cfg.Worker.ManagerAddress),
 		zap.Strings("tags", cfg.Worker.Node.Tags))
 
 	// 等待退出信号

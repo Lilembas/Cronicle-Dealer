@@ -1,13 +1,13 @@
 # 服务器配置
 server:
-  mode: "master"  # master 或 worker
+  mode: "manager"  # master 或 worker
   host: "0.0.0.0"
   http_port: 8080
   grpc_port: 9090
   websocket_port: 8081  # WebSocket服务端口
   
 # Master 配置
-master:
+manager:
   # 调度配置
   scheduler:
     enabled: true
@@ -27,7 +27,7 @@ master:
 # Worker 配置
 worker:
   # Master 地址
-  master_address: "localhost:9090"
+  manager_address: "localhost:9090"
   
   # 节点信息
   node:

@@ -27,14 +27,14 @@
 
 ### 1.1 项目简介
 
-Cronicle-Next 是一个基于 Go + Vue 3 的分布式任务调度平台，采用 Master-Worker 架构。
+Cronicle-Next 是一个基于 Go + Vue 3 的分布式任务调度平台，采用 Manager-Worker 架构。
 
 **核心特性**：
 - 🚀 高性能：Go 原生并发
 - 🔄 分布式：支持水平扩展
 - 📊 实时监控：WebSocket 推送
 - 🎯 智能调度：Cron 表达式
-- 🛡️ 高可用：Master 故障转移
+- 🛡️ 高可用：Manager 故障转移
 
 ### 1.2 技术栈
 
@@ -58,7 +58,7 @@ Cronicle-Next 是一个基于 Go + Vue 3 的分布式任务调度平台，采用
 - **完成度**: ~98%
 - **后端**: 核心功能已完成（含 JWT 鉴权、任务中止、分布式重试逻辑、Ad-hoc 执行等）
 - **前端**: 所有核心业务页面已完成（Dashboard, Jobs, Events, Shell, JobDetail, Nodes, Logs）
-- **待完成**: HTTP/Docker 执行器、通知系统、多 Master 高可用、分发指标观测
+- **待完成**: HTTP/Docker 执行器、通知系统、多 Manager 高可用、分发指标观测
 
 ---
 
@@ -66,47 +66,47 @@ Cronicle-Next 是一个基于 Go + Vue 3 的分布式任务调度平台，采用
 
 ### 2.1 架构模式
 
-**Master-Worker 架构**：
+**Manager-Worker 架构**：
 ```
 前端 (Vue 3)
     ↓ HTTP/WebSocket
-Master (Go)
+Manager (Go)
     ↓ gRPC
 Worker 节点
 ```
 
 ### 2.2 核心组件
 
-#### Master 组件
+#### Manager 组件
 
 **Scheduler（调度器）**：
-- 位置：`internal/master/scheduler.go`
+- 位置：`internal/manager/scheduler.go`
 - 功能：管理 Cron 任务，触发执行
 - 依赖：`robfig/cron/v3`
 
 **Dispatcher（分发器）**：
-- 位置：`internal/master/dispatcher.go`
+- 位置：`internal/manager/dispatcher.go`
 - 功能：选择合适的 Worker 节点
 - 策略：any/node_id/tags/least_loaded
 
 **TaskConsumer（任务消费者）**：
-- 位置：`internal/master/task_consumer.go`
+- 位置：`internal/manager/task_consumer.go`
 - 功能：从 Redis 队列消费任务
 - 调用：Dispatcher 分发任务
 
 **gRPC Server**：
-- 位置：`internal/master/grpc_server.go`
+- 位置：`internal/manager/grpc_server.go`
 - 功能：处理 Worker 注册、心跳、日志流
 
 **WebSocket Server**：
-- 位置：`internal/master/websocket_server.go`
+- 位置：`internal/manager/websocket_server.go`
 - 功能：实时推送日志和状态
 
 #### Worker 组件
 
 **Client（客户端）**：
 - 位置：`internal/worker/client.go`
-- 功能：连接 Master、注册、心跳
+- 功能：连接 Manager、注册、心跳
 
 **Executor（执行器）**：
 - 位置：`internal/worker/executor.go`
@@ -151,12 +151,12 @@ Worker 节点
 **包命名**：
 - 使用小写单词
 - 简洁明了
-- 示例：`master`, `worker`, `models`
+- 示例：`manager`, `worker`, `models`
 
 **函数命名**：
 - 导出函数：`PascalCase`
 - 内部函数：`camelCase`
-- 示例：`NewMaster()`, `startServices()`
+- 示例：`NewManager()`, `startServices()`
 
 **变量命名**：
 - `camelCase`
@@ -304,7 +304,7 @@ async function getJobs(): Promise<Job[]> {
 #### 示例
 
 ```bash
-feat(master): 添加任务重试逻辑
+feat(manager): 添加任务重试逻辑
 
 实现了任务失败时的自动重试机制：
 - 支持配置重试次数和延迟
@@ -323,10 +323,10 @@ Closes #123
 ```
 cronicle-next/
 ├── cmd/                    # 主程序
-│   ├── master/            # Master 主程序
+│   ├── manager/            # Manager 主程序
 │   └── worker/            # Worker 主程序
 ├── internal/              # 内部包
-│   ├── master/           # Master 相关
+│   ├── manager/           # Manager 相关
 │   ├── worker/           # Worker 相关
 │   ├── models/           # 数据模型
 │   ├── storage/          # 存储层
@@ -362,8 +362,8 @@ cronicle-next/
 - `redis.go` - Redis 客户端
 - `log_storage.go` - 日志存储
 
-**master/**：Master 相关
-- `master.go` - Master 管理器
+**manager/**：Manager 相关
+- `manager.go` - Manager 管理器
 - `scheduler.go` - 调度器
 - `dispatcher.go` - 分发器
 - `task_consumer.go` - 任务消费者
@@ -372,7 +372,7 @@ cronicle-next/
 - `websocket_server.go` - WebSocket 服务
 
 **worker/**：Worker 相关
-- `client.go` - Master 客户端
+- `client.go` - Manager 客户端
 - `executor.go` - 任务执行器
 
 ---
@@ -383,7 +383,7 @@ cronicle-next/
 
 **步骤**：
 
-1. 在 `internal/master/api_server.go` 添加路由：
+1. 在 `internal/manager/api_server.go` 添加路由：
 ```go
 func (s *APIServer) setupRoutes() {
     s.router.POST("/api/v1/custom", s.handleCustom)
@@ -551,17 +551,17 @@ resp, err := client.NewMethod(ctx, &pb.Request{Data: "test"})
 
 ### 6.1 本地运行
 
-**启动 Master**：
+**启动 Manager**：
 ```bash
 # 方式 1: Makefile
-make run-master
+make run-manager
 
 # 方式 2: 直接运行
-go run cmd/master/main.go
+go run cmd/manager/main.go
 
 # 方式 3: 先编译后运行
-go build -o bin/master cmd/master/main.go
-./bin/master
+go build -o bin/manager cmd/manager/main.go
+./bin/manager
 ```
 
 **启动 Worker**：
@@ -578,10 +578,10 @@ npm run dev
 
 ### 6.2 日志调试
 
-**查看 Master 日志**：
+**查看 Manager 日志**：
 ```bash
 # 使用 debug 级别
-LOG_LEVEL=debug go run cmd/master/main.go
+LOG_LEVEL=debug go run cmd/manager/main.go
 ```
 
 **查看 Worker 日志**：
@@ -594,7 +594,7 @@ go run cmd/worker/main.go > worker.log 2>&1
 **查看日志文件**：
 ```bash
 # 日志存储在 logs/ 目录
-tail -f logs/master.log
+tail -f logs/manager.log
 tail -f logs/worker.log
 tail -f logs/events/evt_xxx.log
 ```
@@ -609,11 +609,11 @@ tail -f logs/events/evt_xxx.log
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Master",
+      "name": "Debug Manager",
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/cmd/master",
+      "program": "${workspaceFolder}/cmd/manager",
       "env": {
         "LOG_LEVEL": "debug"
       }
@@ -634,7 +634,7 @@ tail -f logs/events/evt_xxx.log
 
 **使用 Delve**：
 ```bash
-dlv debug cmd/master/main.go
+dlv debug cmd/manager/main.go
 ```
 
 ### 6.4 API 测试
@@ -700,7 +700,7 @@ func TestParseCron(t *testing.T) {
 
 **运行单元测试**：
 ```bash
-go test ./internal/master/...
+go test ./internal/manager/...
 go test -v ./internal/worker/...
 ```
 
@@ -720,8 +720,8 @@ npm run test
 
 **构建镜像**：
 ```bash
-# Master
-docker build -f deployments/docker/master.Dockerfile -t cronicle-master:latest .
+# Manager
+docker build -f deployments/docker/manager.Dockerfile -t cronicle-manager:latest .
 
 # Worker
 docker build -f deployments/docker/worker.Dockerfile -t cronicle-worker:latest .
@@ -757,7 +757,7 @@ export REDIS_URL="redis://host:6379/0"
 
 ### 9.1 常见问题
 
-#### Master 无法启动
+#### Manager 无法启动
 
 **症状**：端口被占用
 ```bash
@@ -775,16 +775,16 @@ kill -9 <PID>
 # 或修改配置文件中的端口
 ```
 
-#### Worker 无法连接 Master
+#### Worker 无法连接 Manager
 
 **症状**：连接失败
 ```bash
-❌ Worker 连接 Master 失败
+❌ Worker 连接 Manager 失败
 ```
 
 **解决**：
-1. 检查 Master 是否运行
-2. 检查 `config.yaml` 中的 `master_address`
+1. 检查 Manager 是否运行
+2. 检查 `config.yaml` 中的 `manager_address`
 3. 检查防火墙规则
 4. 查看网络连通性
 
@@ -796,21 +796,21 @@ kill -9 <PID>
 1. 检查 Job 是否启用
 2. 检查 Cron 表达式是否正确
 3. 检查是否有在线 Worker
-4. 查看 Master 日志
+4. 查看 Manager 日志
 5. 查看 Worker 日志
 
 ### 9.2 日志分析
 
-**Master 日志**：
+**Manager 日志**：
 ```bash
 # 查看 Scheduler 日志
-grep "Scheduler" logs/master.log
+grep "Scheduler" logs/manager.log
 
 # 查看分发错误
-grep "Dispatch" logs/master.log | grep -i error
+grep "Dispatch" logs/manager.log | grep -i error
 
 # 查看 gRPC 日志
-grep "gRPC" logs/master.log
+grep "gRPC" logs/manager.log
 ```
 
 **Worker 日志**：
@@ -964,8 +964,8 @@ if err != nil {
 
 **常用命令**：
 ```bash
-# 运行 Master
-make run-master
+# 运行 Manager
+make run-manager
 
 # 运行 Worker
 make run-worker
@@ -984,8 +984,8 @@ docker-compose up -d
 ```
 
 **重要端口**：
-- Master HTTP: 8080
-- Master gRPC: 9090
+- Manager HTTP: 8080
+- Manager gRPC: 9090
 - WebSocket: 8081
 - Frontend: 5173
 - PostgreSQL: 5432

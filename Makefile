@@ -1,4 +1,4 @@
-.PHONY: all proto build clean run-master run-worker docker test
+.PHONY: all proto build clean run-manager run-worker docker test
 
 # 默认目标
 all: proto build
@@ -13,12 +13,12 @@ proto:
 	@echo "✅ Protobuf 代码生成完成"
 
 # 构建二进制文件
-build: build-master build-worker
+build: build-manager build-worker
 
-build-master:
-	@echo "构建 Master..."
-	go build -o bin/master cmd/master/main.go
-	@echo "✅ Master 构建完成"
+build-manager:
+	@echo "构建 Manager..."
+	go build -o bin/manager cmd/manager/main.go
+	@echo "✅ Manager 构建完成"
 
 build-worker:
 	@echo "构建 Worker..."
@@ -26,9 +26,9 @@ build-worker:
 	@echo "✅ Worker 构建完成"
 
 # 运行服务
-run-master:
-	@echo "启动 Master..."
-	go run cmd/master/main.go
+run-manager:
+	@echo "启动 Manager..."
+	go run cmd/manager/main.go
 
 run-worker:
 	@echo "启动 Worker..."
@@ -49,12 +49,12 @@ install-proto-tools:
 	@echo "✅ Protobuf 工具安装完成"
 
 # Docker 构建
-docker: docker-master docker-worker
+docker: docker-manager docker-worker
 
-docker-master:
-	@echo "构建 Master Docker 镜像..."
-	docker build -f deployments/docker/master.Dockerfile -t cronicle-master:latest .
-	@echo "✅ Master 镜像构建完成"
+docker-manager:
+	@echo "构建 Manager Docker 镜像..."
+	docker build -f deployments/docker/manager.Dockerfile -t cronicle-manager:latest .
+	@echo "✅ Manager 镜像构建完成"
 
 docker-worker:
 	@echo "构建 Worker Docker 镜像..."
@@ -136,7 +136,7 @@ help:
 	@echo "可用命令："
 	@echo "  make proto                - 生成 Protobuf 代码"
 	@echo "  make build                - 构建所有二进制文件"
-	@echo "  make run-master           - 运行 Master"
+	@echo "  make run-manager           - 运行 Manager"
 	@echo "  make run-worker           - 运行 Worker"
 	@echo "  make docker               - 构建 Docker 镜像"
 	@echo "  make docker-up            - 启动 Docker Compose"

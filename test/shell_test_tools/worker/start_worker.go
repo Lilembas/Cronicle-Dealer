@@ -53,11 +53,11 @@ func main() {
 	fmt.Println("\n🚀 启动 Worker 节点")
 	workerClient := worker.NewClient(&cfg.Worker)
 	if err := workerClient.Connect(); err != nil {
-		logger.Fatal("Worker 连接 Master 失败", zap.Error(err))
+		logger.Fatal("Worker 连接 Manager 失败", zap.Error(err))
 	}
 	defer workerClient.Close()
 
-	// 设置 executor gRPC 地址（用于Master连接Worker）
+	// 设置 executor gRPC 地址（用于Manager连接Worker）
 	workerClient.SetGRPCAddress(cfg.Server.Host, cfg.Worker.Executor.GRPCPort)
 
 	if err := workerClient.Register(); err != nil {
@@ -73,7 +73,7 @@ func main() {
 	// 启动Worker执行器
 	fmt.Println("\n🔧 启动 Worker 执行器...")
 	executor := worker.NewExecutor(&cfg.Worker.Executor)
-	executor.SetMasterClient(workerClient.GetMasterClient())
+	executor.SetManagerClient(workerClient.GetManagerClient())
 	if err := executor.Start(cfg.Worker.Executor.GRPCPort); err != nil {
 		logger.Fatal("执行器启动失败", zap.Error(err))
 	}

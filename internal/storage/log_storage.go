@@ -51,7 +51,7 @@ func InitLogStorage(dir string) error {
 func SaveLogChunk(ctx context.Context, eventID, content string) error {
 	logKey := fmt.Sprintf("task_logs:%s", eventID)
 
-	// 1. 存储到Redis（不设置TTL，由Master在任务完成后统一管理）
+	// 1. 存储到Redis（不设置TTL，由Manager在任务完成后统一管理）
 	if err := RedisClient.Append(ctx, logKey, content).Err(); err != nil {
 		logger.Error("存储日志到Redis失败",
 			zap.String("event_id", eventID),
@@ -209,7 +209,7 @@ func getLogFilePath(eventID string) string {
 	return filepath.Join(logDir, fmt.Sprintf("%s.log", eventID))
 }
 
-// SaveLogToFile 用完整内容覆盖写入日志文件（Master下载全量日志时使用）
+// SaveLogToFile 用完整内容覆盖写入日志文件（Manager下载全量日志时使用）
 func SaveLogToFile(eventID, content string) error {
 	logFilePath := getLogFilePath(eventID)
 
@@ -261,7 +261,7 @@ func CloseAllLogFiles() error {
 	return lastErr
 }
 
-// PublishLog 通过 Redis Pub/Sub 发布日志（供 Master 实时推送前端）
+// PublishLog 通过 Redis Pub/Sub 发布日志（供 Manager 实时推送前端）
 func PublishLog(ctx context.Context, eventID, content string) {
 	msg := eventID + logMessageSep + content
 	if err := RedisClient.Publish(ctx, logPubSubChannel, msg).Err(); err != nil {

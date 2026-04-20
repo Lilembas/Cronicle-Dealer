@@ -31,7 +31,7 @@ func main() {
 
 	// Worker配置
 	fmt.Println("\n👷 Worker配置:")
-	fmt.Printf("   Master地址: %s\n", cfg.Worker.MasterAddress)
+	fmt.Printf("   Manager地址: %s\n", cfg.Worker.ManagerAddress)
 	fmt.Printf("   Executor gRPC端口: %d\n", cfg.Worker.Executor.GRPCPort)
 	fmt.Printf("   标签: %v\n", cfg.Worker.Node.Tags)
 

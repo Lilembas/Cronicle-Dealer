@@ -23,12 +23,12 @@
 
 ### 1.1 项目简介
 
-Cronicle-Next 是一个高性能、可扩展、可视化的分布式任务调度与执行平台。采用 Master-Worker 架构，支持水平扩展、高可用性和实时监控。
+Cronicle-Next 是一个高性能、可扩展、可视化的分布式任务调度与执行平台。采用 Manager-Worker 架构，支持水平扩展、高可用性和实时监控。
 
 ### 1.2 核心特性
 
-- **分布式架构**: Master-Worker 模式，支持水平扩展
-- **单 Master 运行模式**: 聚焦功能完整性与稳定性，支持多 Worker 负载均衡
+- **分布式架构**: Manager-Worker 模式，支持水平扩展
+- **单 Manager 运行模式**: 聚焦功能完整性与稳定性，支持多 Worker 负载均衡
 - **智能调度**: 支持 Cron 表达式（6位，秒级精度），灵活的任务调度策略
 - **实时监控**: WebSocket 实时推送任务状态和日志流
 - **任务执行能力**: 稳定支持 Shell 执行，支持严格模式（Exit on Error）
@@ -56,7 +56,7 @@ Cronicle-Next 是一个高性能、可扩展、可视化的分布式任务调度
 └──────────────────────┬──────────────────────────────────────┘
                        │ HTTP/WebSocket
 ┌──────────────────────▼──────────────────────────────────────┐
-│                      Master 节点                              │
+│                      Manager 节点                              │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
 │  │ REST API    │  │  Scheduler  │  │ Dispatcher  │          │
@@ -117,7 +117,7 @@ Worker Executor
                  │
             gRPC StreamLogs
                  │
-          Master gRPC Server
+          Manager gRPC Server
                  │
           WebSocket Hub
                  │
@@ -395,7 +395,7 @@ cronicle:heartbeat:{node_id} → String<timestamp>
 cronicle:logs:{event_id} → List<LogChunk>
 
 # 分布式锁
-cronicle:lock:master → String<master_id>
+cronicle:lock:manager → String<manager_id>
 cronicle:lock:job:{job_id} → String<event_id>
 ```
 
@@ -403,7 +403,7 @@ cronicle:lock:job:{job_id} → String<event_id>
 
 ## 4. 核心组件
 
-### 4.1 Master 组件
+### 4.1 Manager 组件
 
 #### 4.1.1 Scheduler（调度器）
 
@@ -557,7 +557,7 @@ func (h *WebSocketHub) Run() {
 #### 4.2.1 Client（客户端）
 
 **职责**:
-- 连接到 Master
+- 连接到 Manager
 - 节点注册
 - 发送心跳
 - 资源上报
@@ -565,7 +565,7 @@ func (h *WebSocketHub) Run() {
 **实现**:
 ```go
 type Client struct {
-    masterConn  *grpc.ClientConn
+    managerConn  *grpc.ClientConn
     nodeID      string
     config      *Config
 }
@@ -856,7 +856,7 @@ WS ws://localhost:8081/ws
 ┌─────────────────────────────────────┐
 │         开发机                      │
 │  ┌────────────┐  ┌────────────┐    │
-│  │  Master    │  │  Worker    │    │
+│  │  Manager    │  │  Worker    │    │
 │  │  :8080     │  │  :9090     │    │
 │  └────────────┘  └────────────┘    │
 │  ┌────────────┐                    │
@@ -882,7 +882,7 @@ WS ws://localhost:8081/ws
            ┌───────────────┼───────────────┐
            │               │               │
     ┌──────▼──────┐ ┌─────▼──────┐ ┌─────▼──────┐
-    │  Master-1   │ │  Master-2  │ │  Master-3  │
+    │  Manager-1   │ │  Manager-2  │ │  Manager-3  │
     │  (Primary)  │ │  (Standby) │ │  (Standby) │
     └──────┬──────┘ └─────┬──────┘ └─────┬──────┘
            │               │               │
@@ -911,10 +911,10 @@ services:
   redis:
     image: redis:7-alpine
 
-  master:
+  manager:
     build:
       context: .
-      dockerfile: deployments/docker/master.Dockerfile
+      dockerfile: deployments/docker/manager.Dockerfile
     ports:
       - "8080:8080"
       - "9090:9090"
@@ -927,7 +927,7 @@ services:
       context: .
       dockerfile: deployments/docker/worker.Dockerfile
     depends_on:
-      - master
+      - manager
 ```
 
 ---

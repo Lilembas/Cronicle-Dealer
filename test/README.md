@@ -13,7 +13,7 @@
 ### Go 测试程序
 - `integration_test.go` - 集成测试
 - `worker_startup.go` - Worker 启动测试
-- `master_worker_e2e.go` - E2E 测试
+- `manager_worker_e2e.go` - E2E 测试
 
 ## 📖 文档
 

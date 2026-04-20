@@ -92,21 +92,21 @@ const startTracking = () => {
   }
 }
 
-const isMasterNode = (node: any) => {
+const isManagerNode = (node: any) => {
   if (!node || !node.tags) return false
-  return node.tags === 'master' || node.tags.includes('master')
+  return node.tags === 'manager' || node.tags.includes('manager')
 }
 
-const masterNodes = computed(() => sortedNodes.value.filter(n => isMasterNode(n)))
-const workerNodes = computed(() => sortedNodes.value.filter(n => !isMasterNode(n)))
+const managerNodes = computed(() => sortedNodes.value.filter(n => isManagerNode(n)))
+const workerNodes = computed(() => sortedNodes.value.filter(n => !isManagerNode(n)))
 
 const sortedNodes = computed(() => {
   if (!nodes.value) return []
   return [...nodes.value].sort((a: any, b: any) => {
-    const aIsMaster = isMasterNode(a)
-    const bIsMaster = isMasterNode(b)
-    if (aIsMaster && !bIsMaster) return -1
-    if (!aIsMaster && bIsMaster) return 1
+    const aIsManager = isManagerNode(a)
+    const bIsManager = isManagerNode(b)
+    if (aIsManager && !bIsManager) return -1
+    if (!aIsManager && bIsManager) return 1
     if (a.status === 'online' && b.status !== 'online') return -1
     if (a.status !== 'online' && b.status === 'online') return 1
     return new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
@@ -383,27 +383,27 @@ onUnmounted(() => {
     <!-- Row 2: Node Cards + Side Panel -->
     <div class="nodes-dispatch-layout mb-6">
       <div class="nodes-col">
-        <!-- Master Nodes -->
-        <div v-if="masterNodes.length > 0" class="node-group mb-5">
+        <!-- Manager Nodes -->
+        <div v-if="managerNodes.length > 0" class="node-group mb-5">
           <div class="group-header">
-            <div class="group-dot master-dot"></div>
-            <span class="group-title">Master</span>
-            <Tag :value="`${masterNodes.length}`" severity="warn" class="group-tag" />
+            <div class="group-dot manager-dot"></div>
+            <span class="group-title">Manager</span>
+            <Tag :value="`${managerNodes.length}`" severity="warn" class="group-tag" />
           </div>
           <div class="node-cards-row">
             <div
-              v-for="node in masterNodes"
+              v-for="node in managerNodes"
               :key="node.id"
-              :class="['node-card', 'master-card', node.status !== 'online' && 'node-offline']"
+              :class="['node-card', 'manager-card', node.status !== 'online' && 'node-offline']"
             >
               <div class="nc-header">
                 <div class="nc-status-wrap">
                   <span :class="['nc-status-dot', node.status === 'online' ? 'online' : 'offline']"></span>
                 </div>
                 <div class="nc-hostname">{{ node.hostname }}</div>
-                <div class="nc-badge master-badge">
+                <div class="nc-badge manager-badge">
                   <svg viewBox="0 0 24 24" fill="currentColor" class="badge-svg"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                  Master
+                  Manager
                 </div>
               </div>
               <div class="nc-metrics" v-if="node.status === 'online'">
@@ -640,7 +640,7 @@ onUnmounted(() => {
 .nodes-dispatch-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
 .group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .group-dot { width: 8px; height: 8px; border-radius: 50%; }
-.master-dot { background: #f59e0b; box-shadow: 0 0 6px #f59e0b88; }
+.manager-dot { background: #f59e0b; box-shadow: 0 0 6px #f59e0b88; }
 .worker-dot { background: #3b82f6; box-shadow: 0 0 6px #3b82f688; }
 .group-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
 .group-tag { font-size: 11px; padding: 2px 6px; }
@@ -648,7 +648,7 @@ onUnmounted(() => {
 
 /* Node Cards */
 .node-card { background: white; border-radius: 14px; border: 1.5px solid #f1f5f9; padding: 14px 16px; min-width: 220px; max-width: 300px; flex: 1 1 220px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.25s ease; position: relative; overflow: hidden; }
-.master-card { border-color: #fef3c7; background: linear-gradient(135deg, #fffbeb 0%, #fff 60%); }
+.manager-card { border-color: #fef3c7; background: linear-gradient(135deg, #fffbeb 0%, #fff 60%); }
 .worker-card { border-color: #eff6ff; background: linear-gradient(135deg, #eff6ff 0%, #fff 60%); }
 .node-card:hover { box-shadow: 0 12px 28px rgba(0,0,0,0.1); border-color: #3b82f644; }
 .node-offline { opacity: 0.6; filter: grayscale(0.5); }
@@ -659,7 +659,7 @@ onUnmounted(() => {
 .nc-status-dot.offline { background: #94a3b8; }
 .nc-hostname { font-size: 12px; font-weight: 700; color: #0f172a; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nc-badge { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; letter-spacing: 0.04em; flex-shrink: 0; }
-.master-badge { background: #fef3c7; color: #92400e; }
+.manager-badge { background: #fef3c7; color: #92400e; }
 .worker-badge { background: #dbeafe; color: #1e40af; }
 .badge-svg { width: 10px; height: 10px; }
 
@@ -700,7 +700,7 @@ onUnmounted(() => {
 .empty-nodes { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 0; color: #94a3b8; font-size: 12px; }
 .empty-icon { width: 28px; height: 28px; opacity: 0.5; }
 
-/* Upcoming Tasks Section (inside Master group) */
+/* Upcoming Tasks Section (inside Manager group) */
 .upcoming-section {
   margin-top: 16px;
   padding-top: 14px;

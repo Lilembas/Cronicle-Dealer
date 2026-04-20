@@ -8,7 +8,7 @@ import (
 // Config 全局配置结构
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
-	Master   MasterConfig   `mapstructure:"master"`
+	Manager  ManagerConfig  `mapstructure:"manager"`
 	Worker   WorkerConfig   `mapstructure:"worker"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
@@ -19,15 +19,15 @@ type Config struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Mode         string `mapstructure:"mode"` // master 或 worker
+	Mode         string `mapstructure:"mode"` // manager 或 worker
 	Host         string `mapstructure:"host"`
 	HTTPPort     int    `mapstructure:"http_port"`
 	GRPCPort     int    `mapstructure:"grpc_port"`
 	WebSocketPort int   `mapstructure:"websocket_port"`
 }
 
-// MasterConfig Master 配置
-type MasterConfig struct {
+// ManagerConfig Manager 配置
+type ManagerConfig struct {
 	Scheduler      SchedulerConfig      `mapstructure:"scheduler"`
 	Heartbeat      HeartbeatConfig      `mapstructure:"heartbeat"`
 	DispatchRetry  DispatchRetryConfig  `mapstructure:"dispatch_retry"`
@@ -54,7 +54,7 @@ type HeartbeatConfig struct {
 
 // WorkerConfig Worker 配置
 type WorkerConfig struct {
-	MasterAddress string          `mapstructure:"master_address"`
+	ManagerAddress string         `mapstructure:"manager_address"`
 	Node          NodeConfig      `mapstructure:"node"`
 	Heartbeat     WorkerHeartbeat `mapstructure:"heartbeat"`
 	Executor      ExecutorConfig  `mapstructure:"executor"`
@@ -186,16 +186,16 @@ func setDefaults() {
 	viper.SetDefault("logging.format", "json")
 	viper.SetDefault("logging.output", "stdout")
 
-	// Master 默认值
-	viper.SetDefault("master.scheduler.enabled", true)
-	viper.SetDefault("master.scheduler.tick_interval", 1)
-	viper.SetDefault("master.heartbeat.timeout", 60)
-	viper.SetDefault("master.heartbeat.check_interval", 30)
+	// Manager 默认值
+	viper.SetDefault("manager.scheduler.enabled", true)
+	viper.SetDefault("manager.scheduler.tick_interval", 1)
+	viper.SetDefault("manager.heartbeat.timeout", 60)
+	viper.SetDefault("manager.heartbeat.check_interval", 30)
 
 	// 分发重试默认值
-	viper.SetDefault("master.dispatch_retry.max_retries", 1)
-	viper.SetDefault("master.dispatch_retry.base_delay_sec", 2)
-	viper.SetDefault("master.dispatch_retry.max_delay_sec", 30)
+	viper.SetDefault("manager.dispatch_retry.max_retries", 1)
+	viper.SetDefault("manager.dispatch_retry.base_delay_sec", 2)
+	viper.SetDefault("manager.dispatch_retry.max_delay_sec", 30)
 
 	// Worker 默认值
 	viper.SetDefault("worker.executor.grpc_port", 9090)

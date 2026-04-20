@@ -29,7 +29,7 @@
 ## ✅ 已完成功能清单
 
 ### 后端 (98%)
-- ✅ Master 选举机制（基于 Redis）
+- ✅ Manager 选举机制（基于 Redis）
 - ✅ 任务调度引擎（Cron 表达式，秒级精度）
 - ✅ 任务分发器（带策略的负载均衡）
 - ✅ Worker 注册和心跳管理
@@ -54,7 +54,7 @@
 
 ### 部署 (100%)
 - ✅ Docker Compose 配置
-- ✅ Master Dockerfile
+- ✅ Manager Dockerfile
 - ✅ Worker Dockerfile
 - ✅ Makefile 构建脚本
 
@@ -67,7 +67,7 @@
 ```bash
 cd s:\projects\cronicle-next
 
-# 启动所有服务（Redis + Master + Worker）
+# 启动所有服务（Redis + Manager + Worker）
 docker-compose -f deployments/docker-compose.yml up -d
 
 # 查看日志
@@ -130,10 +130,10 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 # 生成 Protobuf 代码
 make proto
 
-# 运行 Master（新终端）
-make run-master
+# 运行 Manager（新终端）
+make run-manager
 # 或
-go run cmd/master/main.go
+go run cmd/manager/main.go
 
 # 运行 Worker（新终端）
 make run-worker
@@ -167,11 +167,11 @@ npm run dev
 ```
 cronicle-next/
 ├── cmd/                    # 主程序入口
-│   ├── master/            # Master 节点
+│   ├── manager/            # Manager 节点
 │   └── worker/            # Worker 节点
 ├── internal/              # 私有应用代码
-│   ├── master/            # Master 核心逻辑
-│   │   ├── election.go    # Master 选举
+│   ├── manager/            # Manager 核心逻辑
+│   │   ├── election.go    # Manager 选举
 │   │   ├── scheduler.go   # 任务调度
 │   │   ├── dispatcher.go  # 任务分发
 │   │   ├── grpc_server.go # gRPC 服务器
@@ -207,7 +207,7 @@ cronicle-next/
 
 ## 🎯 核心功能说明
 
-### 1. Master 节点
+### 1. Manager 节点
 
 **职责**：
 - 任务调度和分发
@@ -304,7 +304,7 @@ curl http://localhost:8080/api/v1/nodes
 
 ```yaml
 server:
-  mode: master          # master 或 worker
+  mode: manager          # manager 或 worker
   http_port: 8080      # HTTP API 端口
   grpc_port: 9090     # gRPC 端口
 
@@ -316,14 +316,14 @@ redis:
   host: localhost
   port: 6379
 
-master:
+manager:
   election:
-    enabled: true     # 启用 Master 选举
+    enabled: true     # 启用 Manager 选举
   scheduler:
     enabled: true     # 启用任务调度
 
 worker:
-  master_address: localhost:9090
+  manager_address: localhost:9090
   node:
     tags: ["default"]
 ```
