@@ -76,7 +76,6 @@ type WorkerHeartbeat struct {
 // ExecutorConfig 执行器配置
 type ExecutorConfig struct {
 	GRPCPort          int `mapstructure:"grpc_port"`
-	MaxConcurrentJobs int `mapstructure:"max_concurrent_jobs"`
 	DefaultTimeout    int `mapstructure:"default_timeout"`
 }
 
@@ -199,7 +198,6 @@ func setDefaults() {
 
 	// Worker 默认值
 	viper.SetDefault("worker.executor.grpc_port", 9090)
-	viper.SetDefault("worker.executor.max_concurrent_jobs", 10)
 	viper.SetDefault("worker.executor.default_timeout", 300)
 	viper.SetDefault("worker.heartbeat.interval", 30)
 }

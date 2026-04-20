@@ -17,6 +17,7 @@ import (
 	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-next/pkg/utils"
 )
 
 const (
@@ -157,17 +158,29 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 		zap.Bool("strict_mode", job.StrictMode),
 		zap.Int("retry_count", retryCount))
 
-	node, err := d.selectNode(job)
+	candidates, err := d.selectCandidates(job)
 	if err != nil {
 		// 记录选择节点失败（仅写日志，不标记 failed — 临时性错误，可重试）
-		errorLog := fmt.Sprintf("[%s] [Manager] ❌ 选择节点失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取候选节点失败: %v\n", time.Now().Format(logTimeFormat), err)
 		errorLog += fmt.Sprintf("[%s] [Manager] 可能原因：\n", time.Now().Format(logTimeFormat))
 		errorLog += fmt.Sprintf("[%s] [Manager] - 没有在线的 Worker 节点\n", time.Now().Format(logTimeFormat))
-		errorLog += fmt.Sprintf("[%s] [Manager] - 所有 Worker 节点都已满载\n", time.Now().Format(logTimeFormat))
-		errorLog += fmt.Sprintf("[%s] [Manager] - 没有符合标签条件的节点\n", time.Now().Format(logTimeFormat))
+		errorLog += fmt.Sprintf("[%s] [Manager] - 没有符合查询条件的节点\n", time.Now().Format(logTimeFormat))
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
 		return fmt.Errorf("选择节点失败: %w", err)
+	}
+
+	// 处理广播模式
+	if job.StrategyID == "broadcast" {
+		return d.dispatchBroadcast(event, candidates, job)
+	}
+
+	// 执行均衡策略选择单个节点
+	node, err := d.pickOneNode(candidates, job.StrategyID)
+	if err != nil {
+		errorLog := fmt.Sprintf("[%s] [Manager] ❌ 负载均衡筛选失败: %v\n", time.Now().Format(logTimeFormat), err)
+		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
+		return fmt.Errorf("筛选节点失败: %w", err)
 	}
 
 	if err := d.updateEventAndDispatch(event, node, job); err != nil {
@@ -432,23 +445,42 @@ func (d *Dispatcher) getJob(jobID string) (*models.Job, error) {
 	return &job, nil
 }
 
-// selectNode 选择执行节点
-func (d *Dispatcher) selectNode(job *models.Job) (*models.Node, error) {
+// selectCandidates 获取所有符合条件的候选节点
+func (d *Dispatcher) selectCandidates(job *models.Job) ([]models.Node, error) {
 	var nodes []models.Node
 
-	// 只选择心跳新鲜的在线节点（排除心跳超时的僵尸节点）
+	// 只选择心跳新鲜的在线节点
 	heartbeatThreshold := time.Now().Add(-90 * time.Second)
 
 	query := storage.DB.Where("status = ?", "online").
 		Where("last_heartbeat > ?", heartbeatThreshold).
-		// 排除 manager 节点（manager 节点不执行任务）
+		// 排除 manager 节点
 		Where("(tags NOT LIKE '%manager%' OR tags IS NULL OR tags = '')")
 
 	switch job.TargetType {
 	case "node_id":
 		query = query.Where("id = ?", job.TargetValue)
 	case "tags":
-		query = query.Where("tags LIKE ?", "%"+job.TargetValue+"%")
+		// 解析标签：可能是单一字符串，也可能是 JSON 数组字符串
+		var targetTags []string
+		if err := json.Unmarshal([]byte(job.TargetValue), &targetTags); err != nil {
+			// 解析失败，视为单一标签
+			targetTags = []string{job.TargetValue}
+		}
+
+		if len(targetTags) > 0 {
+			tagSubQuery := storage.DB
+			for i, tag := range targetTags {
+				// 匹配精确包含在 JSON 数组中的标签
+				cond := "%\"" + tag + "\"%"
+				if i == 0 {
+					tagSubQuery = tagSubQuery.Where("tags LIKE ?", cond)
+				} else {
+					tagSubQuery = tagSubQuery.Or("tags LIKE ?", cond)
+				}
+			}
+			query = query.Where(tagSubQuery)
+		}
 	case "any":
 		// 不添加额外条件
 	}
@@ -458,15 +490,15 @@ func (d *Dispatcher) selectNode(job *models.Job) (*models.Node, error) {
 	}
 
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf("没有可用的节点")
+		return nil, fmt.Errorf("没有符合条件的可用节点")
 	}
 
-	logger.Debug("选择节点前的任务信息",
-		zap.String("job_id", job.ID),
-		zap.String("job_name", job.Name),
-		zap.String("strategy_id", job.StrategyID))
+	return nodes, nil
+}
 
-	strategy := d.loadStrategy(job.StrategyID)
+// pickOneNode 根据负载均衡策略从候选节点中选择一个
+func (d *Dispatcher) pickOneNode(nodes []models.Node, strategyID string) (*models.Node, error) {
+	strategy := d.loadStrategy(strategyID)
 	if strategy != nil {
 		return d.selectByStrategy(nodes, strategy)
 	}
@@ -492,6 +524,52 @@ func (d *Dispatcher) selectLeastBusyNode(nodes []models.Node) (*models.Node, err
 	}
 
 	return selectedNode, nil
+}
+
+// dispatchBroadcast 广播分发：将任务分发给所有符合条件的节点
+func (d *Dispatcher) dispatchBroadcast(event *models.Event, candidates []models.Node, job *models.Job) error {
+	logger.Info("执行广播分发",
+		zap.String("event_id", event.ID),
+		zap.Int("candidate_count", len(candidates)))
+
+	for i := range candidates {
+		node := &candidates[i]
+		targetEvent := event
+
+		// 对于除第一个以外的节点，克隆事件
+		if i > 0 {
+			newEventID := utils.GenerateID("event")
+			targetEvent = &models.Event{
+				ID:            newEventID,
+				JobID:         event.JobID,
+				JobName:       event.JobName,
+				Status:        "pending",
+				ScheduledTime: event.ScheduledTime,
+				IsRetry:       event.IsRetry,
+				RetryCount:    event.RetryCount,
+				ParentEventID: event.ID, // 关联到主事件
+				CreatedAt:     time.Now(),
+			}
+
+			if err := storage.DB.Create(targetEvent).Error; err != nil {
+				logger.Error("创建广播子事件失败",
+					zap.String("parent_event_id", event.ID),
+					zap.String("node_id", node.ID),
+					zap.Error(err))
+				continue
+			}
+		}
+
+		// 分发任务到当前节点
+		if err := d.updateEventAndDispatch(targetEvent, node, job); err != nil {
+			logger.Error("广播分发到节点失败",
+				zap.String("event_id", targetEvent.ID),
+				zap.String("node_id", node.ID),
+				zap.Error(err))
+		}
+	}
+
+	return nil
 }
 
 // updateEventAndDispatch 更新事件并分发任务

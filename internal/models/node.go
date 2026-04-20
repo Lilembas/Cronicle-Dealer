@@ -34,7 +34,7 @@ type Node struct {
 	
 	// 任务信息
 	RunningJobs   int `json:"running_jobs"`   // 当前运行任务数
-	MaxConcurrent int `gorm:"default:10" json:"max_concurrent"` // 最大并发任务数
+	MaxConcurrent int `gorm:"default:0" json:"max_concurrent"` // 最大并发任务数，0 表示不限制
 	
 	// 版本信息
 	Version      string `gorm:"type:varchar(50)" json:"version"`
@@ -63,5 +63,11 @@ func (n *Node) IsOnline(timeout time.Duration) bool {
 
 // CanAcceptJob 判断节点是否可以接受新任务
 func (n *Node) CanAcceptJob() bool {
-	return n.Status == "online" && n.RunningJobs < n.MaxConcurrent
+	if n.Status != "online" {
+		return false
+	}
+	if n.MaxConcurrent <= 0 {
+		return true
+	}
+	return n.RunningJobs < n.MaxConcurrent
 }

@@ -644,7 +644,8 @@ func (s *APIServer) updateNode(c *gin.Context) {
 	}
 
 	var req struct {
-		Tags string `json:"tags"` // JSON 存储标签数组
+		Tags          *string `json:"tags"`           // JSON 存储标签数组
+		MaxConcurrent *int    `json:"max_concurrent"` // 最大并发
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -652,8 +653,11 @@ func (s *APIServer) updateNode(c *gin.Context) {
 	}
 
 	updates := make(map[string]interface{})
-	if req.Tags != "" {
-		updates["tags"] = req.Tags
+	if req.Tags != nil {
+		updates["tags"] = *req.Tags
+	}
+	if req.MaxConcurrent != nil {
+		updates["max_concurrent"] = *req.MaxConcurrent
 	}
 
 	if len(updates) > 0 {

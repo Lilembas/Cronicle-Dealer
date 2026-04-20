@@ -446,7 +446,7 @@ func (s *GRPCServer) buildNode(nodeID string, req *pb.RegisterNodeRequest) *mode
 		DiskPercent:   calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal),
 		Version:       req.Version,
 		RunningJobs:   0,
-		MaxConcurrent: defaultMaxConcurrent,
+		MaxConcurrent: 0,
 		LastHeartbeat: time.Now(),
 	}
 }

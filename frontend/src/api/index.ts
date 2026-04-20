@@ -164,7 +164,7 @@ export const nodesApi = {
     get: (id: string) =>
         request.get<Node>(`/nodes/${id}`),
 
-    update: (id: string, data: { tags?: string }) =>
+    update: (id: string, data: { tags?: string; max_concurrent?: number }) =>
         request.put<Node>(`/nodes/${id}`, data),
 
     delete: (id: string) =>

@@ -46,7 +46,8 @@ type Client struct {
 	nodeID      string
 	hostname    string
 	localIP     string
-	grpcAddress string // executor gRPC 服务地址
+	grpcAddress string    // executor gRPC 服务地址
+	executor    *Executor // 引用执行器以获取运行状态
 }
 
 // NewClient 创建 Worker 客户端
@@ -97,6 +98,11 @@ func (c *Client) SetGRPCAddress(host string, port int) {
 	logger.Info("设置 Worker executor gRPC 地址",
 		zap.String("address", c.grpcAddress),
 		zap.String("local_ip", c.localIP))
+}
+
+// SetExecutor 设置执行器引用
+func (c *Client) SetExecutor(e *Executor) {
+	c.executor = e
 }
 
 // Register 注册节点
@@ -171,10 +177,16 @@ func (c *Client) sendHeartbeat() error {
 		resources = &pb.NodeResources{}
 	}
 
+	// 汇报运行中的任务
+	var runningJobs []string
+	if c.executor != nil {
+		runningJobs = c.executor.GetRunningJobIDs()
+	}
+
 	req := &pb.HeartbeatRequest{
 		NodeId:      c.nodeID,
 		Resources:   resources,
-		RunningJobs: []string{}, // TODO: 需要与 Executor 共享运行任务信息
+		RunningJobs: runningJobs,
 		Timestamp:   time.Now().Unix(),
 	}
 

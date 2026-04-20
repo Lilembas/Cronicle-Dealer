@@ -86,7 +86,8 @@ func main() {
 	}
 
 	executor.SetManagerClient(client.GetManagerClient())
-	logger.Info("已设置Manager客户端")
+	client.SetExecutor(executor)
+	logger.Info("已设置Manager客户端和执行器引用")
 
 	go client.StartHeartbeat()
 

@@ -59,6 +59,18 @@ func (e *Executor) SetManagerClient(client pb.CronicleServiceClient) {
 	e.managerClient = client
 }
 
+// GetRunningJobIDs 获取当前运行的任务 ID 列表
+func (e *Executor) GetRunningJobIDs() []string {
+	var ids []string
+	e.runningJobs.Range(func(key, _ interface{}) bool {
+		if id, ok := key.(string); ok {
+			ids = append(ids, id)
+		}
+		return true
+	})
+	return ids
+}
+
 // Start 启动 gRPC 服务器（接收任务）
 func (e *Executor) Start(port int) error {
 	if port <= 0 {
@@ -100,12 +112,6 @@ func (e *Executor) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.Tas
 		zap.String("event_id", req.EventId),
 		zap.String("command", req.Command))
 
-	if !e.canAcceptJob() {
-		return &pb.TaskResponse{
-			Accepted: false,
-			Message:  "已达到最大并发任务数",
-		}, nil
-	}
 
 	e.incrementJobCount()
 	go e.executeTask(req)
@@ -155,11 +161,6 @@ func (e *Executor) AbortTask(ctx context.Context, req *pb.AbortTaskRequest) (*pb
 }
 
 // canAcceptJob 检查是否可以接受新任务
-func (e *Executor) canAcceptJob() bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.jobCount < e.cfg.MaxConcurrentJobs
-}
 
 // incrementJobCount 增加任务计数
 func (e *Executor) incrementJobCount() {

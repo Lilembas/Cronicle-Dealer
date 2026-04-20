@@ -15,21 +15,15 @@ type FormulaParams map[string]interface{}
 
 // BuildParamsFromNode 从 Node 资源信息构建公式参数
 func BuildParamsFromNode(node *models.Node) FormulaParams {
-	threadsRemainPct := 0.0
-	if node.MaxConcurrent > 0 {
-		threadsRemainPct = float64(node.MaxConcurrent-node.RunningJobs) / float64(node.MaxConcurrent) * 100.0
-	}
-
 	return FormulaParams{
-		"memory_usage_pct":   node.MemoryPercent,
-		"memory_usage_abs":   node.MemoryUsage,
+		"memory_usage_pct": node.MemoryPercent,
+		"memory_usage_abs": node.MemoryUsage,
 		"memory_remain_pct": math.Max(0, 100.0-node.MemoryPercent),
 		"memory_remain_abs": math.Max(0, node.MemoryTotal-node.MemoryUsage),
-		"cpu_usage_pct":      node.CPUUsage,
-		"threads_used":       float64(node.RunningJobs),
-		"threads_total":      float64(node.MaxConcurrent),
-		"threads_remain_pct": threadsRemainPct,
-		"threads_remain":     float64(node.MaxConcurrent - node.RunningJobs),
+		"cpu_usage_pct":    node.CPUUsage,
+		"events_used":      float64(node.RunningJobs),
+		"events_total":     float64(node.MaxConcurrent),
+		"events_remain":    float64(node.MaxConcurrent - node.RunningJobs),
 	}
 }
 
@@ -160,15 +154,14 @@ func EvaluateFormula(formula string, params FormulaParams) (float64, error) {
 
 // dummyParams 模拟参数（包级变量，避免重复分配）
 var dummyParams = FormulaParams{
-	"memory_usage_pct":   50.0,
-	"memory_usage_abs":   4.0,
-	"memory_remain_pct":  50.0,
-	"memory_remain_abs":  4.0,
-	"cpu_usage_pct":      30.0,
-	"threads_used":       3.0,
-	"threads_total":      10.0,
-	"threads_remain_pct": 70.0,
-	"threads_remain":     7.0,
+	"memory_usage_pct":  50.0,
+	"memory_usage_abs":  4.0,
+	"memory_remain_pct": 50.0,
+	"memory_remain_abs": 4.0,
+	"cpu_usage_pct":     30.0,
+	"events_used":       3.0,
+	"events_total":      10.0,
+	"events_remain":     7.0,
 }
 
 // ValidateFormula 用模拟参数验证公式语法
@@ -189,8 +182,7 @@ var FormulaParameterInfo = []struct {
 	{"memory_remain_pct", "内存剩余百分比", "%", "剩余内存占比"},
 	{"memory_remain_abs", "内存剩余量", "GB", "剩余内存绝对值"},
 	{"cpu_usage_pct", "CPU 使用百分比", "%", "CPU 使用率"},
-	{"threads_used", "已用线程数", "个", "当前运行任务数"},
-	{"threads_total", "总线程数", "个", "最大并发任务数"},
-	{"threads_remain_pct", "线程剩余百分比", "%", "剩余线程占比"},
-	{"threads_remain", "剩余线程数", "个", "可接受的新任务数"},
+	{"events_used", "已用实例数", "个", "当前运行实例数"},
+	{"events_total", "总实例数", "个", "最大并发实例数"},
+	{"events_remain", "剩余实例数", "个", "可接受的新实例数"},
 }

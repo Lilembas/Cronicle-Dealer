@@ -11,18 +11,19 @@ import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import Chips from 'primevue/chips'
 import InputNumber from 'primevue/inputnumber'
 import ProgressBar from 'primevue/progressbar'
 
 const loading = ref(false)
 const nodes = ref<Node[]>([])
-const selectedNodes = ref<Node[]>([])
 const wsStore = useWebSocketStore()
 
 
 const editDialogVisible = ref(false)
 const editNode = ref<Node | null>(null)
 const editTags = ref<string[]>([])
+const editMaxConcurrent = ref(0)
 const editLoading = ref(false)
 
 // --- 负载均衡策略状态 ---
@@ -126,9 +127,6 @@ const getRowClass = (data: Node) => {
   return ''
 }
 
-const canSelectRow = (node: Node) => {
-  return !(isManagerNode(node) || node.id === getManagerNodeId())
-}
 
 const loadNodes = async () => {
   try {
@@ -169,6 +167,7 @@ const handleDelete = async (node: Node) => {
 
 const handleEdit = (node: Node) => {
   editNode.value = node
+  editMaxConcurrent.value = node.max_concurrent || 0
   try {
     editTags.value = node.tags ? JSON.parse(node.tags) : []
   } catch {
@@ -183,7 +182,8 @@ const saveEdit = async () => {
   try {
     editLoading.value = true
     await nodesApi.update(editNode.value.id, {
-      tags: JSON.stringify(editTags.value)
+      tags: JSON.stringify(editTags.value),
+      max_concurrent: editMaxConcurrent.value
     })
     showToast({ severity: 'success', summary: '更新成功', life: 3000 })
     editDialogVisible.value = false
@@ -285,8 +285,9 @@ const validateFormulaDebounced = (metric: LBFormulaMetric) => {
   }
   validateTimer = setTimeout(async () => {
     try {
-      const result = await strategiesApi.validate(metric.formula)
-      formulaValidation.value[metric.id] = { valid: result.valid, error: result.error }
+      const resp = await strategiesApi.validate(metric.formula)
+      const data = (resp as any).data || resp
+      formulaValidation.value[metric.id] = { valid: data.valid, error: data.error }
     } catch {
       formulaValidation.value[metric.id] = { valid: false, error: '验证请求失败' }
     }
@@ -311,7 +312,7 @@ const saveStrategy = async () => {
 
   try {
     strategyLoading.value = true
-    const payload = {
+    const payload: any = {
       name: currentStrategy.value.name,
       description: currentStrategy.value.description,
       direction: currentStrategy.value.direction,
@@ -370,6 +371,7 @@ const insertParam = (param: FormulaParameter) => {
 
 onMounted(async () => {
   await loadNodes()
+  await loadStrategies()
   wsStore.onMessage('node_status', handleNodeStatus)
 })
 
@@ -425,7 +427,7 @@ onUnmounted(() => {
         <template #content>
           <div class="flex items-center gap-4">
             <div class="stat-icon bg-purple-50 text-purple-500">
-              <i class="pi pi-scales text-xl"></i>
+              <i class="pi pi-share-alt text-xl"></i>
             </div>
             <div class="flex-1 min-w-0">
               <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">均衡策略</div>
@@ -478,13 +480,21 @@ onUnmounted(() => {
               </span>
             </template>
           </Column>
-          <Column header="并行任务" style="width: 100px" alignHeader="center" align="center">
+          <Column header="并行任务" style="width: 120px" alignHeader="center" align="center">
             <template #body="{ data }">
-              <span v-if="data.running_jobs > 0" class="premium-badge badge-running-mini">
-                <i class="pi pi-spin pi-spinner text-[10px]"></i>
-                <span>{{ data.running_jobs }}</span>
-              </span>
-              <span v-else class="text-gray-300">-</span>
+              <!-- Manager 节点 -->
+              <div v-if="isManagerNode(data)" class="text-gray-300 font-medium">-</div>
+              
+              <!-- Worker 节点 -->
+              <div v-else class="flex items-center justify-center gap-1.5">
+                <span :class="data.running_jobs > 0 ? 'text-blue-500 font-bold' : 'text-gray-600 font-medium'">
+                  {{ data.running_jobs }}
+                </span>
+                <span class="text-gray-300 text-xs">/</span>
+                <span class="text-gray-400 text-xs">
+                  {{ data.max_concurrent > 0 ? data.max_concurrent : '∞' }}
+                </span>
+              </div>
             </template>
           </Column>
           <Column header="上线时间" style="width: 110px">
@@ -552,9 +562,16 @@ onUnmounted(() => {
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-medium text-sm">节点标签</label>
-          <Select v-model="editTags" multiple filterable editable placeholder="添加标签（按回车确认）" class="w-full" />
+          <Chips v-model="editTags" separator=" " placeholder="输入标签并回车" class="w-full" autofocus />
         </div>
-        <p class="text-gray-400 text-xs">节点标签用于任务调度时按标签匹配 Worker 节点</p>
+        <div class="flex flex-col gap-1">
+          <label class="font-medium text-sm">最大并发任务数</label>
+          <div class="flex items-center gap-3">
+            <InputNumber v-model="editMaxConcurrent" :min="0" :max="1000" showButtons class="flex-1" placeholder="0 表示不限制" />
+            <span class="text-xs text-gray-400 w-24">{{ editMaxConcurrent === 0 ? '不限制' : '项任务' }}</span>
+          </div>
+        </div>
+        <p class="text-gray-400 text-xs">设置该节点允许同时运行的最大任务数量，0 为不限制。</p>
       </div>
       <template #footer>
         <Button severity="secondary" @click="editDialogVisible = false" label="取消" />
@@ -624,7 +641,7 @@ onUnmounted(() => {
         </div>
         <div class="flex flex-col gap-1">
           <label class="font-medium text-sm">描述</label>
-          <InputText v-model="currentStrategy.description" placeholder="策略说明（可选）" />
+          <InputText v-model="currentStrategy.description" placeholder="策略说明（可选）" autofocus />
         </div>
 
         <!-- 指标列表 -->
@@ -669,9 +686,9 @@ onUnmounted(() => {
               <label class="text-xs text-gray-400">名称</label>
               <InputText v-model="metric.name" placeholder="如：内存压力" class="text-sm" />
             </div>
-            <div class="flex flex-col gap-1 col-span-2">
+            <div class="flex flex-col gap-1 col-span-2 overflow-hidden">
               <label class="text-xs text-gray-400">公式</label>
-              <div class="relative">
+              <div class="relative w-full">
                 <InputText v-model="metric.formula" placeholder="memory_usage_pct * 0.5" class="text-sm font-mono w-full formula-input" @input="validateFormulaDebounced(metric)" />
                 <span v-if="formulaValidation[metric.id]" class="formula-status">
                   <i v-if="formulaValidation[metric.id].valid" class="pi pi-check text-green-500"></i>
@@ -679,9 +696,9 @@ onUnmounted(() => {
                 </span>
               </div>
             </div>
-            <div class="flex flex-col gap-1">
+            <div class="flex flex-col gap-1 overflow-hidden">
               <label class="text-xs text-gray-400">权重</label>
-              <InputNumber v-model="metric.weight" :minFractionDigits="0" :maxFractionDigits="2" :min="0" class="text-sm w-full" />
+              <InputNumber v-model="metric.weight" :minFractionDigits="0" :maxFractionDigits="2" :min="0" class="text-sm w-full weight-input" />
             </div>
           </div>
           <div v-if="formulaValidation[metric.id] && !formulaValidation[metric.id].valid" class="text-red-400 text-xs mt-1 ml-1">
@@ -1004,7 +1021,11 @@ onUnmounted(() => {
 }
 
 .formula-input:deep(.p-inputtext) {
-  padding-right: 2rem;
+  padding-right: 2.5rem;
+}
+
+.weight-input :deep(.p-inputnumber-input) {
+  width: 100%;
 }
 
 @media (max-width: 1024px) {

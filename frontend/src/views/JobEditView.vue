@@ -65,6 +65,16 @@ const loadingTags = ref(false)
 const strategies = ref<LoadBalanceStrategy[]>([])
 const loadingStrategies = ref(false)
 
+// 负载均衡策略选项
+const strategyOptions = computed(() => [
+  { id: '', name: '默认（运行任务最少的节点）' },
+  { id: 'broadcast', name: '广播模式（所有匹配节点）' },
+  ...strategies.value.map(s => ({
+    id: s.id,
+    name: s.name
+  }))
+])
+
 const parseEnvString = (value: unknown): Array<{ key: string; value: string }> => {
   if (!value) return []
   if (typeof value !== 'string') return []
@@ -559,7 +569,7 @@ onMounted(() => {
               <label class="font-medium text-sm">负载均衡策略</label>
               <Select
                 v-model="formData.strategy_id"
-                :options="[{ id: '', name: '默认（最小负载）' }, ...strategies.map(s => ({ id: s.id, name: s.name }))]"
+                :options="strategyOptions"
                 optionLabel="name"
                 optionValue="id"
                 placeholder="使用默认策略"
@@ -569,7 +579,7 @@ onMounted(() => {
               />
               <p class="field-hint pt-2">
                 <i class="pi pi-scales mr-1"></i>
-                选择用于在多个候选节点中选择执行节点的策略，留空则使用默认最小负载策略。
+                选择在多个匹配节点中调度任务的均衡策略。默认规则：自动选择当前运行任务最少的节点。
               </p>
             </div>
 
