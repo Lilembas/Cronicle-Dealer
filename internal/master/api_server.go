@@ -267,30 +267,39 @@ func (s *APIServer) getJob(c *gin.Context) {
 
 // updateJob 更新任务
 func (s *APIServer) updateJob(c *gin.Context) {
-	var job models.Job
-	if err := c.ShouldBindJSON(&job); err != nil {
+	jobID := c.Param("id")
+
+	// 先查出原有记录
+	var existing models.Job
+	if err := storage.DB.First(&existing, "id = ?", jobID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+		return
+	}
+
+	// 解析请求体，只覆盖传入的字段
+	var updates models.Job
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
-	job.ID = c.Param("id")
-	
-	logger.Info("[API] 更新任务详情",
-		zap.String("id", job.ID),
-		zap.String("name", job.Name),
-		zap.Bool("strict_mode", job.StrictMode))
 
-	if err := storage.DB.Save(&job).Error; err != nil {
+	logger.Info("[API] 更新任务详情",
+		zap.String("id", jobID),
+		zap.String("name", updates.Name),
+		zap.Bool("strict_mode", updates.StrictMode))
+
+	// 使用 Updates 只更新非零值字段
+	if err := storage.DB.Model(&existing).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
-	// 更新调度器
-	if err := s.scheduler.UpdateJob(&job); err != nil {
+
+	// 更新调度器（需要完整记录）
+	if err := s.scheduler.UpdateJob(&existing); err != nil {
 		logger.Error("更新调度器任务失败", zap.Error(err))
 	}
-	
-	c.JSON(http.StatusOK, job)
+
+	c.JSON(http.StatusOK, existing)
 }
 
 // deleteJob 删除任务

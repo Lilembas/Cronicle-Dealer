@@ -180,6 +180,27 @@ const handleDelete = async (id: string, name: string) => {
   })
 }
 
+const toggleJobEnabled = async (job: any) => {
+  const newEnabled = !job.enabled
+  const action = newEnabled ? '启用' : '禁用'
+  showConfirm({
+    message: `确定要${action}任务 "${job.name}" 吗？`,
+    header: `确认${action}`,
+    icon: 'pi pi-exclamation-triangle',
+    acceptProps: { label: '确定', severity: newEnabled ? 'success' : 'warn' },
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    accept: async () => {
+      try {
+        await jobsApi.update(job.id, { enabled: newEnabled })
+        showToast({ severity: 'success', summary: `${action}成功`, detail: `任务 "${job.name}" 已${action}`, life: 3000 })
+        refetch()
+      } catch (error: any) {
+        showToast({ severity: 'error', summary: `${action}失败`, detail: error.response?.data?.error || `${action}失败`, life: 5000 })
+      }
+    },
+  })
+}
+
 const handleTrigger = async (id: string, name: string) => {
   showConfirm({
     message: `确定要触发任务 "${name}" 吗？`,
@@ -317,7 +338,13 @@ const getStatusText = (status: string) => {
               </Column>
               <Column header="开启" style="width: 90px" alignHeader="center" align="center">
                 <template #body="{ data }">
-                  <Tag :value="data.enabled ? '启用' : '禁用'" :severity="data.enabled ? 'success' : 'secondary'" />
+                  <Tag
+                    :value="data.enabled ? '启用' : '禁用'"
+                    :severity="data.enabled ? 'success' : 'secondary'"
+                    class="cursor-pointer select-none"
+                    v-tooltip.top="`点击${data.enabled ? '禁用' : '启用'}此任务`"
+                    @click="toggleJobEnabled(data)"
+                  />
                 </template>
               </Column>
               <Column header="状态" style="width: 100px" alignHeader="center" align="center">
