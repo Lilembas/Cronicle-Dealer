@@ -186,10 +186,10 @@ onUnmounted(() => {
 
           <Column header="持续时长" style="width: 120px">
             <template #body="{ data }">
-              <span v-if="data.status === 'running' && data.start_time" class="time-text text-blue-500 font-bold">
+              <span v-if="data.status === 'running' && data.start_time" class="time-text font-mono text-blue-500 font-bold">
                 {{ formatDuration(Math.max(0, Math.floor((systemStore.currentTime - new Date(data.start_time).getTime()) / 1000))) }}
               </span>
-              <span v-else class="time-text">{{ formatDuration(data.duration) }}</span>
+              <span v-else class="time-text font-mono">{{ formatDuration(data.duration) }}</span>
             </template>
           </Column>
 

@@ -279,13 +279,13 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column header="时长" style="width: 140px" align="right">
+          <Column header="持续时长" style="width: 140px" align="right">
             <template #body="{ data }">
-              <span v-if="data.status === 'running' && data.start_time" class="font-mono text-blue-500">
+              <span v-if="data.status === 'running' && data.start_time" class="time-text font-mono text-blue-500 font-bold">
                 {{ formatDuration(Math.max(0, Math.floor((systemStore.currentTime - new Date(data.start_time).getTime()) / 1000))) }}
               </span>
-              <span v-else-if="data.duration" class="font-mono">{{ formatDuration(data.duration) }}</span>
-              <span v-else class="text-gray-400 font-mono">-</span>
+              <span v-else-if="data.duration" class="time-text font-mono">{{ formatDuration(data.duration) }}</span>
+              <span v-else class="time-text font-mono text-gray-400">-</span>
             </template>
           </Column>
 
@@ -459,7 +459,7 @@ onUnmounted(() => {
 
 .time-text-end {
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-muted);
   opacity: 0.8;
 }
@@ -527,7 +527,7 @@ onUnmounted(() => {
 
 .metric-text {
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--color-text-secondary);
 }
 

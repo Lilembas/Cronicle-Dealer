@@ -831,7 +831,7 @@ onUnmounted(() => {
 
 .usage-text {
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--p-surface-400);
   text-align: right;
   font-weight: 500;
@@ -965,12 +965,12 @@ onUnmounted(() => {
 }
 
 .param-unit {
-  font-size: 10px;
+  font-size: 11px;
   color: #a1a1aa;
 }
 
 .param-desc {
-  font-size: 10px;
+  font-size: 11px;
   color: #71717a;
 }
 

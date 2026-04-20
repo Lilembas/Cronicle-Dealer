@@ -282,10 +282,10 @@ const formatDuration = (seconds: number) => {
             </Column>
             <Column header="持续时长" style="width: 100px" alignHeader="right" align="right">
               <template #body="{ data }">
-                <span v-if="data.status === 'running' && data.start_time" class="time-text text-blue-500 font-bold">
+                <span v-if="data.status === 'running' && data.start_time" class="time-text font-mono text-blue-500 font-bold">
                   {{ formatDuration(Math.max(0, Math.floor((systemStore.currentTime - new Date(data.start_time).getTime()) / 1000))) }}
                 </span>
-                <span v-else class="time-text">{{ data.duration ? formatDuration(data.duration) : '-' }}</span>
+                <span v-else class="time-text font-mono">{{ data.duration ? formatDuration(data.duration) : '-' }}</span>
               </template>
             </Column>
             <Column header="退出码" style="width: 100px" alignHeader="center" align="center">
@@ -399,11 +399,6 @@ const formatDuration = (seconds: number) => {
   background: #f8fafc;
   border-radius: 6px;
   border: 1px solid #e2e8f0;
-}
-
-.time-text {
-  font-size: 12px;
-  color: var(--color-text-muted);
 }
 
 /* 信息网格布局 */

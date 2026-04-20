@@ -628,9 +628,9 @@ onUnmounted(() => {
 .stat-green { background: #f0fdf4; color: #10b981; }
 .stat-amber { background: #fffbeb; color: #f59e0b; }
 .stat-purple { background: #f5f3ff; color: #8b5cf6; }
-.stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px; }
+.stat-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px; }
 .stat-value { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.2; }
-.stat-sub { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+.stat-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 .text-green { color: #10b981 !important; }
 .text-amber { color: #f59e0b !important; }
 .text-purple { color: #8b5cf6 !important; }
@@ -642,8 +642,8 @@ onUnmounted(() => {
 .group-dot { width: 8px; height: 8px; border-radius: 50%; }
 .master-dot { background: #f59e0b; box-shadow: 0 0 6px #f59e0b88; }
 .worker-dot { background: #3b82f6; box-shadow: 0 0 6px #3b82f688; }
-.group-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
-.group-tag { font-size: 10px; padding: 2px 6px; }
+.group-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
+.group-tag { font-size: 11px; padding: 2px 6px; }
 .node-cards-row { display: flex; flex-wrap: wrap; gap: 14px; }
 
 /* Node Cards */
@@ -658,7 +658,7 @@ onUnmounted(() => {
 .nc-status-dot.online { background: #22c55e; }
 .nc-status-dot.offline { background: #94a3b8; }
 .nc-hostname { font-size: 12px; font-weight: 700; color: #0f172a; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nc-badge { display: flex; align-items: center; gap: 3px; font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; letter-spacing: 0.04em; flex-shrink: 0; }
+.nc-badge { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; letter-spacing: 0.04em; flex-shrink: 0; }
 .master-badge { background: #fef3c7; color: #92400e; }
 .worker-badge { background: #dbeafe; color: #1e40af; }
 .badge-svg { width: 10px; height: 10px; }
@@ -666,31 +666,31 @@ onUnmounted(() => {
 /* Metrics */
 .nc-metrics { display: flex; flex-direction: column; gap: 8px; }
 .metric-row { display: flex; align-items: center; gap: 8px; }
-.metric-label { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #94a3b8; width: 28px; flex-shrink: 0; }
+.metric-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; width: 28px; flex-shrink: 0; }
 .bar-container { flex: 1; height: 10px; background: #f1f5f9; border-radius: 6px; overflow: hidden; position: relative; }
 .bar-fill { height: 100%; border-radius: 6px; position: relative; overflow: hidden; min-width: 4px; transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2); }
 .bar-fill::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.05) 100%); }
 .bar-fill.low { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); }
 .bar-fill.medium { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
 .bar-fill.high { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); }
-.metric-value { font-size: 10px; font-weight: 700; font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; width: 32px; text-align: right; flex-shrink: 0; }
+.metric-value { font-size: 11px; font-weight: 700; font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; width: 32px; text-align: right; flex-shrink: 0; }
 .metric-value.low { color: #10b981; }
 .metric-value.medium { color: #f59e0b; }
 .metric-value.high { color: #ef4444; }
 
 /* Running jobs in node card */
 .nc-running-jobs { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; display: flex; flex-direction: column; gap: 5px; }
-.running-job-item { display: flex; align-items: center; gap: 8px; font-size: 10px; justify-content: space-between; }
+.running-job-item { display: flex; align-items: center; gap: 8px; font-size: 11px; justify-content: space-between; }
 .running-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; animation: runningPulse 1s ease-in-out infinite alternate; }
 @keyframes runningPulse { from { opacity: 0.5; transform: scale(0.8); } to { opacity: 1; transform: scale(1.2); } }
 .running-name-row { flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0; }
 .running-name { font-weight: 600; color: #3b82f6; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
 .running-name:hover { text-decoration: underline; }
 .running-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.running-elapsed { font-family: monospace; color: #64748b; font-size: 9px; }
+.running-elapsed { font-family: monospace; color: #64748b; font-size: 11px; }
 
-.task-category-tag { font-size: 8px; font-weight: 700; color: #64748b; background: #f1f5f9; padding: 0px 4px; border-radius: 4px; text-transform: uppercase; white-space: nowrap; }
-.task-category-badge { font-size: 9px; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0px 5px; border-radius: 4px; text-transform: uppercase; margin-left: 6px; }
+.task-category-tag { font-size: 11px; font-weight: 700; color: #64748b; background: #f1f5f9; padding: 0px 4px; border-radius: 4px; text-transform: uppercase; white-space: nowrap; }
+.task-category-badge { font-size: 11px; font-weight: 700; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 0px 5px; border-radius: 4px; text-transform: uppercase; margin-left: 6px; }
 
 /* Skeleton & Empty */
 .skeleton-card { min-height: 120px; }
@@ -718,14 +718,14 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 .upcoming-section-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #64748b;
 }
 .upcoming-section-count {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 99px;
@@ -770,7 +770,7 @@ onUnmounted(() => {
   animation: runningPulse 1s ease-in-out infinite alternate;
 }
 .utc-name {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #1e293b;
   white-space: nowrap;
@@ -788,12 +788,12 @@ onUnmounted(() => {
   padding-left: 10px;
 }
 .utc-countdown {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: #10b981;
 }
 .utc-category {
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   color: #64748b;
   background: #f1f5f9;
@@ -812,7 +812,7 @@ onUnmounted(() => {
 .panel-accent { width: 4px; height: 18px; border-radius: 2px; flex-shrink: 0; }
 .amber-accent { background: #f59e0b; }
 .panel-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #0f172a; margin: 0; flex: 1; }
-.panel-count { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+.panel-count { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
 .running-count { background: #fffbeb; color: #92400e; }
 .task-list { display: flex; flex-direction: column; gap: 0; }
 .task-item { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid #f8fafc; transition: background 0.15s ease; position: relative; }
@@ -823,10 +823,10 @@ onUnmounted(() => {
 .task-name-row { display: flex; align-items: center; justify-content: flex-start; width: 100%; }
 .task-name { font-size: 12px; font-weight: 600; color: #3b82f6; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 .task-name:hover { text-decoration: underline; }
-.task-meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 10px; color: #94a3b8; }
+.task-meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 11px; color: #94a3b8; }
 .meta-icon { width: 10px; height: 10px; flex-shrink: 0; }
 .font-mono { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; }
-.empty-tasks { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 0; color: #94a3b8; font-size: 11px; }
+.empty-tasks { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 0; color: #94a3b8; font-size: 12px; }
 .empty-icon-sm { width: 20px; height: 20px; opacity: 0.4; margin-bottom: 2px; }
 
 /* Dispatch Connection Line Animation */
