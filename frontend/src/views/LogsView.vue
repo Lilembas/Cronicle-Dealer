@@ -346,7 +346,7 @@ onUnmounted(() => {
 }
 
 .info-value.mono {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 13px;
   word-break: break-all;
 }
@@ -405,7 +405,7 @@ onUnmounted(() => {
   background: #0f172a;
   color: #e2e8f0;
   border-radius: 8px;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;

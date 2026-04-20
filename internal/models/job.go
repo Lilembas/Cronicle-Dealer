@@ -26,6 +26,9 @@ type Job struct {
 	// 目标节点
 	TargetType  string    `gorm:"type:varchar(20);default:'any'" json:"target_type"` // any, node_id, tags, group
 	TargetValue string    `gorm:"type:varchar(255)" json:"target_value"`
+
+	// 负载均衡策略
+	StrategyID  string    `gorm:"type:varchar(64)" json:"strategy_id"` // 负载均衡策略 ID，空则用默认
 	
 	// 超时和重试
 	Timeout     int       `gorm:"default:3600" json:"timeout"` // 秒

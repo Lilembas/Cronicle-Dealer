@@ -163,3 +163,11 @@ body {
 :deep(.p-progressbar-value) {
   background: var(--progress-color, #10b981);
 }
+
+/* Confirm dialog highlight */
+:deep(.confirm-highlight) {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: #3b82f6;
+  font-weight: 600;
+  padding: 0 2px;
+}

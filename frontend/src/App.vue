@@ -5,7 +5,7 @@ import { useWebSocketStore } from '@/stores/websocket'
 import { toastEmitter } from '@/api/request'
 import { useToast } from 'primevue/usetoast'
 import Toast from 'primevue/toast'
-import ConfirmDialog from 'primevue/confirmdialog'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const wsStore = useWebSocketStore()
 const toast = useToast()

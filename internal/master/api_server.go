@@ -114,6 +114,18 @@ func (s *APIServer) setupRoutes() {
 		shell.POST("/execute", s.executeShell)       // 执行 Shell 命令
 		shell.GET("/logs/:event_id", s.getShellLogs) // 获取实时日志
 	}
+
+	// 负载均衡策略
+	strategies := protected.Group("/strategies")
+	{
+		strategies.GET("", s.listStrategies)
+		strategies.GET("/parameters", s.getFormulaParameters)
+		strategies.POST("", s.createStrategy)
+		strategies.POST("/validate", s.validateFormula)
+		strategies.GET("/:id", s.getStrategy)
+		strategies.PUT("/:id", s.updateStrategy)
+		strategies.DELETE("/:id", s.deleteStrategy)
+	}
 }
 
 // Start 启动 API 服务器

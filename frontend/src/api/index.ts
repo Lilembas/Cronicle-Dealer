@@ -14,6 +14,7 @@ export interface Job {
     env: string
     target_type: string
     target_value: string
+    strategy_id: string
     timeout: number
     strict_mode: boolean
     max_retries: number
@@ -207,4 +208,53 @@ export const shellApi = {
 
     getLogs: (eventId: string) =>
         request.get<ShellLogsResponse>(`/shell/logs/${eventId}`),
+}
+
+// 负载均衡策略
+export interface LBFormulaMetric {
+    id: string
+    name: string
+    formula: string
+    weight: number
+    description: string
+}
+
+export interface LoadBalanceStrategy {
+    id: string
+    name: string
+    description: string
+    direction: string  // asc=优先最小值, desc=优先最大值
+    metrics: string
+    created_at: string
+    updated_at: string
+}
+
+export interface FormulaParameter {
+    name: string
+    label: string
+    unit: string
+    description: string
+}
+
+export const strategiesApi = {
+    list: () =>
+        request.get<LoadBalanceStrategy[]>('/strategies'),
+
+    get: (id: string) =>
+        request.get<LoadBalanceStrategy>(`/strategies/${id}`),
+
+    getParameters: () =>
+        request.get<{ parameters: FormulaParameter[] }>('/strategies/parameters'),
+
+    create: (data: { name: string; description?: string; direction?: string; metrics?: LBFormulaMetric[] }) =>
+        request.post<LoadBalanceStrategy>('/strategies', data),
+
+    update: (id: string, data: Partial<LoadBalanceStrategy> & { metrics?: LBFormulaMetric[] }) =>
+        request.put<LoadBalanceStrategy>(`/strategies/${id}`, data),
+
+    delete: (id: string) =>
+        request.delete(`/strategies/${id}`),
+
+    validate: (formula: string) =>
+        request.post<{ valid: boolean; error?: string }>('/strategies/validate', { formula }),
 }

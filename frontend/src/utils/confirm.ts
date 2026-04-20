@@ -12,6 +12,11 @@ export interface ConfirmOptions {
   reject?: () => void
 }
 
+// 高亮变量内容的 HTML 标签
+export function hl(html: string) {
+  return `<span class="confirm-highlight">${html}</span>`
+}
+
 export function showConfirm(options: ConfirmOptions) {
   ConfirmationEventBus.emit('confirm', options)
 }

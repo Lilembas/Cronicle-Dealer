@@ -7,6 +7,7 @@ import Button from 'primevue/button'
 import Tag from 'primevue/tag'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useSystemStore } from '@/stores/system'
+import { showConfirm, hl } from '@/utils/confirm'
 
 interface DispatchAnimation {
   id: string // event_id
@@ -183,6 +184,16 @@ const handleTaskStatus = (data: any) => {
   }
 }
 
+let upcomingRefreshTimer: number | null = null
+
+const scheduleUpcomingRefresh = () => {
+  if (upcomingRefreshTimer) clearTimeout(upcomingRefreshTimer)
+  upcomingRefreshTimer = window.setTimeout(() => {
+    upcomingRefreshTimer = null
+    loadData(true)
+  }, 200)
+}
+
 const triggerConnection = (data: any) => {
   const sourceEl = document.getElementById(`upcoming-${data.job_id}`)
   const targetEl = document.getElementById(`node-card-${data.node_id}`)
@@ -203,6 +214,7 @@ const triggerConnection = (data: any) => {
   }
   frozenCards.value.push(frozenCard)
   upcomingJobs.value = upcomingJobs.value.filter(j => j.id !== data.job_id)
+  scheduleUpcomingRefresh()
 
   const sourceElId = `frozen-${data.event_id}`
   const sourceRect = sourceEl.getBoundingClientRect()
@@ -244,7 +256,7 @@ const triggerConnection = (data: any) => {
     if (anim) anim.phase = 'fading'
   }, 1500)
 
-  // Phase 3: Clean up frozen card and reload
+  // Phase 3: Clean up frozen card and refresh data
   setTimeout(() => {
     dispatchAnimations.value = dispatchAnimations.value.filter(a => a.id !== animId)
     frozenCards.value = frozenCards.value.filter(c => c.event_id !== animId)
@@ -258,13 +270,22 @@ const triggerConnection = (data: any) => {
   }, 2500)
 }
 
-const handleAbort = async (event: any) => {
-  try {
-    await eventsApi.abort(event.id)
-    loadData(true)
-  } catch (error) {
-    console.error('中止任务失败:', error)
-  }
+const handleAbort = (event: any) => {
+  showConfirm({
+    message: `确定要中止任务 ${hl(event.job_name)} 吗？`,
+    header: '确认中止',
+    icon: 'pi pi-exclamation-triangle',
+    acceptProps: { label: '确定', severity: 'danger' },
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    accept: async () => {
+      try {
+        await eventsApi.abort(event.id)
+        loadData(true)
+      } catch (error) {
+        console.error('中止任务失败:', error)
+      }
+    },
+  })
 }
 
 const handleNodeStatus = (data: any) => {
@@ -652,7 +673,7 @@ onUnmounted(() => {
 .bar-fill.low { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); }
 .bar-fill.medium { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
 .bar-fill.high { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); }
-.metric-value { font-size: 10px; font-weight: 700; font-family: 'JetBrains Mono', monospace; width: 32px; text-align: right; flex-shrink: 0; }
+.metric-value { font-size: 10px; font-weight: 700; font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; width: 32px; text-align: right; flex-shrink: 0; }
 .metric-value.low { color: #10b981; }
 .metric-value.medium { color: #f59e0b; }
 .metric-value.high { color: #ef4444; }
@@ -804,7 +825,7 @@ onUnmounted(() => {
 .task-name:hover { text-decoration: underline; }
 .task-meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 10px; color: #94a3b8; }
 .meta-icon { width: 10px; height: 10px; flex-shrink: 0; }
-.font-mono { font-family: 'JetBrains Mono', monospace; }
+.font-mono { font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif; }
 .empty-tasks { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 0; color: #94a3b8; font-size: 11px; }
 .empty-icon-sm { width: 20px; height: 20px; opacity: 0.4; margin-bottom: 2px; }
 

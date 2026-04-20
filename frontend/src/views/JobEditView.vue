@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { jobsApi, nodesApi, type Node } from '@/api'
+import { jobsApi, nodesApi, strategiesApi, type Node, type LoadBalanceStrategy } from '@/api'
 import { showToast } from '@/utils/toast'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
@@ -33,6 +33,7 @@ const formData = ref({
   tags: [] as string[],
   target_type: 'tags',
   target_value: '',
+  strategy_id: '',
   strict_mode: false,
 })
 
@@ -61,6 +62,8 @@ const nodes = ref<Node[]>([])
 const loadingNodes = ref(false)
 const availableTags = ref<string[]>([])
 const loadingTags = ref(false)
+const strategies = ref<LoadBalanceStrategy[]>([])
+const loadingStrategies = ref(false)
 
 const parseEnvString = (value: unknown): Array<{ key: string; value: string }> => {
   if (!value) return []
@@ -129,6 +132,17 @@ const loadTags = async () => {
   }
 }
 
+const loadStrategies = async () => {
+  try {
+    loadingStrategies.value = true
+    const data = await strategiesApi.list()
+    strategies.value = (data as any) || []
+  } catch {
+  } finally {
+    loadingStrategies.value = false
+  }
+}
+
 const loadJob = async () => {
   if (!isEdit.value) return
 
@@ -158,6 +172,7 @@ const loadJob = async () => {
       tags: tags,
       target_type: job.target_type === 'node_id' ? 'node_id' : 'tags',
       target_value: String(targetValue || ''),
+      strategy_id: job.strategy_id || '',
       strict_mode: job.strict_mode || false,
     }
 
@@ -340,6 +355,7 @@ const save = async () => {
       target_value: formData.value.target_type === 'tags'
         ? JSON.stringify(formData.value.tags)
         : formData.value.target_value,
+      strategy_id: formData.value.strategy_id,
       strict_mode: formData.value.strict_mode,
     }
 
@@ -364,6 +380,7 @@ onMounted(() => {
   loadGroups()
   loadNodes()
   loadTags()
+  loadStrategies()
   loadJob()
 
   if (!formData.value.category) {
@@ -535,6 +552,24 @@ onMounted(() => {
                 <template v-else>
                   任务将在匹配任意一个所选标签的**所有**节点上运行。
                 </template>
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-2 mb-8">
+              <label class="font-medium text-sm">负载均衡策略</label>
+              <Select
+                v-model="formData.strategy_id"
+                :options="[{ id: '', name: '默认（最小负载）' }, ...strategies.map(s => ({ id: s.id, name: s.name }))]"
+                optionLabel="name"
+                optionValue="id"
+                placeholder="使用默认策略"
+                :loading="loadingStrategies"
+                showClear
+                class="w-full"
+              />
+              <p class="field-hint pt-2">
+                <i class="pi pi-scales mr-1"></i>
+                选择用于在多个候选节点中选择执行节点的策略，留空则使用默认最小负载策略。
               </p>
             </div>
 
@@ -833,7 +868,7 @@ onMounted(() => {
   background-color: #fff !important;
   width: 100% !important;
   height: 400px !important;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 13px;
   padding: 8px;
   transition: border-color 0.2s;

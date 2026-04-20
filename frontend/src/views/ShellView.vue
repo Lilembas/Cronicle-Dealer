@@ -509,7 +509,7 @@ const downloadLog = async () => {
   background-color: #fff !important;
   width: 100% !important;
   height: 240px !important;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 14px;
   padding: 4px;
 }
@@ -564,7 +564,7 @@ const downloadLog = async () => {
 
 .logs-content {
   margin: 0;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 13px;
   line-height: 1.6;
   color: #e2e8f0;

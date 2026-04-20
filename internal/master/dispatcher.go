@@ -25,10 +25,11 @@ const (
 
 // Dispatcher 任务分发器
 type Dispatcher struct {
-	mu          sync.Mutex
-	grpcClients map[string]pb.CronicleServiceClient
-	conns       map[string]*grpc.ClientConn
-	wsServer    *WebSocketServer
+	mu           sync.Mutex
+	grpcClients  map[string]pb.CronicleServiceClient
+	conns        map[string]*grpc.ClientConn
+	wsServer     *WebSocketServer
+	strategyCache sync.Map // 策略缓存，key=策略ID，value=*models.LoadBalanceStrategy
 }
 
 // NewDispatcher 创建分发器
@@ -238,7 +239,11 @@ func (d *Dispatcher) AbortTask(event *models.Event, reason string) error {
 
 	client, err := d.getGRPCClient(&node)
 	if err != nil {
-		return fmt.Errorf("获取 gRPC 客户端失败: %w", err)
+		logger.Warn("获取 gRPC 客户端失败，跳过 Worker 中止，直接更新 DB 状态",
+			zap.String("event_id", event.ID),
+			zap.String("node_id", event.NodeID),
+			zap.Error(err))
+		return nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -250,11 +255,19 @@ func (d *Dispatcher) AbortTask(event *models.Event, reason string) error {
 		Reason:  reason,
 	})
 	if err != nil {
-		return fmt.Errorf("调用 Worker AbortTask 失败: %w", err)
+		logger.Warn("调用 Worker AbortTask 失败，跳过 Worker 中止，直接更新 DB 状态",
+			zap.String("event_id", event.ID),
+			zap.String("node_id", event.NodeID),
+			zap.Error(err))
+		return nil
 	}
 
 	if !resp.Success {
-		return fmt.Errorf("Worker 拒绝中止请求: %s", resp.Message)
+		logger.Warn("Worker 拒绝中止请求，直接更新 DB 状态",
+			zap.String("event_id", event.ID),
+			zap.String("node_id", event.NodeID),
+			zap.String("message", resp.Message))
+		return nil
 	}
 
 	logger.Info("任务中止请求已下发",
@@ -262,6 +275,125 @@ func (d *Dispatcher) AbortTask(event *models.Event, reason string) error {
 		zap.String("node_id", event.NodeID))
 
 	return nil
+}
+
+// loadStrategy 从 DB 加载策略（带缓存）
+func (d *Dispatcher) loadStrategy(strategyID string) *models.LoadBalanceStrategy {
+	if strategyID == "" {
+		logger.Debug("任务未配置负载均衡策略，使用默认最小负载策略")
+		return nil
+	}
+	// 检查缓存
+	if cached, ok := d.strategyCache.Load(strategyID); ok {
+		return cached.(*models.LoadBalanceStrategy)
+	}
+	var strategy models.LoadBalanceStrategy
+	if err := storage.DB.Where("id = ?", strategyID).First(&strategy).Error; err != nil {
+		logger.Warn("负载均衡策略未找到，回退到默认策略", zap.String("strategy_id", strategyID))
+		return nil
+	}
+	logger.Debug("加载负载均衡策略",
+		zap.String("strategy_id", strategy.ID),
+		zap.String("strategy_name", strategy.Name),
+		zap.String("direction", strategy.Direction),
+		zap.Int("metrics_count", len(strings.Split(strategy.Metrics, ","))))
+	d.strategyCache.Store(strategyID, &strategy)
+	return &strategy
+}
+
+// selectByStrategy 根据策略公式评估选择最优节点
+func (d *Dispatcher) selectByStrategy(nodes []models.Node, strategy *models.LoadBalanceStrategy) (*models.Node, error) {
+	var metrics []models.LBMetric
+	if err := json.Unmarshal([]byte(strategy.Metrics), &metrics); err != nil {
+		logger.Error("策略指标解析失败，回退到默认策略", zap.Error(err))
+		return d.selectLeastBusyNode(nodes)
+	}
+
+	if len(metrics) == 0 {
+		return d.selectLeastBusyNode(nodes)
+	}
+
+	logger.Debug("开始策略评估",
+		zap.String("strategy", strategy.Name),
+		zap.String("direction", strategy.Direction),
+		zap.Int("candidate_nodes", len(nodes)))
+
+	type scoredNode struct {
+		node  *models.Node
+		score float64
+	}
+
+	var candidates []scoredNode
+	for i := range nodes {
+		node := &nodes[i]
+		if !node.CanAcceptJob() {
+			logger.Debug("跳过不可接受任务的节点",
+				zap.String("node_id", node.ID),
+				zap.String("hostname", node.Hostname),
+				zap.Int("running_jobs", node.RunningJobs),
+				zap.Int("max_concurrent", node.MaxConcurrent))
+			continue
+		}
+		params := BuildParamsFromNode(node)
+		totalScore := 0.0
+		valid := true
+		for _, m := range metrics {
+			val, err := EvaluateFormula(m.Formula, params)
+			if err != nil {
+				logger.Warn("公式求值失败",
+					zap.String("metric", m.Name),
+					zap.String("formula", m.Formula),
+					zap.String("node_id", node.ID),
+					zap.Error(err))
+				valid = false
+				break
+			}
+			weighted := val * m.Weight
+			totalScore += weighted
+			logger.Debug("指标求值完成",
+				zap.String("node_id", node.ID),
+				zap.String("metric", m.Name),
+				zap.String("formula", m.Formula),
+				zap.Float64("raw_value", val),
+				zap.Float64("weight", m.Weight),
+				zap.Float64("weighted_score", weighted))
+		}
+		if valid {
+			candidates = append(candidates, scoredNode{node: node, score: totalScore})
+			logger.Debug("节点评估完成",
+				zap.String("node_id", node.ID),
+				zap.String("hostname", node.Hostname),
+				zap.Float64("total_score", totalScore))
+		}
+	}
+
+	if len(candidates) == 0 {
+		logger.Warn("所有节点策略评估失败，回退到默认策略")
+		return d.selectLeastBusyNode(nodes)
+	}
+
+	// direction: asc=选最小值, desc=选最大值
+	best := candidates[0]
+	for _, c := range candidates[1:] {
+		if strategy.Direction == "desc" {
+			if c.score > best.score {
+				best = c
+			}
+		} else {
+			if c.score < best.score {
+				best = c
+			}
+		}
+	}
+
+	logger.Info("策略选节点",
+		zap.String("strategy", strategy.Name),
+		zap.String("direction", strategy.Direction),
+		zap.String("node_id", best.node.ID),
+		zap.String("hostname", best.node.Hostname),
+		zap.Float64("score", best.score))
+
+	return best.node, nil
 }
 
 // Close 关闭所有 gRPC 连接
@@ -327,6 +459,11 @@ func (d *Dispatcher) selectNode(job *models.Job) (*models.Node, error) {
 
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("没有可用的节点")
+	}
+
+	strategy := d.loadStrategy(job.StrategyID)
+	if strategy != nil {
+		return d.selectByStrategy(nodes, strategy)
 	}
 
 	return d.selectLeastBusyNode(nodes)

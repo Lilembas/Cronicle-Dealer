@@ -234,7 +234,8 @@ func (s *Scheduler) enqueueTask(job *models.Job, event *models.Event) {
 		"env":             job.Env,
 		"target_type":     job.TargetType,
 		"target_value":    job.TargetValue,
-		"strict_mode":     fmt.Sprintf("%v", job.StrictMode),
+	"strict_mode":     fmt.Sprintf("%v", job.StrictMode),
+		"strategy_id":     job.StrategyID,
 		"scheduled_time":  event.ScheduledTime.Unix(),
 	}
 

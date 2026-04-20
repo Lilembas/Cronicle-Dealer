@@ -74,6 +74,7 @@ func AutoMigrate() error {
 		&models.Event{},
 		&models.Node{},
 		&models.User{},
+		&models.LoadBalanceStrategy{},
 	)
 }
 

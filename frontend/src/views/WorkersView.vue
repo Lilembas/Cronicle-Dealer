@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { nodesApi, type Node } from '@/api'
+import { nodesApi, strategiesApi, type Node, type LoadBalanceStrategy, type LBFormulaMetric, type FormulaParameter } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
 import { showToast } from '@/utils/toast'
-import { showConfirm } from '@/utils/confirm'
+import { showConfirm, hl } from '@/utils/confirm'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -11,6 +11,7 @@ import Column from 'primevue/column'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import InputNumber from 'primevue/inputnumber'
 import ProgressBar from 'primevue/progressbar'
 
 const loading = ref(false)
@@ -23,6 +24,32 @@ const editDialogVisible = ref(false)
 const editNode = ref<Node | null>(null)
 const editTags = ref<string[]>([])
 const editLoading = ref(false)
+
+// --- 负载均衡策略状态 ---
+const strategies = ref<LoadBalanceStrategy[]>([])
+const strategyDialogVisible = ref(false)
+const strategyFormVisible = ref(false)
+const strategyLoading = ref(false)
+const formulaParams = ref<FormulaParameter[]>([])
+const formulaParamVisible = ref(false)
+
+const currentStrategy = ref<{
+  id?: string
+  name: string
+  description: string
+  direction: string
+  metrics: LBFormulaMetric[]
+}>({
+  name: '',
+  description: '',
+  direction: 'asc',
+  metrics: [],
+})
+
+const formulaValidation = ref<Record<string, { valid: boolean; error?: string }>>({})
+let validateTimer: ReturnType<typeof setTimeout> | null = null
+
+const isEditing = computed(() => !!currentStrategy.value.id)
 
 const isMasterNode = (node: Node) => {
   return node.tags === 'master' || node.tags.includes('master')
@@ -123,7 +150,7 @@ const handleDelete = async (node: Node) => {
   }
 
   showConfirm({
-    message: `确定要删除节点 "${node.hostname}" (${node.ip}) 吗？`,
+    message: `确定要删除节点 ${hl(node.hostname)} (${hl(node.ip)}) 吗？`,
     header: '删除 Worker 节点',
     icon: 'pi pi-exclamation-triangle',
     acceptProps: { label: '确定', severity: 'danger' },
@@ -183,9 +210,166 @@ const handleNodeStatus = (data: any) => {
   }
 }
 
+// --- 负载均衡策略方法 ---
+
+const loadStrategies = async () => {
+  try {
+    const data = await strategiesApi.list()
+    strategies.value = (data as any) || []
+  } catch (error) {
+    console.error('加载策略失败:', error)
+  }
+}
+
+const loadFormulaParams = async () => {
+  try {
+    const data = await strategiesApi.getParameters()
+    formulaParams.value = (data as any).parameters || []
+  } catch {
+    formulaParams.value = []
+  }
+}
+
+const openStrategyDialog = async () => {
+  await loadStrategies()
+  await loadFormulaParams()
+  strategyDialogVisible.value = true
+}
+
+const openStrategyForm = (strategy?: LoadBalanceStrategy) => {
+  formulaValidation.value = {}
+  if (strategy) {
+    let metrics: LBFormulaMetric[] = []
+    try { metrics = JSON.parse(strategy.metrics) } catch { metrics = [] }
+    currentStrategy.value = {
+      id: strategy.id,
+      name: strategy.name,
+      description: strategy.description || '',
+      direction: strategy.direction || 'asc',
+      metrics,
+    }
+  } else {
+    currentStrategy.value = {
+      name: '',
+      description: '',
+      direction: 'asc',
+      metrics: [],
+    }
+  }
+  strategyFormVisible.value = true
+}
+
+const addMetric = () => {
+  currentStrategy.value.metrics.push({
+    id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    name: '',
+    formula: '',
+    weight: 1.0,
+    description: '',
+  })
+}
+
+const removeMetric = (index: number) => {
+  const metricId = currentStrategy.value.metrics[index]?.id
+  currentStrategy.value.metrics.splice(index, 1)
+  if (metricId) {
+    delete formulaValidation.value[metricId]
+  }
+}
+
+const validateFormulaDebounced = (metric: LBFormulaMetric) => {
+  if (validateTimer) clearTimeout(validateTimer)
+  if (!metric.formula.trim()) {
+    delete formulaValidation.value[metric.id]
+    return
+  }
+  validateTimer = setTimeout(async () => {
+    try {
+      const result = await strategiesApi.validate(metric.formula)
+      formulaValidation.value[metric.id] = { valid: result.valid, error: result.error }
+    } catch {
+      formulaValidation.value[metric.id] = { valid: false, error: '验证请求失败' }
+    }
+  }, 400)
+}
+
+const saveStrategy = async () => {
+  if (!currentStrategy.value.name.trim()) {
+    showToast({ severity: 'warn', summary: '请输入策略名称', life: 3000 })
+    return
+  }
+
+  // 验证所有有公式的指标都能通过验证
+  const hasInvalid = currentStrategy.value.metrics.some(m => {
+    if (!m.formula.trim()) return false
+    return formulaValidation.value[m.id]?.valid === false
+  })
+  if (hasInvalid) {
+    showToast({ severity: 'warn', summary: '存在无效的公式，请修正', life: 3000 })
+    return
+  }
+
+  try {
+    strategyLoading.value = true
+    const payload = {
+      name: currentStrategy.value.name,
+      description: currentStrategy.value.description,
+      direction: currentStrategy.value.direction,
+      metrics: currentStrategy.value.metrics,
+    }
+    if (isEditing.value) {
+      await strategiesApi.update(currentStrategy.value.id!, payload)
+    } else {
+      await strategiesApi.create(payload)
+    }
+    showToast({ severity: 'success', summary: isEditing.value ? '更新成功' : '创建成功', life: 3000 })
+    strategyFormVisible.value = false
+    await loadStrategies()
+  } catch (error: any) {
+    showToast({ severity: 'error', summary: '操作失败', detail: error.response?.data?.error || '操作失败', life: 5000 })
+  } finally {
+    strategyLoading.value = false
+  }
+}
+
+const deleteStrategy = async (strategy: LoadBalanceStrategy) => {
+  showConfirm({
+    message: `确定要删除策略 ${hl(strategy.name)} 吗？`,
+    header: '删除策略',
+    icon: 'pi pi-exclamation-triangle',
+    acceptProps: { label: '确定', severity: 'danger' },
+    rejectProps: { label: '取消', severity: 'secondary', outlined: true },
+    accept: async () => {
+      try {
+        await strategiesApi.delete(strategy.id)
+        showToast({ severity: 'success', summary: '删除成功', life: 3000 })
+        await loadStrategies()
+      } catch (error: any) {
+        showToast({ severity: 'error', summary: '删除失败', detail: error.response?.data?.error || '删除失败', life: 5000 })
+      }
+    },
+  })
+}
+
+const getMetricCount = (strategy: LoadBalanceStrategy) => {
+  try {
+    const metrics = JSON.parse(strategy.metrics)
+    return metrics.length
+  } catch {
+    return 0
+  }
+}
+
+const insertParam = (param: FormulaParameter) => {
+  const lastMetric = currentStrategy.value.metrics[currentStrategy.value.metrics.length - 1]
+  if (lastMetric) {
+    lastMetric.formula = lastMetric.formula ? `${lastMetric.formula} + ${param.name}` : param.name
+    validateFormulaDebounced(lastMetric)
+  }
+}
+
 onMounted(async () => {
   await loadNodes()
-
   wsStore.onMessage('node_status', handleNodeStatus)
 })
 
@@ -237,16 +421,17 @@ onUnmounted(() => {
           </div>
         </template>
       </Card>
-      <Card class="stat-card">
+      <Card class="stat-card stat-card-clickable" @click="openStrategyDialog">
         <template #content>
           <div class="flex items-center gap-4">
             <div class="stat-icon bg-purple-50 text-purple-500">
-              <i class="pi pi-microchip text-xl"></i>
+              <i class="pi pi-scales text-xl"></i>
             </div>
-            <div>
-              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">负载均衡</div>
-              <div class="text-2xl font-bold">Safe</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">均衡策略</div>
+              <div class="text-2xl font-bold">{{ strategies.length || 0 }}</div>
             </div>
+            <Button icon="pi pi-cog" text rounded severity="secondary" class="text-xs" v-tooltip.top="'管理策略'" />
           </div>
         </template>
       </Card>
@@ -376,6 +561,144 @@ onUnmounted(() => {
         <Button severity="info" :loading="editLoading" @click="saveEdit" label="保存" />
       </template>
     </Dialog>
+
+    <!-- 负载均衡策略管理对话框 -->
+    <Dialog v-model:visible="strategyDialogVisible" header="负载均衡策略管理" :style="{ width: '900px' }" :maximizable="true">
+      <div class="flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <span class="text-gray-400 text-sm">配置节点选择策略，基于资源指标加权评分选最优节点</span>
+          <Button label="新建策略" icon="pi pi-plus" size="small" @click="openStrategyForm()" />
+        </div>
+
+        <DataTable :value="strategies" stripedRows dataKey="id" class="strategy-table" :rowHover="true">
+          <Column field="name" header="策略名称" style="min-width: 140px">
+            <template #body="{ data }">
+              <span class="font-semibold text-sm">{{ data.name }}</span>
+            </template>
+          </Column>
+          <Column header="指标数" style="width: 80px" alignHeader="center" align="center">
+            <template #body="{ data }">
+              <span class="text-sm font-mono">{{ getMetricCount(data) }}</span>
+            </template>
+          </Column>
+          <Column field="description" header="描述" style="min-width: 160px">
+            <template #body="{ data }">
+              <span class="text-gray-400 text-sm">{{ data.description || '-' }}</span>
+            </template>
+          </Column>
+          <Column header="操作" style="width: 120px" frozen alignFrozen="right">
+            <template #body="{ data }">
+              <div class="action-buttons">
+                <Button v-tooltip.top="'编辑'" icon="pi pi-pencil" class="btn-edit" @click="openStrategyForm(data)" />
+                <Button v-tooltip.top="'删除'" icon="pi pi-trash" class="btn-delete" @click="deleteStrategy(data)" />
+              </div>
+            </template>
+          </Column>
+        </DataTable>
+
+        <div v-if="strategies.length === 0" class="text-center py-8 text-gray-400">
+          <i class="pi pi-scales text-4xl mb-2 block"></i>
+          <p>暂无策略，使用默认最小负载策略</p>
+        </div>
+      </div>
+      <template #footer>
+        <Button severity="secondary" @click="strategyDialogVisible = false" label="关闭" />
+      </template>
+    </Dialog>
+
+    <!-- 策略编辑对话框 -->
+    <Dialog v-model:visible="strategyFormVisible" :header="isEditing ? '编辑策略' : '新建策略'" :style="{ width: '780px' }" :maximizable="true">
+      <div class="flex flex-col gap-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="flex flex-col gap-1">
+            <label class="font-medium text-sm">策略名称 <span class="text-red-400">*</span></label>
+            <InputText v-model="currentStrategy.name" placeholder="如：综合资源均衡" />
+          </div>
+          <div class="flex flex-col gap-1">
+            <label class="font-medium text-sm">优先方向</label>
+            <Select v-model="currentStrategy.direction" :options="[
+              { value: 'asc', label: '优先选最小值' },
+              { value: 'desc', label: '优先选最大值' },
+            ]" optionLabel="label" optionValue="value" placeholder="选择方向" class="w-full" />
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="font-medium text-sm">描述</label>
+          <InputText v-model="currentStrategy.description" placeholder="策略说明（可选）" />
+        </div>
+
+        <!-- 指标列表 -->
+        <div class="flex items-center justify-between">
+          <label class="font-medium text-sm">评分指标</label>
+          <div class="flex items-center gap-2">
+            <Button label="参数参考" icon="pi pi-question-circle" text size="small" severity="secondary" @click="formulaParamVisible = !formulaParamVisible" />
+            <Button label="添加指标" icon="pi pi-plus" text size="small" @click="addMetric" />
+          </div>
+        </div>
+
+        <!-- 参数参考面板 -->
+        <div v-if="formulaParamVisible" class="param-reference">
+          <div class="param-header">
+            <span class="font-semibold text-sm">可用公式参数</span>
+            <Button icon="pi pi-times" text size="small" severity="secondary" @click="formulaParamVisible = false" />
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-2">
+            <div v-for="p in formulaParams" :key="p.name" class="param-item" @click="insertParam(p)">
+              <div class="flex items-center gap-2">
+                <code class="param-name">{{ p.name }}</code>
+                <span class="param-unit">({{ p.unit }})</span>
+              </div>
+              <span class="param-desc">{{ p.description }}</span>
+            </div>
+          </div>
+          <div class="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-500">
+            <p class="font-semibold mb-1">公式示例：</p>
+            <code>memory_usage_pct * 0.5 + cpu_usage_pct * 0.3</code><br>
+            <code>max(memory_usage_pct, cpu_usage_pct)</code><br>
+            <code>(threads_used / threads_total) * 100</code>
+          </div>
+        </div>
+
+        <div v-for="(metric, idx) in currentStrategy.metrics" :key="metric.id" class="metric-row">
+          <div class="metric-header">
+            <span class="text-sm font-semibold text-gray-500">指标 {{ idx + 1 }}</span>
+            <Button icon="pi pi-trash" text size="small" severity="danger" @click="removeMetric(idx)" />
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div class="flex flex-col gap-1 col-span-1">
+              <label class="text-xs text-gray-400">名称</label>
+              <InputText v-model="metric.name" placeholder="如：内存压力" class="text-sm" />
+            </div>
+            <div class="flex flex-col gap-1 col-span-2">
+              <label class="text-xs text-gray-400">公式</label>
+              <div class="relative">
+                <InputText v-model="metric.formula" placeholder="memory_usage_pct * 0.5" class="text-sm font-mono w-full formula-input" @input="validateFormulaDebounced(metric)" />
+                <span v-if="formulaValidation[metric.id]" class="formula-status">
+                  <i v-if="formulaValidation[metric.id].valid" class="pi pi-check text-green-500"></i>
+                  <i v-else class="pi pi-times text-red-500" v-tooltip.top="formulaValidation[metric.id].error"></i>
+                </span>
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-400">权重</label>
+              <InputNumber v-model="metric.weight" :minFractionDigits="0" :maxFractionDigits="2" :min="0" class="text-sm w-full" />
+            </div>
+          </div>
+          <div v-if="formulaValidation[metric.id] && !formulaValidation[metric.id].valid" class="text-red-400 text-xs mt-1 ml-1">
+            {{ formulaValidation[metric.id].error }}
+          </div>
+        </div>
+
+        <div v-if="currentStrategy.metrics.length === 0" class="text-center py-6 text-gray-300 border border-dashed rounded-lg">
+          <i class="pi pi-plus-circle text-2xl mb-1 block"></i>
+          <p class="text-sm">点击"添加指标"配置评分公式</p>
+        </div>
+      </div>
+      <template #footer>
+        <Button severity="secondary" @click="strategyFormVisible = false" label="取消" />
+        <Button :loading="strategyLoading" @click="saveStrategy" :label="isEditing ? '保存' : '创建'" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -403,6 +726,14 @@ onUnmounted(() => {
 .stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card-clickable {
+  cursor: pointer;
+}
+
+.stat-card-clickable:hover {
+  border-color: var(--color-primary, #8b5cf6);
 }
 
 .stat-icon {
@@ -475,13 +806,13 @@ onUnmounted(() => {
 }
 
 .ip-text {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 11px;
   color: var(--p-surface-400);
 }
 
 .pid-text, .uptime-text {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 11px;
 }
 
@@ -499,7 +830,7 @@ onUnmounted(() => {
 }
 
 .usage-text {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 10px;
   color: var(--p-surface-400);
   text-align: right;
@@ -540,6 +871,8 @@ onUnmounted(() => {
   border-color: #dcfce7;
   padding: 2px 8px;
 }
+
+
 
 .action-buttons {
   display: flex;
@@ -587,9 +920,91 @@ onUnmounted(() => {
   padding: 12px 16px;
 }
 
+.strategy-table :deep(.p-datatable-tbody > tr > td) {
+  padding: 10px 14px;
+}
+
 :deep(.offline-row) {
   opacity: 0.6;
   filter: grayscale(0.5);
+}
+
+/* Parameter Reference */
+.param-reference {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.param-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.param-item {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.param-item:hover {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+}
+
+.param-name {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-size: 11px;
+  color: #6d28d9;
+  font-weight: 600;
+}
+
+.param-unit {
+  font-size: 10px;
+  color: #a1a1aa;
+}
+
+.param-desc {
+  font-size: 10px;
+  color: #71717a;
+}
+
+/* Metric Row */
+.metric-row {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.formula-status {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+}
+
+.metric-row :deep(.p-inputtext.font-mono) {
+  line-height: 1.6;
+  padding: 6px 10px;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.formula-input:deep(.p-inputtext) {
+  padding-right: 2rem;
 }
 
 @media (max-width: 1024px) {

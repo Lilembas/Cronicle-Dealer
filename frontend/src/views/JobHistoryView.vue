@@ -6,7 +6,7 @@ import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
-import { showConfirm } from '@/utils/confirm'
+import { showConfirm, hl } from '@/utils/confirm'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -80,7 +80,7 @@ const canAbort = (status: string) => status === 'running' || status === 'pending
 
 const handleAbort = async (event: Event) => {
   showConfirm({
-    message: `确认中止任务 ${event.id} 吗？`,
+    message: `确认中止任务 ${hl(event.id)} 吗？`,
     header: '中止确认',
     icon: 'pi pi-exclamation-triangle',
     acceptProps: { label: '确认', severity: 'danger' },
@@ -308,15 +308,15 @@ onUnmounted(() => {
 }
 
 .event-id {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 13px;
 }
 
-.text-green { color: #16a34a; font-family: 'Fira Code', monospace; }
-.text-red { color: #dc2626; font-family: 'Fira Code', monospace; }
+.text-green { color: #16a34a; }
+.text-red { color: #dc2626; }
 
 .time-text {
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   font-size: 11px;
   color: var(--color-text-muted);
 }

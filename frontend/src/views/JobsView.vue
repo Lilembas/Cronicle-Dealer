@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { jobsApi, nodesApi, type Node } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
 import { showToast } from '@/utils/toast'
-import { showConfirm } from '@/utils/confirm'
+import { showConfirm, hl } from '@/utils/confirm'
 import Button from 'primevue/button'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -163,7 +163,7 @@ const handleHistory = (id: string) => {
 
 const handleDelete = async (id: string, name: string) => {
   showConfirm({
-    message: `确定要删除任务 "${name}" 吗？`,
+    message: `确定要删除任务 ${hl(name)} 吗？`,
     header: '确认删除',
     icon: 'pi pi-exclamation-triangle',
     acceptProps: { label: '确定', severity: 'danger' },
@@ -184,7 +184,7 @@ const toggleJobEnabled = async (job: any) => {
   const newEnabled = !job.enabled
   const action = newEnabled ? '启用' : '禁用'
   showConfirm({
-    message: `确定要${action}任务 "${job.name}" 吗？`,
+    message: `确定要${action}任务 ${hl(job.name)} 吗？`,
     header: `确认${action}`,
     icon: 'pi pi-exclamation-triangle',
     acceptProps: { label: '确定', severity: newEnabled ? 'success' : 'warn' },
@@ -203,7 +203,7 @@ const toggleJobEnabled = async (job: any) => {
 
 const handleTrigger = async (id: string, name: string) => {
   showConfirm({
-    message: `确定要触发任务 "${name}" 吗？`,
+    message: `确定要触发任务 ${hl(name)} 吗？`,
     header: '确认触发',
     icon: 'pi pi-exclamation-triangle',
     acceptProps: { label: '确定', severity: 'info' },
@@ -214,7 +214,7 @@ const handleTrigger = async (id: string, name: string) => {
         showToast({
           severity: 'success',
           summary: '任务已入队',
-          detail: `任务 "${name}" 已入队，Event ID: ${result.event_id}`,
+          detail: `任务 ${name} 已入队，Event ID: ${result.event_id}`,
           life: 5000
         })
       } catch (error: any) {
