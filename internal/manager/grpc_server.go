@@ -480,6 +480,46 @@ func (s *GRPCServer) updateNodeHeartbeat(node *models.Node, req *pb.HeartbeatReq
 			logger.Warn("推送节点状态失败", zap.String("node_id", node.ID), zap.Error(err))
 		}
 	}
+
+	// 执行任务对账，清理僵尸任务
+	s.reconcileRunningJobs(node.ID, req.RunningJobs)
+}
+
+// reconcileRunningJobs 任务对账：清理数据库中显示正在运行但 Worker 实际未上报的任务
+func (s *GRPCServer) reconcileRunningJobs(nodeID string, reportedIDs []string) {
+	var zombies []models.Event
+	// 安全缓冲：只处理更新时间在 60 秒以前的任务
+	threshold := time.Now().Add(-60 * time.Second)
+
+	// 只查询必要的字段
+	if err := storage.DB.Select("id", "status").
+		Where("node_id = ? AND status = ? AND updated_at < ?", nodeID, "running", threshold).
+		Find(&zombies).Error; err != nil {
+		return
+	}
+
+	if len(zombies) == 0 {
+		return
+	}
+
+	reportedMap := make(map[string]struct{}, len(reportedIDs))
+	for _, id := range reportedIDs {
+		reportedMap[id] = struct{}{}
+	}
+
+	for _, event := range zombies {
+		if _, found := reportedMap[event.ID]; !found {
+			logger.Warn("清理僵尸任务", zap.String("event_id", event.ID), zap.String("node_id", nodeID))
+
+			now := time.Now()
+			storage.DB.Model(&event).Updates(map[string]interface{}{
+				"status":        "failed",
+				"error_message": "执行节点重启或任务进程异常消失（对账清理）",
+				"end_time":      &now,
+				"updated_at":    now,
+			})
+		}
+	}
 }
 
 // calculatePercent 计算百分比
