@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { adminApi, type AdminUser } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { showToast } from '@/utils/toast'
 import { showConfirm } from '@/utils/confirm'
 import Button from 'primevue/button'
@@ -13,6 +14,7 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import InputToggle from 'primevue/inputswitch'
 
+const authStore = useAuthStore()
 const loading = ref(false)
 const users = ref<AdminUser[]>([])
 const total = ref(0)
@@ -31,14 +33,15 @@ const roleOptions = [
 const totalUsers = computed(() => users.value.length)
 const activeUsers = computed(() => users.value.filter(u => u.active).length)
 const adminCount = computed(() => users.value.filter(u => u.role === 'admin').length)
+const activeAdminCount = computed(() => users.value.filter(u => u.role === 'admin' && u.active).length)
 const disabledCount = computed(() => users.value.filter(u => !u.active).length)
 
 async function loadUsers() {
   loading.value = true
   try {
-    const { data } = await adminApi.listUsers({ page: 1, page_size: 100 })
-    users.value = data.data || []
-    total.value = data.total || 0
+    const res = await adminApi.listUsers({ page: 1, page_size: 100 }) as any
+    users.value = res.data || []
+    total.value = res.total || 0
   } catch {
     showToast({ severity: 'error', summary: '加载用户列表失败', life: 5000 })
   } finally {
@@ -82,14 +85,23 @@ async function handleSave() {
   try {
     if (isEdit.value) {
       const { username, email, role, full_name, active, password } = editUser.value
+      
+      // 禁止禁用或变更最后一个激活的管理员
+      const isOriginalAdmin = users.value.find(u => u.id === editUser.value!.id)?.role === 'admin'
+      const isChangedToNonAdmin = isOriginalAdmin && role !== 'admin'
+      if (isOriginalAdmin && (!active || isChangedToNonAdmin) && activeAdminCount.value <= 1) {
+        showToast({ severity: 'error', summary: '禁止操作', detail: '不能禁用或变更最后一个激活的管理员角色', life: 5000 })
+        return
+      }
+
       const data: any = { username, email, role, full_name, active }
       if (password) data.password = password
       await adminApi.updateUser(editUser.value.id!, data)
       showToast({ severity: 'success', summary: '用户更新成功', life: 3000 })
     } else {
       await adminApi.createUser({
-        username: editUser.value.username,
-        password: editUser.value.password,
+        username: editUser.value.username!,
+        password: editUser.value.password!,
         email: editUser.value.email,
         role: editUser.value.role || 'user',
         full_name: editUser.value.full_name,
@@ -106,16 +118,29 @@ async function handleSave() {
 }
 
 async function handleDelete(user: AdminUser) {
-  const confirmed = await showConfirm(`确定要删除用户 "${user.username}" 吗？`, { header: '删除用户' })
-  if (!confirmed) return
-
-  try {
-    await adminApi.deleteUser(user.id)
-    showToast({ severity: 'success', summary: '用户已删除', life: 3000 })
-    await loadUsers()
-  } catch (error: any) {
-    showToast({ severity: 'error', summary: '删除失败', detail: error.response?.data?.error || '请重试', life: 5000 })
+  if (user.id === authStore.user?.id) {
+    showToast({ severity: 'warn', summary: '禁止操作', detail: '不能删除自己', life: 3000 })
+    return
   }
+  
+  if (user.role === 'admin' && adminCount.value <= 1) {
+    showToast({ severity: 'warn', summary: '禁止操作', detail: '不能删除最后一个管理员', life: 3000 })
+    return
+  }
+
+  showConfirm({
+    message: `确定要删除用户 "${user.username}" 吗？`,
+    header: '删除用户',
+    accept: async () => {
+      try {
+        await adminApi.deleteUser(user.id)
+        showToast({ severity: 'success', summary: '用户已删除', life: 3000 })
+        await loadUsers()
+      } catch (error: any) {
+        showToast({ severity: 'error', summary: '删除失败', detail: error.response?.data?.error || '请重试', life: 5000 })
+      }
+    }
+  })
 }
 
 function getRoleSeverity(role: string) {
@@ -210,7 +235,10 @@ onMounted(loadUsers)
         <DataTable :value="users" stripedRows :loading="loading" dataKey="id">
           <Column field="username" header="用户名" style="min-width: 120px">
             <template #body="{ data }">
-              <span class="font-medium">{{ data.username }}</span>
+              <div class="flex items-center gap-2">
+                <span class="font-medium">{{ data.username }}</span>
+                <Tag v-if="data.id === authStore.user?.id" value="我" severity="info" size="small" />
+              </div>
             </template>
           </Column>
           <Column field="full_name" header="姓名" style="min-width: 100px">
@@ -244,7 +272,13 @@ onMounted(loadUsers)
             <template #body="{ data }">
               <div class="action-buttons">
                 <Button v-tooltip.top="'编辑'" icon="pi pi-pencil" class="btn-edit" @click="openEditDialog(data)" />
-                <Button v-tooltip.top="'删除'" icon="pi pi-trash" class="btn-delete" @click="handleDelete(data)" />
+                <Button 
+                  v-tooltip.top="data.id === authStore.user?.id ? '不能删除自己' : (data.role === 'admin' && adminCount <= 1 ? '不能删除最后一个管理员' : '删除')" 
+                  icon="pi pi-trash" 
+                  class="btn-delete" 
+                  :disabled="data.id === authStore.user?.id || (data.role === 'admin' && adminCount <= 1)" 
+                  @click="handleDelete(data)" 
+                />
               </div>
             </template>
           </Column>
