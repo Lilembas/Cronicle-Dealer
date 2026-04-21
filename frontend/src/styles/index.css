@@ -158,3 +158,17 @@ body {
   font-weight: 600;
   padding: 0 2px;
 }
+
+/* Page Container - Unified Layout */
+.page-container {
+  padding: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  min-height: calc(100vh - 64px); /* Assuming navbar is 64px */
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px;
+  }
+}

@@ -337,7 +337,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dashboard">
+  <div class="page-container">
     <!-- Row 1: Quick Stats -->
     <div class="stats-grid mb-6">
       <div class="stat-card">
@@ -623,7 +623,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.dashboard { padding: 16px 24px 24px 24px; max-width: 1600px; margin: 0 auto; }
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .stat-card { background: white; border-radius: 14px; border: 1px solid #f1f5f9; padding: 16px 18px; display: flex; align-items: center; gap: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); transition: transform 0.2s ease, box-shadow 0.2s ease; }
 .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); }

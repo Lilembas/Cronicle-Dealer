@@ -277,7 +277,7 @@ const getStatusText = (status: string) => {
 </script>
 
 <template>
-  <div class="jobs">
+  <div class="jobs page-container">
     <Card>
       <template #header>
         <div class="card-header">
@@ -445,11 +445,8 @@ const getStatusText = (status: string) => {
 </template>
 
 <style scoped>
-.jobs {
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
+.jobs { }
+
 
 .card-header {
   display: flex;

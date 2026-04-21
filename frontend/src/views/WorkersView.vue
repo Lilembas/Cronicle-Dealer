@@ -367,7 +367,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="workers-page">
+  <div class="workers page-container">
     <div class="stats-grid mb-6">
       <Card class="stat-card">
         <template #content>
@@ -698,11 +698,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.workers-page {
-  padding: 16px 24px 24px 24px;
-  max-width: 1500px;
-  margin: 0 auto;
-}
+.workers { }
 
 .stats-grid {
   display: grid;

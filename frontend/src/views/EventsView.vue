@@ -200,7 +200,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="events">
+  <div class="events page-container">
     <!-- 筛选栏 -->
     <Card class="filter-card">
       <template #content>
@@ -371,11 +371,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.events {
-  padding: 16px 24px 24px 24px;
-  max-width: 1500px;
-  margin: 0 auto;
-}
+.events { }
+
 
 .filter-card {
   border-radius: 12px;

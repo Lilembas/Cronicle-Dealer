@@ -37,7 +37,10 @@ const CroniclePreset = definePreset(Aura, {
   components: {
     card: {
       borderRadius: '12px',
-      shadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)'
+      shadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
+      body: {
+        padding: '1.5rem'
+      }
     },
     button: {
       borderRadius: '8px',
