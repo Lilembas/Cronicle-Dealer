@@ -72,3 +72,6 @@ PROMPT.md
 # 生成的 Protobuf 代码（可选，看是否提交）
 # pkg/grpc/pb/
 .claude
+CLAUDE.md
+.codex
+.serena

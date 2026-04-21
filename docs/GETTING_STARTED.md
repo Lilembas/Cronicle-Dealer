@@ -4,23 +4,23 @@
 
 ## 📊 项目概览
 
-**当前版本**: v0.2.0 Beta  
-**总体完成度**: 98%  
-**最后更新**: 2026-04-16
+**当前版本**: v0.5.0 Beta  
+**总体完成度**: 95%  
+**最后更新**: 2026-04-21
 
 ### 技术栈
 
 #### 后端
 - **语言**: Go 1.22+
 - **框架**: Gin (REST API), gRPC, robfig/cron
-- **数据库**: SQLite (默认) / PostgreSQL (可选)
-- **缓存**: Redis 7+ (可选)
+- **数据库**: SQLite (默认) / PostgreSQL (进行中)
+- **缓存/队列**: Redis 7+ (**必须**)
 - **日志**: Zap
 
 #### 前端
 - **框架**: Vue 3.4 + TypeScript
 - **构建**: Vite 5
-- **UI**: Element Plus + Tailwind CSS
+- **UI**: PrimeVue + Tailwind CSS
 - **状态**: Pinia
 - **数据**: TanStack Query
 
@@ -42,7 +42,7 @@
 
 ### 前端 (98%)
 - ✅ Vue 3 + TypeScript 现代化架构
-- ✅ Tailwind CSS + Element Plus 响应式布局
+- ✅ Tailwind CSS + PrimeVue 响应式布局
 - ✅ Pinia 状态管理
 - ✅ 登录页面 (JWT)
 - ✅ 仪表盘 (核心指标看板)
@@ -52,46 +52,25 @@
 - ✅ 实时日志查看器 (xterm.js)
 - ✅ WebSocket 实时数据流
 
-### 部署 (100%)
-- ✅ Docker Compose 配置
-- ✅ Manager Dockerfile
-- ✅ Worker Dockerfile
-- ✅ Makefile 构建脚本
+### 部署 (进行中)
+- [ ] Docker Compose 配置 (待完善)
+- [ ] Manager Dockerfile (待集成前端构建)
+- [ ] Worker Dockerfile (基础实验性)
 
 ---
 
 ## 🚀 快速启动
 
-### 方式一：使用 Docker Compose（推荐）
-
-```bash
-cd s:\projects\cronicle-next
-
-# 启动所有服务（Redis + Manager + Worker）
-docker-compose -f deployments/docker-compose.yml up -d
-
-# 查看日志
-docker-compose -f deployments/docker-compose.yml logs -f
-
-# 停止服务
-docker-compose -f deployments/docker-compose.yml down
-```
-
-访问：
-- **前端**: http://localhost:5173
-- **后端 API**: http://localhost:8080
-- **登录**: admin / admin123
+当前版本推荐使用 **本地开发方式** 启动。Docker 方案目前仅处于占位阶段，暂不可用。
 
 ### 方式二：本地开发
 
 #### 1. 准备环境
 
 **必需**：
-- Go 1.22+
+- Go 1.25+
 - Node.js 18+
-
-**可选**：
-- Redis 7+ (用于分布式缓存和队列)
+- Redis 7+ (用于分布式任务队列与状态管理)
 
 **安装 Go**：
 - 下载：https://golang.org/dl/

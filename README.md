@@ -7,16 +7,6 @@
 
 > 一个高性能、可扩展、可视化的分布式任务调度与执行平台，基于 Go + Vue 3 构建
 
-**🎉 项目状态（2026-04-16）**: 核心链路完整闭环（调度、分发、执行、实时日志、JWT 认证、任务中止、Ad-hoc 执行、前端全页面闭环），已可用于开发环境使用。
-
-## 📚 快速链接
-
-- 📖 [快速开始指南](docs/GETTING_STARTED.md) - **推荐首先阅读**
-- 🏗️ [设计文档](DESIGN.md) - 架构设计和技术细节
-- 🤖 [Claude 开发指南](CLAUDE.md) - AI 辅助开发指导
-- 📊 [开发进度报告](docs/progress.md)
-- 🎨 [前端完成报告](frontend/COMPLETION.md)
-- 📋 [待办事项](TODO.md)
 
 ## ✨ 特性
 
@@ -26,42 +16,29 @@
 - 🎯 **智能调度**：支持 Cron 表达式（6位，秒级精度），灵活的任务调度
 - 📊 **实时监控**：WebSocket 实时推送任务状态和日志
 - 📝 **日志流式传输**：实时日志推送，支持长任务
-- 🛡️ **高可用**：Redis 队列缓冲，任务不丢失
+- ⚖️ **自定义负载均衡**：允许用户自定义负载均衡策略函数（根据节点cpu、内存等负载）
 
-### 前端界面
-- 🎨 **现代化界面**：Vue 3 + TypeScript + Tailwind CSS
-- 📱 **响应式设计**：适配各种屏幕尺寸
-- ⚡ **实时更新**：WebSocket 自动刷新数据
-- 🔧 **任务管理**：完整的 CRUD 操作
-- 💻 **Shell 执行**：Ad-hoc 命令执行和实时输出
-
-### 后端服务
-- 🌐 **REST API**：15+ API 端点
-- 📡 **gRPC 通信**：7 个 RPC 接口
-- 🔐 **安全配置**：JWT 认证（已实现）、Worker Token 通信校验（待完善）
-- 📦 **多数据库**：支持 SQLite 和 PostgreSQL
-- 🗄️ **Redis 集成**：队列、缓存、分布式锁
 
 ## 🏗️ 架构
 
 ```
-┌─────────────┐
-│  Vue 3 前端  │
-└──────┬──────┘
-       │ HTTP/WebSocket
-┌──────▼──────────────────┐
-│    Manager 节点           │
-│  - REST API (Gin)       │
-│  - 调度引擎 (Cron)       │
-│  - gRPC Server          │
-│  - WebSocket (Melody)   │
-└──────┬──────────────────┘
-       │ gRPC
-   ┌───┴───┬───────┐
-   ▼       ▼       ▼
-┌─────┐ ┌─────┐ ┌─────┐
-│ W-1 │ │ W-2 │ │ W-N │ Worker 节点
-└─────┘ └─────┘ └─────┘
+      ┌──────────────┐
+      │  Vue 3 前端   │
+      └──────┬───────┘
+             │ HTTP/WS
+      ┌──────▼──────┐
+      │   Manager   │ (Scheduler/API)
+      └──────┬──────┘
+             │ 
+      ┌──────▼──────┐
+      │    Redis    │ (Task Queue/State/HA)
+      └──────┬──────┘
+             │ gRPC Dispatch
+   ┌─────────┴─────────┐
+   ▼         ▼         ▼
+┌─────┐   ┌─────┐   ┌─────┐
+│ W-1 │   │ W-2 │   │ W-N │ Worker 节点 (Executor)
+└─────┘   └─────┘   └─────┘
 ```
 
 ## 🛠️ 技术栈
@@ -71,14 +48,14 @@
 - **Web 框架**：Gin
 - **RPC**：gRPC
 - **调度**：robfig/cron/v3
-- **数据库**：SQLite (默认) / PostgreSQL (可选)
-- **缓存**：Redis
+- **数据库**：SQLite (默认) / PostgreSQL (待完善)
+- **核心组件**：Redis
 - **WebSocket**：Melody
 
 ### 前端
 - **框架**：Vue 3 + TypeScript
 - **构建工具**：Vite
-- **UI 库**：Element Plus + Tailwind CSS
+- **UI**: PrimeVue + Tailwind CSS
 - **状态管理**：Pinia
 - **数据请求**：TanStack Query
 - **日志终端**：xterm.js
@@ -89,13 +66,13 @@
 
 - Go 1.25+
 - Node.js 18+
-- Redis 7+ (可选，用于分布式缓存和队列)
+- Redis 7+
 
 ### 本地开发
 
 1. **克隆项目**
 ```bash
-git clone https://github.com/cronicle/cronicle-next.git
+git clone https://github.com/Lilembas/cronicle-next.git
 cd cronicle-next
 ```
 
@@ -112,52 +89,36 @@ npm install
 3. **配置环境**
 ```bash
 cp config.example.yaml config.yaml
-# 编辑 config.yaml 配置 Redis 连接（可选）
+# 编辑 config.yaml 配置 Redis 连接、manager、worker通讯地址和端口
 ```
 
 4. **运行服务**
 ```bash
-# 启动 Redis（使用 Docker，可选）
-docker-compose up -d redis
-
 # 运行 Manager
 make run-manager
+或 go run cmd/manager/main.go
 
 # 运行 Worker（新终端）
 make run-worker
+或 go run cmd/worker/main.go
 
 # 运行前端（新终端）
 cd frontend
-npm run dev
+npm run dev -- --host=0.0.0.0
 ```
 
 5. **访问界面**
 
-打开浏览器访问：http://localhost:5173
+打开浏览器访问：http://manager_ip:5173
 
 默认账号：`admin` / `admin123`
 
-### Docker 部署
-
-```bash
-# 启动 Redis（如果需要）
-docker-compose up -d redis
-
-# 或者启动所有服务（包括前端）
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
-```
 
 ## 📚 文档
 
 ### 核心文档
-- [架构设计](DESIGN.md) - 系统架构、数据模型、核心组件
-- [Claude 开发指南](CLAUDE.md) - 开发规范、代码组织、最佳实践
+- 🏗️ [架构设计](DESIGN.md) - 系统架构、数据模型、核心组件
+- 🤖 [Claude 开发指南](CLAUDE.md) - AI 辅助开发规范
 
 ### 用户文档
 - [快速开始指南](docs/GETTING_STARTED.md) - 安装和运行指南
@@ -172,33 +133,20 @@ docker-compose down
 ## 🗺️ 路线图
 
 ### 已完成 ✅
-- [x] 项目初始化和架构设计
 - [x] Manager 核心功能实现（Scheduler, Dispatcher, TaskConsumer）
 - [x] Worker 核心功能实现（Client, Executor）
 - [x] WebSocket 实时通信
 - [x] Redis 任务队列集成
-- [x] 前端主要页面（Dashboard, Jobs, Events, Shell）
 - [x] Shell 命令 Ad-hoc 执行
 - [x] 日志实时推送
-- [x] 认证系统实现（JWT）
-- [x] 任务中止功能
-- [x] 前端剩余页面（JobDetail, Nodes, Logs）
-- [x] triggerJob 手动触发闭环
-- [x] 分发重试参数配置化
+- [x] 自定义负载均衡策略
 
-### 进行中 🚧
-- [ ] 分发重试可观测性（Prometheus 指标）
-- [ ] 统一队列治理能力与限流
-- [ ] 单元测试覆盖率提升至 60%+
 
 ### 计划中 📋
 - [ ] HTTP 任务执行器
-- [ ] Docker 任务执行器
-- [ ] Cron 可视化编辑器增强
-- [ ] 用户管理界面
+- [ ] Dockerfile 与 Docker-compose 部署方案完善
 - [ ] 通知系统（Webhook/邮件）
 - [ ] 性能优化
-- [ ] 单元测试和集成测试
 
 ## 🤝 贡献
 

@@ -50,7 +50,7 @@ Cronicle-Next 是一个基于 Go + Vue 3 的分布式任务调度平台，采用
 - Vue 3.4+
 - TypeScript
 - Vite
-- Element Plus
+- PrimeVue
 - Tailwind CSS
 
 ### 1.3 项目状态
@@ -277,6 +277,17 @@ async function getJobs(): Promise<Job[]> {
   return data
 }
 ```
+
+#### UI/UX 标准 (v0.5.0+)
+
+**容器布局**：
+*   所有主页面必须使用 `class="page-container"` 以保证 1600px 居中布局。
+*   主区域使用 `Card` 组件，圆角统一为 `12px`，阴影使用全局 `shadow-md` 预设。
+
+**权限感知交互 (RBAC)**：
+*   **读取者 (viewer)**: 大部分操作按钮应显示为 `disabled` 并通过 `v-tooltip` 提示“无操作权限”。
+*   **普通用户 (user)**: 可操作任务，但无权操作节点、系统配置及用户管理。
+*   **交互规范**: 优先使用“禁用+提示”而非“直接隐藏”，以提升用户对功能边界的认知。
 
 ### 3.3 Git 提交规范
 

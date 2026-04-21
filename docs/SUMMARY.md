@@ -1,35 +1,35 @@
-# Cronicle-Next 项目总结（代码实况）
+# Cronicle-Next 项目总结 (v0.5.0)
 
-> 最后更新: 2026-04-11
+> 最后更新: 2026-04-21
 
-## 一句话总结
+## 一句话状态
+Cronicle-Next 已完成 **全链路核心功能闭环**，并具备 **生产级权限管理 (RBAC)** 与 **高标准 UI/UX 交互**。当前版本已支持多种调度策略、任务手动触发/中止以及全方位的后台管理。
 
-Cronicle-Next 已具备“可开发测试”的核心能力，但仍有少量高优先级缺口，暂不建议直接用于生产。
+## 🏆 核心里程碑 (Completed)
 
-## 当前能力边界
+### 1. 架构稳定性
+- ✅ **全链路闭环**: Scheduler -> Queue -> Dispatcher (Retry) -> Worker -> WebSocket Logs。
+- ✅ **任务重试机制**: 实现指数退避的分发重试，提升复杂环境下的稳定性。
+- ✅ **任务中止**: 支持从前端一键中止正在运行的远程任务。
 
-### 已可用
+### 2. 权限与安全 (RBAC)
+- ✅ **三级权限体系**: 实现 `admin`, `user`, `viewer` 角色。
+- ✅ **权限感知 UI**: 所有敏感操作均有明确的权限提示与交互拦截 (Disabled + Tooltip)。
 
-- 分布式调度链路: Scheduler -> Redis 队列 -> Dispatcher -> Worker 执行
-- Shell 任务执行与实时日志推送（gRPC Stream + WebSocket）
-- 常用后端 API: Jobs / Events / Nodes / Stats / Shell
-- 前端主流程页面: Dashboard、Jobs、JobEdit、Events、Shell
+### 3. 可视化与交互
+- ✅ **UI/UX 专项优化**: 统一卡片布局、优化阴影与圆角、适配次级标签导航设计。
+- ✅ **原子化同步**: 分组管理、节点、任务、日志等所有占位页面均已实现真实业务逻辑。
 
-### 未闭环
+## 🔍 当前核心优势
+- **极简设计**: 没有任何冗余代码，核心代码高度内聚。
+- **实时性**: 基于 Melody 的 WebSocket 方案提供接近 0 延迟的监控体验。
+- **技术栈先进**: Go 1.24+ 与 Vue 3/TypeScript/PrimeVue。
 
-- JWT 认证与鉴权中间件
-- 任务中止（Manager API 与 Worker AbortTask 均未完成）
-- HTTP / Docker 任务执行器
-- 3 个占位页面（JobDetail / Nodes / Logs）
+## 🚧 下一步计划 (Roadmap)
+1. **可观测性升级**: 集成 Prometheus 指标。
+2. **场景扩展**: 实现 HTTP 执行器与 Docker 隔离执行器。
+3. **通知系统**: Webhook/邮件通知机制。
 
-## 适用场景
-
-- 适合: 本地开发、联调、功能验证、演示环境
-- 不建议直接用于: 无额外加固的生产环境
-
-## 建议执行顺序
-
-1. 先补齐认证与任务中止
-2. 修复 `Job.Env` 前后端数据格式不一致
-3. 完成占位页面，形成前端可视化闭环
-4. 再扩展 HTTP/Docker 执行器与重试策略
+---
+**当前版本**: v0.5.0 Beta
+**开发者**: Cronicle-Next Team
