@@ -70,18 +70,30 @@ func (s *APIServer) setupRoutes() {
 	jobs := protected.Group("/jobs")
 	{
 		jobs.GET("", s.listJobs)
-		jobs.POST("", s.createJob)
 		jobs.GET("/:id", s.getJob)
-		jobs.PUT("/:id", s.updateJob)
-		jobs.DELETE("/:id", s.deleteJob)
-		jobs.POST("/:id/trigger", s.triggerJob)
+		
+		// 写入和触发操作需要普通用户或管理员权限
+		jobsWrite := jobs.Group("")
+		jobsWrite.Use(s.userMiddleware())
+		{
+			jobsWrite.POST("", s.createJob)
+			jobsWrite.PUT("/:id", s.updateJob)
+			jobsWrite.DELETE("/:id", s.deleteJob)
+			jobsWrite.POST("/:id/trigger", s.triggerJob)
+		}
 	}
 	events := protected.Group("/events")
 	{
 		events.GET("", s.listEvents)
 		events.GET("/:id", s.getEvent)
-		events.POST("/:id/abort", s.abortEvent)
 		events.GET("/:id/download", s.downloadLog)
+
+		// 中止操作需要普通用户或管理员权限
+		eventsWrite := events.Group("")
+		eventsWrite.Use(s.userMiddleware())
+		{
+			eventsWrite.POST("/:id/abort", s.abortEvent)
+		}
 	}
 	
 	nodes := protected.Group("/nodes")
@@ -102,8 +114,14 @@ func (s *APIServer) setupRoutes() {
 
 	shell := protected.Group("/shell")
 	{
-		shell.POST("/execute", s.executeShell)
 		shell.GET("/logs/:event_id", s.getShellLogs)
+		
+		// Shell 执行需要普通用户或管理员权限
+		shellWrite := shell.Group("")
+		shellWrite.Use(s.userMiddleware())
+		{
+			shellWrite.POST("/execute", s.executeShell)
+		}
 	}
 
 	strategies := protected.Group("/strategies")
@@ -121,6 +139,8 @@ func (s *APIServer) setupRoutes() {
 		strategiesAdmin.PUT("/:id", s.updateStrategy)
 		strategiesAdmin.DELETE("/:id", s.deleteStrategy)
 	}
+
+	protected.GET("/categories", s.listCategories)
 
 	admin := api.Group("")
 	admin.Use(s.authMiddleware())

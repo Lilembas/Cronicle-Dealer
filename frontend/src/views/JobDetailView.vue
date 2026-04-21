@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, inject, type Ref } from 'vue'
+import { onMounted, onUnmounted, ref, computed, inject, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { jobsApi, eventsApi, statsApi, type Job, type Event } from '@/api'
+import { jobsApi, eventsApi, type Job, type Event } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
@@ -15,6 +16,7 @@ import Skeleton from 'primevue/skeleton'
 import Breadcrumb from 'primevue/breadcrumb'
 
 const wsStore = useWebSocketStore()
+const authStore = useAuthStore()
 const systemStore = useSystemStore()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
@@ -24,6 +26,9 @@ const job = ref<Job | null>(null)
 const events = ref<Event[]>([])
 const loading = ref(false)
 const triggering = ref(false)
+
+const canManage = computed(() => authStore.isAdmin || authStore.user?.role === 'user')
+const canTrigger = computed(() => authStore.isAdmin || authStore.user?.role === 'user')
 
 const getStatusText = (status: string) => {
   const map: Record<string, string> = {
@@ -58,6 +63,10 @@ const loadData = async (silent = false) => {
 }
 
 const handleTrigger = async () => {
+  if (!canTrigger.value) {
+    showToast({ severity: 'error', summary: '权限不足', detail: '只读用户无法触发任务', life: 3000 })
+    return
+  }
   if (!job.value || triggering.value) return
 
   showConfirm({
@@ -82,6 +91,10 @@ const handleTrigger = async () => {
 }
 
 const handleEdit = () => {
+  if (!canManage.value) {
+    showToast({ severity: 'error', summary: '权限不足', detail: '只读用户无法编辑任务', life: 3000 })
+    return
+  }
   if (job.value) {
     router.push(`/jobs/${job.value.id}`)
   }
@@ -94,6 +107,7 @@ const viewLog = (id: string) => {
 const canAbort = (status: string) => status === 'running' || status === 'pending' || status === 'queued'
 
 const handleAbort = async (event: Event) => {
+  if (!canTrigger.value) return
   showConfirm({
     message: `确认中止任务 ${hl(event.id)} 吗？`,
     header: '中止确认',
@@ -164,8 +178,8 @@ const formatDuration = (seconds: number) => {
           <Breadcrumb :model="breadcrumbItems" />
         </div>
         <div class="right-actions">
-          <Button icon="pi pi-play" :loading="triggering" class="btn-trigger" @click="handleTrigger" label="立即触发" />
-          <Button icon="pi pi-pencil" class="btn-edit" @click="handleEdit" label="编辑" />
+          <Button icon="pi pi-play" :loading="triggering" class="btn-trigger" :disabled="!canTrigger" v-tooltip.top="!canTrigger ? '无执行权限' : ''" @click="handleTrigger" label="立即触发" />
+          <Button icon="pi pi-pencil" class="btn-edit" :disabled="!canManage" v-tooltip.top="!canManage ? '无编辑权限' : ''" @click="handleEdit" label="编辑" />
         </div>
       </div>
 
@@ -300,7 +314,7 @@ const formatDuration = (seconds: number) => {
               <template #body="{ data }">
                 <div class="action-buttons">
                   <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" severity="info" class="btn-log" @click="viewLog(data.id)" />
-                  <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" severity="danger" class="btn-abort" @click="handleAbort(data)" />
+                  <Button v-if="canAbort(data.status)" v-tooltip.top="canTrigger ? '中止' : '无操作权限'" size="small" icon="pi pi-stop-circle" severity="danger" class="btn-abort" :disabled="!canTrigger" @click="handleAbort(data)" />
                 </div>
               </template>
             </Column>

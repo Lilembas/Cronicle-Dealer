@@ -20,6 +20,15 @@ func (s *APIServer) listCategories(c *gin.Context) {
 	var categories []models.Category
 	storage.DB.Order("name ASC").Find(&categories)
 
+	if len(categories) == 0 {
+		defaultCat := models.Category{
+			ID:   utils.GenerateID("cat"),
+			Name: "默认分组",
+		}
+		storage.DB.Create(&defaultCat)
+		categories = append(categories, defaultCat)
+	}
+
 	var jobCategories []string
 	storage.DB.Model(&models.Job{}).Where("category != '' AND category IS NOT NULL").Distinct("category").Pluck("category", &jobCategories)
 

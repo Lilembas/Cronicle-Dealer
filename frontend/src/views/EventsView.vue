@@ -2,8 +2,9 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, inject, watch, type Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { eventsApi, jobsApi, nodesApi, type Event } from '@/api'
+import { eventsApi, jobsApi, nodesApi, adminApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
 import { showConfirm, hl } from '@/utils/confirm'
@@ -17,6 +18,7 @@ import Paginator from 'primevue/paginator'
 import ProgressBar from 'primevue/progressbar'
 
 const wsStore = useWebSocketStore()
+const authStore = useAuthStore()
 const systemStore = useSystemStore()
 const queryClient = useQueryClient()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
@@ -84,12 +86,13 @@ const jobOptions = ref<{ label: string; value: string }[]>([])
 const nodeOptions = ref<{ label: string; value: string }[]>([])
 
 const loadFilterOptions = async () => {
-  const { data } = await jobsApi.list({ page_size: 1000 }) as unknown as { data: any[] }
-  const categories = [...new Set((data || []).map((j: any) => j.category).filter(Boolean))]
+  const categoriesData = await adminApi.listCategories() as unknown as any[]
   categoryOptions.value = [
     { label: '全部', value: '' },
-    ...categories.map((c: string) => ({ label: c, value: c })),
+    ...categoriesData.map((c: any) => ({ label: c.name, value: c.name })),
   ]
+
+  const { data } = await jobsApi.list({ page_size: 1000 }) as unknown as { data: any[] }
   jobOptions.value = (data || []).map((j: any) => ({ label: j.name, value: j.id }))
 
   const nodesData = await nodesApi.list() as unknown as any[]
@@ -129,8 +132,10 @@ const viewDetail = (event: Event) => {
 }
 
 const canAbort = (status: string) => status === 'running' || status === 'pending' || status === 'queued'
+const canTrigger = computed(() => authStore.isAdmin || authStore.user?.role === 'user')
 
 const handleAbort = async (event: Event) => {
+  if (!canTrigger.value) return
   showConfirm({
     message: `确认中止任务 ${hl(event.id)} 吗？`,
     header: '中止确认',
@@ -338,7 +343,7 @@ onUnmounted(() => {
             <template #body="{ data }">
               <div class="action-buttons">
                 <Button v-tooltip.top="'日志'" size="small" icon="pi pi-eye" severity="info" class="btn-log" @click="viewDetail(data)" />
-                <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" severity="danger" class="btn-abort" @click="handleAbort(data)" />
+                <Button v-if="canAbort(data.status)" v-tooltip.top="canTrigger ? '中止' : '无操作权限'" size="small" icon="pi pi-stop-circle" severity="danger" class="btn-abort" :disabled="!canTrigger" @click="handleAbort(data)" />
               </div>
             </template>
           </Column>

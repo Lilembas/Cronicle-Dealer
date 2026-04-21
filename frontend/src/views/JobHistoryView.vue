@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
 import { showConfirm, hl } from '@/utils/confirm'
@@ -16,6 +17,7 @@ import Breadcrumb from 'primevue/breadcrumb'
 import { type Job } from '@/api'
 
 const wsStore = useWebSocketStore()
+const authStore = useAuthStore()
 const systemStore = useSystemStore()
 const queryClient = useQueryClient()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
@@ -77,8 +79,10 @@ const viewLog = (event: Event) => {
 }
 
 const canAbort = (status: string) => status === 'running' || status === 'pending' || status === 'queued'
+const canTrigger = computed(() => authStore.isAdmin || authStore.user?.role === 'user')
 
 const handleAbort = async (event: Event) => {
+  if (!canTrigger.value) return
   showConfirm({
     message: `确认中止任务 ${hl(event.id)} 吗？`,
     header: '中止确认',
@@ -207,9 +211,9 @@ onUnmounted(() => {
                 <Button v-tooltip.top="'日志'" size="small" icon="pi pi-eye" class="action-btn" :pt="{ 
                   root: { style: { background: '#f0f9ff', borderColor: '#bae6fd', color: '#0284c7' } } 
                 }" @click="viewLog(data)" />
-                <Button v-if="canAbort(data.status)" v-tooltip.top="'中止'" size="small" icon="pi pi-stop-circle" class="action-btn" :pt="{ 
+                <Button v-if="canAbort(data.status)" v-tooltip.top="canTrigger ? '中止' : '无操作权限'" size="small" icon="pi pi-stop-circle" class="action-btn" :pt="{ 
                   root: { style: { background: '#fef2f2', borderColor: '#fecaca', color: '#dc2626' } } 
-                }" @click="handleAbort(data)" />
+                }" :disabled="!canTrigger" @click="handleAbort(data)" />
               </div>
             </template>
           </Column>

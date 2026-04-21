@@ -408,7 +408,7 @@ onUnmounted(() => {
           </div>
         </template>
       </Card>
-      <Card class="stat-card" :class="{ 'stat-card-clickable': authStore.isAdmin }" @click="authStore.isAdmin && openStrategyDialog()">
+      <Card class="stat-card stat-card-clickable" @click="openStrategyDialog">
         <template #content>
           <div class="flex items-center gap-4">
             <div class="stat-icon bg-purple-50 text-purple-500">
@@ -503,17 +503,19 @@ onUnmounted(() => {
           </Column>
           <Column header="操作" frozen alignFrozen="right" style="width: 100px">
             <template #body="{ data }">
-              <div v-if="authStore.isAdmin && isRemovableNode(data)" class="action-buttons">
+              <div v-if="isRemovableNode(data)" class="action-buttons">
                 <Button
-                  v-tooltip.top="'编辑标签'"
+                  v-tooltip.top="authStore.isAdmin ? '编辑标签' : '需管理员权限'"
                   icon="pi pi-pencil"
                   class="btn-edit"
+                  :disabled="!authStore.isAdmin"
                   @click="handleEdit(data)"
                 />
                 <Button
-                  v-tooltip.top="'移除节点'"
+                  v-tooltip.top="authStore.isAdmin ? '移除节点' : '需管理员权限'"
                   icon="pi pi-trash"
                   class="btn-delete"
+                  :disabled="!authStore.isAdmin"
                   @click="handleDelete(data)"
                 />
               </div>
@@ -561,7 +563,7 @@ onUnmounted(() => {
       <div class="flex flex-col gap-4">
         <div class="flex items-center justify-between">
           <span class="text-gray-400 text-sm">配置节点选择策略，基于资源指标加权评分选最优节点</span>
-          <Button label="新建策略" icon="pi pi-plus" size="small" @click="openStrategyForm()" />
+          <Button :label="authStore.isAdmin ? '新建策略' : '需管理员权限'" icon="pi pi-plus" size="small" :disabled="!authStore.isAdmin" @click="openStrategyForm()" />
         </div>
 
         <DataTable :value="strategies" stripedRows dataKey="id" class="strategy-table" :rowHover="true">
@@ -583,8 +585,8 @@ onUnmounted(() => {
           <Column header="操作" style="width: 120px" frozen alignFrozen="right">
             <template #body="{ data }">
               <div class="action-buttons">
-                <Button v-tooltip.top="'编辑'" icon="pi pi-pencil" class="btn-edit" @click="openStrategyForm(data)" />
-                <Button v-tooltip.top="'删除'" icon="pi pi-trash" class="btn-delete" @click="deleteStrategy(data)" />
+                <Button v-tooltip.top="authStore.isAdmin ? '编辑' : '需管理员权限'" icon="pi pi-pencil" class="btn-edit" :disabled="!authStore.isAdmin" @click="openStrategyForm(data)" />
+                <Button v-tooltip.top="authStore.isAdmin ? '删除' : '需管理员权限'" icon="pi pi-trash" class="btn-delete" :disabled="!authStore.isAdmin" @click="deleteStrategy(data)" />
               </div>
             </template>
           </Column>

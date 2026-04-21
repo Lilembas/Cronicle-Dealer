@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { jobsApi, nodesApi, strategiesApi, type Node, type LoadBalanceStrategy } from '@/api'
+import { jobsApi, nodesApi, strategiesApi, adminApi, type Node, type LoadBalanceStrategy } from '@/api'
 import { showToast } from '@/utils/toast'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
@@ -45,16 +45,19 @@ const cmOptions = {
   tabSize: 2,
 }
 
-const commonGroups = ['默认分组', '系统任务', '数据同步', '定时清理', '监控告警', '数据备份']
-const availableGroups = ref<string[]>([...commonGroups])
+const availableGroups = ref<string[]>([])
 
 const loadGroups = async () => {
   try {
-    const result = await jobsApi.list({ page: 1, page_size: 100 }) as unknown as { data: any[] }
-    const groups = result?.data?.map((job: any) => job.category).filter(Boolean) || []
-    availableGroups.value = Array.from(new Set([...commonGroups, ...groups])).sort()
+    const result = await adminApi.listCategories() as unknown as any[]
+    const groups = result?.map((cat: any) => cat.name) || []
+    if (groups.length === 0) {
+      availableGroups.value = ['默认分组']
+    } else {
+      availableGroups.value = groups.sort()
+    }
   } catch {
-    availableGroups.value = [...commonGroups]
+    availableGroups.value = ['默认分组']
   }
 }
 

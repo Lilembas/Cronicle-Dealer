@@ -104,6 +104,17 @@ func (s *APIServer) adminMiddleware() gin.HandlerFunc {
 	}
 }
 
+func (s *APIServer) userMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists || (role.(string) != "admin" && role.(string) != "user") {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "需要普通用户或管理员权限"})
+			return
+		}
+		c.Next()
+	}
+}
+
 func (s *APIServer) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr, err := extractBearerToken(c.GetHeader("Authorization"))

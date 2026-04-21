@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, inject, type Ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { statsApi, nodesApi, eventsApi, jobsApi } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Tag from 'primevue/tag'
@@ -36,6 +37,7 @@ const frozenCards = ref<FrozenCard[]>([])
 const statsLoading = ref(false)
 const nodesLoading = ref(false)
 const wsStore = useWebSocketStore()
+const authStore = useAuthStore()
 const systemStore = useSystemStore()
 const router = useRouter()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
@@ -99,6 +101,8 @@ const isManagerNode = (node: any) => {
 
 const managerNodes = computed(() => sortedNodes.value.filter(n => isManagerNode(n)))
 const workerNodes = computed(() => sortedNodes.value.filter(n => !isManagerNode(n)))
+
+const canTrigger = computed(() => authStore.isAdmin || authStore.user?.role === 'user')
 
 const sortedNodes = computed(() => {
   if (!nodes.value) return []
@@ -271,6 +275,7 @@ const triggerConnection = (data: any) => {
 }
 
 const handleAbort = (event: any) => {
+  if (!canTrigger.value) return
   showConfirm({
     message: `确定要中止任务 ${hl(event.job_name)} 吗？`,
     header: '确认中止',
@@ -540,7 +545,7 @@ onUnmounted(() => {
                   </div>
                   <div class="running-actions">
                     <span class="running-elapsed">{{ Math.max(0, Math.floor((systemStore.currentTime - new Date(job.start_time).getTime()) / 1000)) }}s</span>
-                    <Button icon="pi pi-stop-circle" text severity="danger" v-tooltip.top="'中止'" @click="handleAbort(job)" style="padding: 0; width: 18px; height: 18px; font-size: 10px;" />
+                    <Button icon="pi pi-stop-circle" text severity="danger" v-tooltip.top="canTrigger ? '中止' : '无操作权限'" :disabled="!canTrigger" @click="handleAbort(job)" style="padding: 0; width: 18px; height: 18px; font-size: 10px;" />
                   </div>
                 </div>
               </div>
@@ -579,7 +584,7 @@ onUnmounted(() => {
                     <span class="font-mono">{{ Math.max(0, Math.floor((systemStore.currentTime - new Date(event.start_time).getTime()) / 1000)) }}s</span>
                   </div>
                 </div>
-                <Button icon="pi pi-stop-circle" text severity="danger" v-tooltip.top="'中止'" @click="handleAbort(event)" style="padding: 0; width: 20px; height: 20px;" />
+                <Button icon="pi pi-stop-circle" text severity="danger" v-tooltip.top="canTrigger ? '中止' : '无操作权限'" :disabled="!canTrigger" @click="handleAbort(event)" style="padding: 0; width: 20px; height: 20px;" />
               </div>
             </div>
           </template>

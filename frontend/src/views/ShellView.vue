@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { shellApi, nodesApi, eventsApi, type Node } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { useWebSocketStore } from '@/stores/websocket'
 import { showToast } from '@/utils/toast'
 import Button from 'primevue/button'
@@ -8,6 +9,7 @@ import Tag from 'primevue/tag'
 import Card from 'primevue/card'
 import Select from 'primevue/select'
 import Checkbox from 'primevue/checkbox'
+import Message from 'primevue/message'
 import { VueCodemirror as Codemirror } from 'codemirror-editor-vue3'
 import 'codemirror/addon/display/placeholder.js'
 import 'codemirror/mode/shell/shell.js'
@@ -19,6 +21,9 @@ const logs = ref('')
 const exitCode = ref<number>(0)
 const strictMode = ref(false)
 const wsStore = useWebSocketStore()
+const authStore = useAuthStore()
+
+const canExecute = computed(() => authStore.isAdmin || authStore.user?.role === 'user')
 
 const selectedNodeId = ref('')
 const nodes = ref<Node[]>([])
@@ -125,6 +130,10 @@ const handleErrorMessage = (data: any) => {
 }
 
 const executeCommand = async () => {
+  if (!canExecute.value) {
+    showToast({ severity: 'error', summary: '权限不足', detail: '只读用户无法执行命令', life: 3000 })
+    return
+  }
   if (!command.value.trim()) {
     showToast({ severity: 'warn', summary: '请输入命令', life: 3000 })
     return
@@ -158,6 +167,7 @@ const executeCommand = async () => {
 }
 
 const abortCommand = async () => {
+  if (!canExecute.value) return
   if (!currentEventId.value) return
   try {
     await eventsApi.abort(currentEventId.value)
@@ -174,6 +184,7 @@ const clearOutput = () => {
 }
 
 const useQuickCommand = (cmd: string) => {
+  if (!canExecute.value) return
   command.value = cmd
 }
 
@@ -233,6 +244,10 @@ const downloadLog = async () => {
 <template>
   <div class="shell-page">
     <div class="shell-container">
+      <Message v-if="!canExecute" severity="warn" icon="pi pi-exclamation-triangle" class="mb-4">
+        您当前是只读权限，无法执行 Shell 命令。如需执行权限，请联系管理员。
+      </Message>
+
       <!-- 无节点提示 -->
       <Card v-if="!loadingNodes && nodes.length === 0" class="command-card">
         <template #content>
@@ -288,7 +303,7 @@ const downloadLog = async () => {
 
             <div class="control-item">
               <div class="flex items-center gap-2">
-                <Checkbox v-model="strictMode" inputId="strictMode" binary />
+                <Checkbox v-model="strictMode" inputId="strictMode" binary :disabled="!canExecute" />
                 <label for="strictMode" class="text-sm">严格模式</label>
                 <i class="pi pi-question-circle help-icon cursor-help" v-tooltip.top="'开启后，命令序列中任何一个命令失败都会立即停止执行'"></i>
               </div>
@@ -309,6 +324,7 @@ const downloadLog = async () => {
                 v-if="isExecuting"
                 severity="danger"
                 icon="pi pi-stop-circle"
+                :disabled="!canExecute"
                 @click="abortCommand"
                 label="中断"
               />
@@ -316,7 +332,8 @@ const downloadLog = async () => {
                 severity="info"
                 icon="pi pi-play"
                 :loading="isExecuting"
-                :disabled="!command.trim()"
+                :disabled="!command.trim() || !canExecute"
+                v-tooltip.top="!canExecute ? '无执行权限' : ''"
                 @click="executeCommand"
                 label="执行"
               />

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, inject, type Ref } fro
 import { useRouter } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { jobsApi, nodesApi, type Node } from '@/api'
+import { useAuthStore } from '@/stores/auth'
 import { useWebSocketStore } from '@/stores/websocket'
 import { showToast } from '@/utils/toast'
 import { showConfirm, hl } from '@/utils/confirm'
@@ -16,10 +17,13 @@ import Card from 'primevue/card'
 import Paginator from 'primevue/paginator'
 
 const wsStore = useWebSocketStore()
+const authStore = useAuthStore()
 const queryClient = useQueryClient()
 const globalRefreshHandler = inject<Ref<(() => void) | null>>('globalRefreshHandler')
 
 const router = useRouter()
+
+const canManage = computed(() => authStore.isAdmin || authStore.user?.role === 'user')
 
 const pagination = ref({
   page: 1,
@@ -162,6 +166,7 @@ const handleHistory = (id: string) => {
 }
 
 const handleDelete = async (id: string, name: string) => {
+  if (!canManage.value) return
   showConfirm({
     message: `确定要删除任务 ${hl(name)} 吗？`,
     header: '确认删除',
@@ -181,6 +186,7 @@ const handleDelete = async (id: string, name: string) => {
 }
 
 const toggleJobEnabled = async (job: any) => {
+  if (!canManage.value) return
   const newEnabled = !job.enabled
   const action = newEnabled ? '启用' : '禁用'
   showConfirm({
@@ -202,6 +208,7 @@ const toggleJobEnabled = async (job: any) => {
 }
 
 const handleTrigger = async (id: string, name: string) => {
+  if (!canManage.value) return
   showConfirm({
     message: `确定要触发任务 ${hl(name)} 吗？`,
     header: '确认触发',
@@ -341,8 +348,9 @@ const getStatusText = (status: string) => {
                   <Tag
                     :value="data.enabled ? '启用' : '禁用'"
                     :severity="data.enabled ? 'success' : 'secondary'"
-                    class="cursor-pointer select-none"
-                    v-tooltip.top="`点击${data.enabled ? '禁用' : '启用'}此任务`"
+                    class="select-none"
+                    :class="{ 'cursor-pointer': canManage }"
+                    v-tooltip.top="canManage ? `点击${data.enabled ? '禁用' : '启用'}此任务` : '无操作权限'"
                     @click="toggleJobEnabled(data)"
                   />
                 </template>
@@ -374,9 +382,9 @@ const getStatusText = (status: string) => {
                   <div class="action-row">
                     <Button v-tooltip.top="'详情'" size="small" icon="pi pi-eye" outlined severity="secondary" class="action-btn" @click="handleDetail(data.id)" />
                     <Button v-tooltip.top="'历史'" size="small" icon="pi pi-clock" outlined severity="secondary" class="action-btn" @click="handleHistory(data.id)" />
-                    <Button v-tooltip.top="'触发'" size="small" icon="pi pi-play" class="action-btn btn-trigger" @click="handleTrigger(data.id, data.name)" />
-                    <Button v-tooltip.top="'编辑'" size="small" icon="pi pi-pencil" outlined severity="secondary" class="action-btn" @click="handleEdit(data.id)" />
-                    <Button v-tooltip.top="'删除'" size="small" icon="pi pi-trash" class="action-btn btn-delete" @click="handleDelete(data.id, data.name)" />
+                    <Button v-tooltip.top="canManage ? '触发' : '无操作权限'" size="small" icon="pi pi-play" class="action-btn btn-trigger" :disabled="!canManage" @click="handleTrigger(data.id, data.name)" />
+                    <Button v-tooltip.top="canManage ? '编辑' : '无操作权限'" size="small" icon="pi pi-pencil" outlined severity="secondary" class="action-btn" :disabled="!canManage" @click="handleEdit(data.id)" />
+                    <Button v-tooltip.top="canManage ? '删除' : '无操作权限'" size="small" icon="pi pi-trash" class="action-btn btn-delete" :disabled="!canManage" @click="handleDelete(data.id, data.name)" />
                   </div>
                 </template>
               </Column>
@@ -411,7 +419,7 @@ const getStatusText = (status: string) => {
           </div>
 
           <!-- 新建任务 -->
-          <div class="create-action">
+          <div v-if="canManage" class="create-action">
             <Button
               severity="primary"
               icon="pi pi-plus"

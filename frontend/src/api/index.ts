@@ -290,7 +290,7 @@ export const adminApi = {
         request.delete(`/admin/users/${id}`),
 
     listCategories: () =>
-        request.get<AdminCategory[]>('/admin/categories'),
+        request.get<AdminCategory[]>('/categories'),
 
     createCategory: (data: { name: string }) =>
         request.post<AdminCategory>('/admin/categories', data),
