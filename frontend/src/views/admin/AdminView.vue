@@ -41,48 +41,60 @@ const activeTab = computed(() => route.path)
 </template>
 
 <style scoped>
+.admin-subtabs {
+  border-bottom: 1px solid #f1f5f9;
+}
+
 .tab-link {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: inherit;
+  color: #64748b;
   text-decoration: none;
-  padding: 10px 16px;
+  padding: 8px 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .tab-link i {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 :deep(.p-tab) {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  border-radius: 8px 8px 0 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
 }
 
-:deep(.p-tab:not(.p-tab-active):hover) {
-  background: #f8fafc !important;
+:deep(.p-tab:not(.p-tab-active):hover .tab-link) {
+  color: #0f172a;
+  background: #f8fafc;
 }
 
 :deep(.p-tab-active) {
-  background: #eff6ff !important;
+  background: transparent !important;
 }
 
 :deep(.p-tab-active .tab-link) {
-  font-weight: 600;
   color: #2563eb !important;
+  font-weight: 600;
 }
 
-:deep(.p-tab-active)::after {
+:deep(.p-tablist-content) {
+  border-bottom: none !important;
+}
+
+:deep(.p-tab-active::after) {
   content: '';
   position: absolute;
-  bottom: 0;
-  left: 15%;
-  right: 15%;
-  height: 3px;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
   background: #3b82f6 !important;
-  border-radius: 3px 3px 0 0;
+  z-index: 10;
 }
 
 .page-fade-enter-active,
