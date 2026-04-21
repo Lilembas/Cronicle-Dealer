@@ -2,13 +2,12 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, inject, watch, type Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import { eventsApi, jobsApi, type Event } from '@/api'
+import { eventsApi, jobsApi, nodesApi, type Event } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useSystemStore } from '@/stores/system'
 import { showToast } from '@/utils/toast'
 import { showConfirm, hl } from '@/utils/confirm'
 import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -30,7 +29,8 @@ const highlightId = ref(route.query.highlight as string || '')
 
 const filters = ref({
   status: '',
-  jobName: '',
+  jobId: '',
+  nodeId: '',
   jobCategory: '',
   startDate: '',
   endDate: '',
@@ -47,6 +47,8 @@ const { data: eventsDataRaw, isLoading, refetch } = useQuery({
     page: pagination.value.page,
     page_size: pagination.value.pageSize,
     status: filters.value.status || undefined,
+    job_id: filters.value.jobId || undefined,
+    node_id: filters.value.nodeId || undefined,
     job_category: filters.value.jobCategory || undefined,
   }),
 })
@@ -78,13 +80,24 @@ const statusOptions = [
 ]
 
 const categoryOptions = ref<{ label: string; value: string }[]>([])
-const loadCategories = async () => {
+const jobOptions = ref<{ label: string; value: string }[]>([])
+const nodeOptions = ref<{ label: string; value: string }[]>([])
+
+const loadFilterOptions = async () => {
   const { data } = await jobsApi.list({ page_size: 1000 }) as unknown as { data: any[] }
   const categories = [...new Set((data || []).map((j: any) => j.category).filter(Boolean))]
   categoryOptions.value = [
     { label: '全部', value: '' },
     ...categories.map((c: string) => ({ label: c, value: c })),
   ]
+  jobOptions.value = (data || []).map((j: any) => ({ label: j.name, value: j.id }))
+
+  const nodesData = await nodesApi.list() as unknown as any[]
+  const workerNodes = (nodesData || []).filter((n: any) => !n.tags?.includes('manager'))
+  nodeOptions.value = workerNodes.map((n: any) => ({
+    label: n.hostname || n.ip,
+    value: n.id,
+  }))
 }
 
 const getStatusText = (status: string) => {
@@ -139,7 +152,8 @@ const handleAbort = async (event: Event) => {
 const resetFilter = () => {
   filters.value = {
     status: '',
-    jobName: '',
+    jobId: '',
+    nodeId: '',
     jobCategory: '',
     startDate: '',
     endDate: '',
@@ -171,7 +185,7 @@ const handleTaskStatus = () => {
 }
 
 onMounted(() => {
-  loadCategories()
+  loadFilterOptions()
   wsStore.onMessage('task_status', handleTaskStatus)
 })
 
@@ -188,17 +202,22 @@ onUnmounted(() => {
         <div class="flex flex-wrap items-end gap-4">
           <div class="flex flex-col gap-1">
             <label class="font-medium text-sm">状态</label>
-            <Select v-model="filters.status" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="选择状态" class="w-36" showClear />
+            <Select v-model="filters.status" :options="statusOptions" optionLabel="label" optionValue="value" placeholder="选择状态" class="w-36" showClear filterable />
           </div>
 
           <div class="flex flex-col gap-1">
             <label class="font-medium text-sm">任务名称</label>
-            <InputText v-model="filters.jobName" placeholder="输入任务名称" class="w-48" />
+            <Select v-model="filters.jobId" :options="jobOptions" optionLabel="label" optionValue="value" placeholder="选择任务" class="w-48" showClear filterable />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label class="font-medium text-sm">执行节点</label>
+            <Select v-model="filters.nodeId" :options="nodeOptions" optionLabel="label" optionValue="value" placeholder="选择节点" class="w-40" showClear filterable />
           </div>
 
           <div class="flex flex-col gap-1">
             <label class="font-medium text-sm">任务分组</label>
-            <Select v-model="filters.jobCategory" :options="categoryOptions" optionLabel="label" optionValue="value" placeholder="选择分组" class="w-36" showClear />
+            <Select v-model="filters.jobCategory" :options="categoryOptions" optionLabel="label" optionValue="value" placeholder="选择分组" class="w-36" showClear filterable />
           </div>
 
           <Button severity="secondary" @click="resetFilter" label="重置" size="small" outlined />

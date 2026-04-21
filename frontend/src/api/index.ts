@@ -140,7 +140,7 @@ export const jobsApi = {
 
 // 执行记录 API
 export const eventsApi = {
-    list: (params?: { page?: number; page_size?: number; job_id?: string; status?: string; job_category?: string }) =>
+    list: (params?: { page?: number; page_size?: number; job_id?: string; status?: string; job_category?: string; node_id?: string }) =>
         request.get<EventListResponse>('/events', { params }),
 
     get: (id: string) =>

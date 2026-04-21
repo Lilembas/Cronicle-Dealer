@@ -449,7 +449,10 @@ func (s *APIServer) listEvents(c *gin.Context) {
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
-	
+	if nodeID := c.Query("node_id"); nodeID != "" {
+		query = query.Where("node_id = ?", nodeID)
+	}
+
 	// 分页
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
