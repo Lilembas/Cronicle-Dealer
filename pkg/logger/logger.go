@@ -10,11 +10,9 @@ import (
 )
 
 var (
-	// Log 全局日志实例
-	Log *zap.Logger
+		Log *zap.Logger
 )
 
-// 可直接使用的日志函数，替代原来的便捷方法
 var (
 	Debug = func(msg string, fields ...zap.Field) {
 		if Log != nil {
@@ -43,7 +41,6 @@ var (
 	}
 )
 
-// InitLogger 初始化日志模块
 func InitLogger(cfg *config.LoggingConfig) error {
 	level := parseLevel(cfg.Level)
 	encoderCfg := newEncoderConfig(cfg.Format)
@@ -56,7 +53,13 @@ func InitLogger(cfg *config.LoggingConfig) error {
 	return nil
 }
 
-// parseLevel 解析日志级别
+func WrapCore(wrapper func(zapcore.Core) zapcore.Core) {
+	if Log == nil {
+		return
+	}
+	Log = zap.New(wrapper(Log.Core()), zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
+}
+
 func parseLevel(level string) zapcore.Level {
 	switch level {
 	case "debug":
@@ -72,7 +75,6 @@ func parseLevel(level string) zapcore.Level {
 	}
 }
 
-// newEncoderConfig 创建编码器配置
 func newEncoderConfig(format string) zapcore.EncoderConfig {
 	if format == "json" {
 		cfg := zap.NewProductionEncoderConfig()
@@ -84,7 +86,6 @@ func newEncoderConfig(format string) zapcore.EncoderConfig {
 	return cfg
 }
 
-// newEncoder 创建编码器
 func newEncoder(format string, cfg zapcore.EncoderConfig) zapcore.Encoder {
 	if format == "json" {
 		return zapcore.NewJSONEncoder(cfg)
@@ -92,7 +93,6 @@ func newEncoder(format string, cfg zapcore.EncoderConfig) zapcore.Encoder {
 	return zapcore.NewConsoleEncoder(cfg)
 }
 
-// newWriteSyncer 创建输出
 func newWriteSyncer(output string) zapcore.WriteSyncer {
 	if output == "stdout" {
 		return zapcore.AddSync(os.Stdout)
@@ -105,7 +105,6 @@ func newWriteSyncer(output string) zapcore.WriteSyncer {
 	return zapcore.AddSync(file)
 }
 
-// Sync 刷新日志缓冲区
 func Sync() error {
 	if Log == nil {
 		return nil

@@ -117,7 +117,6 @@ export interface TriggerResponse {
     message: string
 }
 
-// 任务 API
 export const jobsApi = {
     list: (params?: { page?: number; page_size?: number; category?: string; enabled?: boolean }) =>
         request.get<JobListResponse>('/jobs', { params }),
@@ -138,7 +137,6 @@ export const jobsApi = {
         request.post<TriggerResponse>(`/jobs/${id}/trigger`),
 }
 
-// 执行记录 API
 export const eventsApi = {
     list: (params?: { page?: number; page_size?: number; job_id?: string; status?: string; job_category?: string; node_id?: string }) =>
         request.get<EventListResponse>('/events', { params }),
@@ -153,7 +151,6 @@ export const eventsApi = {
         request.get(`/events/${id}/download`, { responseType: 'blob' }),
 }
 
-// 节点 API
 export const nodesApi = {
     list: (params?: { status?: string }) =>
         request.get<Node[]>('/nodes', { params }),
@@ -171,13 +168,11 @@ export const nodesApi = {
         request.delete(`/nodes/${id}`),
 }
 
-// 统计 API
 export const statsApi = {
     get: () =>
         request.get<Stats>('/stats'),
 }
 
-// Shell 执行 API
 export interface ShellExecuteRequest {
     command: string
     node_id?: string
@@ -210,7 +205,6 @@ export const shellApi = {
         request.get<ShellLogsResponse>(`/shell/logs/${eventId}`),
 }
 
-// 负载均衡策略
 export interface LBFormulaMetric {
     id: string
     name: string
@@ -257,4 +251,58 @@ export const strategiesApi = {
 
     validate: (formula: string) =>
         request.post<{ valid: boolean; error?: string }>('/strategies/validate', { formula }),
+}
+
+export interface AdminUser {
+    id: string
+    username: string
+    email: string
+    role: string
+    full_name: string
+    active: boolean
+    created_at: string
+    updated_at: string
+    last_login_at?: string
+}
+
+export interface AdminCategory {
+    id: string
+    name: string
+    created_at: string
+    updated_at: string
+    job_count: number
+}
+
+export const adminApi = {
+    listUsers: (params?: { page?: number; page_size?: number; role?: string; active?: boolean }) =>
+        request.get<{ total: number; page: number; data: AdminUser[] }>('/admin/users', { params }),
+
+    getUser: (id: string) =>
+        request.get<AdminUser>(`/admin/users/${id}`),
+
+    createUser: (data: { username: string; password: string; email?: string; role: string; full_name?: string }) =>
+        request.post<AdminUser>('/admin/users', data),
+
+    updateUser: (id: string, data: Partial<AdminUser> & { password?: string }) =>
+        request.put<AdminUser>(`/admin/users/${id}`, data),
+
+    deleteUser: (id: string) =>
+        request.delete(`/admin/users/${id}`),
+
+    listCategories: () =>
+        request.get<AdminCategory[]>('/admin/categories'),
+
+    createCategory: (data: { name: string }) =>
+        request.post<AdminCategory>('/admin/categories', data),
+
+    updateCategory: (id: string, data: { name: string }) =>
+        request.put<AdminCategory>(`/admin/categories/${id}`, data),
+
+    deleteCategory: (id: string) =>
+        request.delete(`/admin/categories/${id}`),
+}
+
+export const userApi = {
+    changePassword: (data: { old_password: string; new_password: string }) =>
+        request.put('/user/password', data),
 }

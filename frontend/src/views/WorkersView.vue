@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { nodesApi, strategiesApi, type Node, type LoadBalanceStrategy, type LBFormulaMetric, type FormulaParameter } from '@/api'
 import { useWebSocketStore } from '@/stores/websocket'
+import { useAuthStore } from '@/stores/auth'
 import { showToast } from '@/utils/toast'
 import { showConfirm, hl } from '@/utils/confirm'
 import Button from 'primevue/button'
@@ -18,7 +19,7 @@ import ProgressBar from 'primevue/progressbar'
 const loading = ref(false)
 const nodes = ref<Node[]>([])
 const wsStore = useWebSocketStore()
-
+const authStore = useAuthStore()
 
 const editDialogVisible = ref(false)
 const editNode = ref<Node | null>(null)
@@ -26,7 +27,6 @@ const editTags = ref<string[]>([])
 const editMaxConcurrent = ref(0)
 const editLoading = ref(false)
 
-// --- 负载均衡策略状态 ---
 const strategies = ref<LoadBalanceStrategy[]>([])
 const strategyDialogVisible = ref(false)
 const strategyFormVisible = ref(false)
@@ -50,34 +50,31 @@ const currentStrategy = ref<{
 const formulaValidation = ref<Record<string, { valid: boolean; error?: string }>>({})
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 
-const isEditing = computed(() => !!currentStrategy.value.id)
+const isEditingStrategy = computed(() => !!currentStrategy.value.id)
 
-const isManagerNode = (node: Node) => {
-  return node.tags === 'manager' || node.tags.includes('manager')
+function isManagerNode(node: Node): boolean {
+  return node.tags?.includes('manager') ?? false
 }
 
-const getManagerNodeId = () => {
-  const nodesWithId = nodes.value.map(node => ({
-    ...node,
-    isManager: isManagerNode(node)
-  }))
+function isRemovableNode(node: Node): boolean {
+  return !isManagerNode(node) && node.id !== getManagerNodeId()
+}
 
-  const explicitManager = nodesWithId.find(node => node.isManager)
-  if (explicitManager) {
-    return explicitManager.id
-  }
+function getManagerNodeId(): string | null {
+  const manager = nodes.value.find(node => isManagerNode(node))
+  if (manager) return manager.id
 
-  if (nodesWithId.length > 0) {
-    const sortedByRegistration = [...nodesWithId].sort((a, b) =>
+  if (nodes.value.length > 0) {
+    const sorted = [...nodes.value].sort((a, b) =>
       new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
     )
-    return sortedByRegistration[0].id
+    return sorted[0].id
   }
 
   return null
 }
 
-const formatUptime = (registeredAt: string) => {
+function formatUptime(registeredAt: string): string {
   if (!registeredAt) return '-'
   const now = new Date()
   const registered = new Date(registeredAt)
@@ -97,9 +94,7 @@ const formatUptime = (registeredAt: string) => {
 }
 
 const filteredNodes = computed(() => {
-  let result = [...nodes.value]
-
-  result.sort((a: Node, b: Node) => {
+  return [...nodes.value].sort((a: Node, b: Node) => {
     if (a.status === 'online' && b.status !== 'online') return -1
     if (a.status !== 'online' && b.status === 'online') return 1
 
@@ -110,8 +105,6 @@ const filteredNodes = computed(() => {
 
     return new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
   })
-
-  return result
 })
 
 const getUsageClass = (value: number) => {
@@ -121,12 +114,8 @@ const getUsageClass = (value: number) => {
 }
 
 const getRowClass = (data: Node) => {
-  if (data.status === 'offline') {
-    return 'offline-row'
-  }
-  return ''
+  return data.status === 'offline' ? 'offline-row' : ''
 }
-
 
 const loadNodes = async () => {
   try {
@@ -142,7 +131,7 @@ const loadNodes = async () => {
 }
 
 const handleDelete = async (node: Node) => {
-  if (isManagerNode(node) || node.id === getManagerNodeId()) {
+  if (!isRemovableNode(node)) {
     showToast({ severity: 'warn', summary: '不能删除 Manager 节点', life: 3000 })
     return
   }
@@ -209,8 +198,6 @@ const handleNodeStatus = (data: any) => {
     loadNodes()
   }
 }
-
-// --- 负载均衡策略方法 ---
 
 const loadStrategies = async () => {
   try {
@@ -300,7 +287,6 @@ const saveStrategy = async () => {
     return
   }
 
-  // 验证所有有公式的指标都能通过验证
   const hasInvalid = currentStrategy.value.metrics.some(m => {
     if (!m.formula.trim()) return false
     return formulaValidation.value[m.id]?.valid === false
@@ -318,12 +304,12 @@ const saveStrategy = async () => {
       direction: currentStrategy.value.direction,
       metrics: currentStrategy.value.metrics,
     }
-    if (isEditing.value) {
+    if (isEditingStrategy.value) {
       await strategiesApi.update(currentStrategy.value.id!, payload)
     } else {
       await strategiesApi.create(payload)
     }
-    showToast({ severity: 'success', summary: isEditing.value ? '更新成功' : '创建成功', life: 3000 })
+    showToast({ severity: 'success', summary: isEditingStrategy.value ? '更新成功' : '创建成功', life: 3000 })
     strategyFormVisible.value = false
     await loadStrategies()
   } catch (error: any) {
@@ -382,7 +368,6 @@ onUnmounted(() => {
 
 <template>
   <div class="workers-page">
-    <!-- 概览统计 -->
     <div class="stats-grid mb-6">
       <Card class="stat-card">
         <template #content>
@@ -423,7 +408,7 @@ onUnmounted(() => {
           </div>
         </template>
       </Card>
-      <Card class="stat-card stat-card-clickable" @click="openStrategyDialog">
+      <Card class="stat-card" :class="{ 'stat-card-clickable': authStore.isAdmin }" @click="authStore.isAdmin && openStrategyDialog()">
         <template #content>
           <div class="flex items-center gap-4">
             <div class="stat-icon bg-purple-50 text-purple-500">
@@ -439,7 +424,6 @@ onUnmounted(() => {
       </Card>
     </div>
 
-    <!-- 节点列表 -->
     <Card class="table-card">
       <template #content>
         <DataTable
@@ -482,10 +466,7 @@ onUnmounted(() => {
           </Column>
           <Column header="并行任务" style="width: 120px" alignHeader="center" align="center">
             <template #body="{ data }">
-              <!-- Manager 节点 -->
               <div v-if="isManagerNode(data)" class="text-gray-300 font-medium">-</div>
-              
-              <!-- Worker 节点 -->
               <div v-else class="flex items-center justify-center gap-1.5">
                 <span :class="data.running_jobs > 0 ? 'text-blue-500 font-bold' : 'text-gray-600 font-medium'">
                   {{ data.running_jobs }}
@@ -522,16 +503,14 @@ onUnmounted(() => {
           </Column>
           <Column header="操作" frozen alignFrozen="right" style="width: 100px">
             <template #body="{ data }">
-              <div class="action-buttons">
+              <div v-if="authStore.isAdmin && isRemovableNode(data)" class="action-buttons">
                 <Button
-                  v-if="!isManagerNode(data) && data.id !== getManagerNodeId()"
                   v-tooltip.top="'编辑标签'"
                   icon="pi pi-pencil"
                   class="btn-edit"
                   @click="handleEdit(data)"
                 />
                 <Button
-                  v-if="!isManagerNode(data) && data.id !== getManagerNodeId()"
                   v-tooltip.top="'移除节点'"
                   icon="pi pi-trash"
                   class="btn-delete"
@@ -549,7 +528,6 @@ onUnmounted(() => {
       </template>
     </Card>
 
-    <!-- 编辑节点对话框 -->
     <Dialog v-model:visible="editDialogVisible" header="编辑节点标签" :style="{ width: '500px' }">
       <div v-if="editNode" class="flex flex-col gap-4">
         <div class="flex flex-col gap-1">
@@ -579,7 +557,6 @@ onUnmounted(() => {
       </template>
     </Dialog>
 
-    <!-- 负载均衡策略管理对话框 -->
     <Dialog v-model:visible="strategyDialogVisible" header="负载均衡策略管理" :style="{ width: '900px' }" :maximizable="true">
       <div class="flex flex-col gap-4">
         <div class="flex items-center justify-between">
@@ -623,8 +600,7 @@ onUnmounted(() => {
       </template>
     </Dialog>
 
-    <!-- 策略编辑对话框 -->
-    <Dialog v-model:visible="strategyFormVisible" :header="isEditing ? '编辑策略' : '新建策略'" :style="{ width: '780px' }" :maximizable="true">
+    <Dialog v-model:visible="strategyFormVisible" :header="isEditingStrategy ? '编辑策略' : '新建策略'" :style="{ width: '780px' }" :maximizable="true">
       <div class="flex flex-col gap-4">
         <div class="grid grid-cols-2 gap-4">
           <div class="flex flex-col gap-1">
@@ -713,7 +689,7 @@ onUnmounted(() => {
       </div>
       <template #footer>
         <Button severity="secondary" @click="strategyFormVisible = false" label="取消" />
-        <Button :loading="strategyLoading" @click="saveStrategy" :label="isEditing ? '保存' : '创建'" />
+        <Button :loading="strategyLoading" @click="saveStrategy" :label="isEditingStrategy ? '保存' : '创建'" />
       </template>
     </Dialog>
   </div>
@@ -726,7 +702,6 @@ onUnmounted(() => {
   margin: 0 auto;
 }
 
-/* Stats Cards */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -858,7 +833,6 @@ onUnmounted(() => {
 .usage-medium :deep(.p-progressbar-value) { background: #f59e0b; }
 .usage-high :deep(.p-progressbar-value) { background: #ef4444; }
 
-/* Premium Badges */
 .premium-badge {
   display: inline-flex;
   align-items: center;
@@ -946,7 +920,6 @@ onUnmounted(() => {
   filter: grayscale(0.5);
 }
 
-/* Parameter Reference */
 .param-reference {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -991,7 +964,6 @@ onUnmounted(() => {
   color: #71717a;
 }
 
-/* Metric Row */
 .metric-row {
   background: #f8fafc;
   border: 1px solid #e2e8f0;

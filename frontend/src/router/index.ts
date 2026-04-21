@@ -73,6 +73,33 @@ const routes: RouteRecordRaw[] = [
                 name: 'Shell',
                 component: () => import('@/views/ShellView.vue'),
                 meta: { title: 'Shell 执行' }
+            },
+            {
+                path: 'admin',
+                name: 'Admin',
+                component: () => import('@/views/admin/AdminView.vue'),
+                meta: { title: '管理员', requiresAdmin: true },
+                redirect: '/admin/users',
+                children: [
+                    {
+                        path: 'users',
+                        name: 'AdminUsers',
+                        component: () => import('@/views/admin/UsersView.vue'),
+                        meta: { title: '用户管理' }
+                    },
+                    {
+                        path: 'logs',
+                        name: 'AdminLogs',
+                        component: () => import('@/views/admin/LogsView.vue'),
+                        meta: { title: '管理日志' }
+                    },
+                    {
+                        path: 'categories',
+                        name: 'AdminCategories',
+                        component: () => import('@/views/admin/CategoriesView.vue'),
+                        meta: { title: '分组管理' }
+                    },
+                ]
             }
         ]
     }
@@ -83,18 +110,31 @@ const router = createRouter({
     routes
 })
 
-// 路由守卫：检查认证状态
+function isAdmin(): boolean {
+    try {
+        const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
+        return user?.role === 'admin'
+    } catch {
+        return false
+    }
+}
+
 router.beforeEach((to, _from, next) => {
     const token = localStorage.getItem('auth_token')
-    const requiresAuth = to.meta.requiresAuth !== false
 
-    if (!token && requiresAuth) {
-        next({ name: 'Login' })
-    } else if (token && to.name === 'Login') {
-        next({ name: 'Dashboard' })
-    } else {
-        next()
+    if (!token && to.meta.requiresAuth !== false) {
+        return next({ name: 'Login' })
     }
+
+    if (token && to.name === 'Login') {
+        return next({ name: 'Dashboard' })
+    }
+
+    if (to.meta.requiresAdmin && !isAdmin()) {
+        return next({ name: 'Dashboard' })
+    }
+
+    next()
 })
 
 export default router

@@ -16,7 +16,6 @@ import (
 	"github.com/cronicle/cronicle-next/pkg/utils"
 )
 
-// Claims JWT 载荷
 type Claims struct {
 	UserID   string `json:"user_id"`
 	Username string `json:"username"`
@@ -94,12 +93,27 @@ func (s *APIServer) refreshToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": newToken})
 }
 
+func (s *APIServer) adminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists || role.(string) != "admin" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "需要管理员权限"})
+			return
+		}
+		c.Next()
+	}
+}
+
 func (s *APIServer) authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr, err := extractBearerToken(c.GetHeader("Authorization"))
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
-			return
+			// 回退到 query param（用于 SSE 等场景）
+			tokenStr = c.Query("token")
+			if tokenStr == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "未授权"})
+				return
+			}
 		}
 
 		claims, err := s.validateToken(tokenStr)
@@ -161,7 +175,6 @@ func extractBearerToken(header string) (string, error) {
 	return parts[1], nil
 }
 
-// EnsureDefaultAdmin 确保存在默认管理员账号
 func EnsureDefaultAdmin() error {
 	var count int64
 	if err := storage.DB.Model(&models.User{}).Where("username = ?", "admin").Count(&count).Error; err != nil {
@@ -186,7 +199,6 @@ func EnsureDefaultAdmin() error {
 	if err := storage.DB.Create(user).Error; err != nil {
 		return err
 	}
-
 	logger.Info("已创建默认管理员账号", zap.String("username", "admin"))
 	return nil
 }

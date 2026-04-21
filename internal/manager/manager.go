@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/models"
@@ -22,7 +23,6 @@ import (
 	"github.com/cronicle/cronicle-next/pkg/utils"
 )
 
-// 资源信息结构体
 type nodeResources struct {
 	CpuUsage     float64
 	MemoryUsage  float64
@@ -39,7 +39,6 @@ var (
 	cpuStatsInited bool
 )
 
-// Manager Manager 节点管理器
 type Manager struct {
 	cfg            *config.Config
 	grpcServer     *GRPCServer
@@ -56,14 +55,12 @@ type Manager struct {
 	managerNodeID   string // Manager 节点自己的 ID
 }
 
-// NewManager 创建 Manager 节点
 func NewManager(cfg *config.Config) *Manager {
 	return &Manager{
 		cfg: cfg,
 	}
 }
 
-// Start 启动 Manager 节点
 func (m *Manager) Start() error {
 	logger.Info("启动 Manager 节点...")
 
@@ -83,29 +80,22 @@ func (m *Manager) Start() error {
 	return nil
 }
 
-// startServices 启动核心服务
 func (m *Manager) startServices() error {
 	logger.Info("启动 Manager 核心服务...")
 
-	// 启动 WebSocket 服务器
 	m.wsServer = NewWebSocketServer(m.cfg.Server.WebSocketPort)
 	if err := m.wsServer.Start(); err != nil {
 		return err
 	}
 
-	// 启动 gRPC 服务器
 	m.grpcServer = NewGRPCServer(m.cfg)
 	m.grpcServer.SetWebSocketServer(m.wsServer) // 设置WebSocket服务器
 	if err := m.grpcServer.Start(); err != nil {
 		return err
 	}
 
-	// 创建分发器
 	m.dispatcher = NewDispatcher(m.wsServer)
 
-	// 加载激活的负载均衡策略
-
-	// 启动节点健康检查器（在 TaskConsumer 之前启动，确保分发时节点状态准确）
 	healthCtx, healthCancel := context.WithCancel(context.Background())
 	m.healthCancel = healthCancel
 	m.healthChecker = NewHealthChecker(
@@ -116,44 +106,45 @@ func (m *Manager) startServices() error {
 	)
 	go m.healthChecker.Start(healthCtx)
 
-	// 启动任务消费者
 	m.taskConsumer = NewTaskConsumer(m.dispatcher, m.cfg.Manager.DispatchRetry)
 	m.taskConsumer.SetWebSocketServer(m.wsServer)
 	consumerCtx, cancel := context.WithCancel(context.Background())
 	m.consumerCancel = cancel
 	go m.taskConsumer.Start(consumerCtx)
 
-	// 启动调度器
 	m.scheduler = NewScheduler(&m.cfg.Manager.Scheduler)
 	if err := m.scheduler.Start(); err != nil {
 		return err
 	}
 
-	// 启动 API 服务器
 	m.apiServer = NewAPIServer(m.cfg, m.scheduler, m.dispatcher)
 	m.apiServer.SetWebSocketServer(m.wsServer)
+
+	m.apiServer.logBuffer = NewLogBuffer(5000)
+	logger.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return &logHookCore{Core: core, buffer: m.apiServer.logBuffer}
+	})
+
+	go m.broadcastManagerLogs()
+
 	if err := m.apiServer.Start(); err != nil {
 		return err
 	}
 
-	// 启动日志订阅器（订阅 Redis Pub/Sub，推送到 WebSocket 前端）
 	m.logSubscriber = NewLogSubscriber(m.wsServer)
 	logSubCtx, logSubCancel := context.WithCancel(context.Background())
 	m.logSubCancel = logSubCancel
 	m.logSubscriber.Start(logSubCtx)
 
-	// 异步恢复孤儿日志（Manager 重启后清理上次残留的无 TTL 日志）
 	go m.grpcServer.RecoverOrphanLogs(context.Background())
 
 	logger.Info("Manager 核心服务启动完成")
 	return nil
 }
 
-// Stop 停止 Manager 节点
 func (m *Manager) Stop() {
 	logger.Info("停止 Manager 节点...")
 
-	// 标记 Manager 节点为离线
 	if m.managerNodeID != "" {
 		storage.DB.Model(&models.Node{}).Where("id = ?", m.managerNodeID).Update("status", "offline")
 	}
@@ -167,7 +158,6 @@ func (m *Manager) Stop() {
 		}
 	}
 
-	// 停止健康检查器
 	if m.healthCancel != nil {
 		m.healthCancel()
 	}
@@ -177,7 +167,6 @@ func (m *Manager) Stop() {
 		}
 	}
 
-	// 停止日志订阅器
 	if m.logSubCancel != nil {
 		m.logSubCancel()
 	}
@@ -201,7 +190,6 @@ func (m *Manager) Stop() {
 	logger.Info("Manager 节点已停止")
 }
 
-// registerManagerAsNode 将 Manager 注册为节点
 func (m *Manager) registerManagerAsNode() error {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -210,17 +198,15 @@ func (m *Manager) registerManagerAsNode() error {
 
 	ip := getLocalIP()
 	pid := int32(os.Getpid())
+	resources, _ := m.getResourceInfo()
 
-	// 首先查找是否有相同 hostname + ip 的现有节点
 	var existingNode models.Node
 	err = storage.DB.Where("hostname = ? AND ip = ?", hostname, ip).First(&existingNode).Error
 
 	var nodeID string
 	if err == nil {
-		// 节点已存在，更新为 Manager
 		nodeID = existingNode.ID
-		// 获取资源信息
-		resources, _ := m.getResourceInfo()
+
 		updates := map[string]interface{}{
 			"tags":            "manager",
 			"pid":             pid,
@@ -245,10 +231,7 @@ func (m *Manager) registerManagerAsNode() error {
 			zap.String("old_tags", existingNode.Tags),
 			zap.Int32("pid", pid))
 	} else {
-		// 创建新的 Manager 节点
 		nodeID = utils.GenerateID("node")
-		// 获取资源信息
-		resources, _ := m.getResourceInfo()
 		node := &models.Node{
 			ID:             nodeID,
 			Hostname:       hostname,
@@ -258,8 +241,6 @@ func (m *Manager) registerManagerAsNode() error {
 			PID:            pid,
 			Status:         "online",
 			Version:        "0.1.0",
-			RunningJobs:    0,
-			MaxConcurrent:  0,
 			LastHeartbeat:  time.Now(),
 			CPUUsage:       resources.CpuUsage,
 			CPUCores:       int(resources.CpuCores),
@@ -282,7 +263,6 @@ func (m *Manager) registerManagerAsNode() error {
 
 	m.managerNodeID = nodeID
 
-	// 通过 WebSocket 推送 Manager 节点上线
 	if m.wsServer != nil {
 		if err := m.wsServer.BroadcastNodeStatus(nodeID, hostname, "online", 0, 0, 0); err != nil {
 			logger.Warn("推送 Manager 节点状态失败", zap.Error(err))
@@ -294,9 +274,32 @@ func (m *Manager) registerManagerAsNode() error {
 	return nil
 }
 
-// startManagerHeartbeat 启动 Manager 心跳
+func (m *Manager) broadcastManagerLogs() {
+	if m.apiServer.logBuffer == nil || m.wsServer == nil {
+		return
+	}
+	ch := m.apiServer.logBuffer.Subscribe()
+	defer m.apiServer.logBuffer.Unsubscribe(ch)
+
+	existing := m.apiServer.logBuffer.GetEntries()
+	for _, entry := range existing {
+		msg := ServerMessage{
+			Type: "manager_log",
+			Data: entry,
+		}
+		_ = m.wsServer.GetHub().BroadcastToRoom("manager:logs", msg)
+	}
+
+	for entry := range ch {
+		msg := ServerMessage{
+			Type: "manager_log",
+			Data: entry,
+		}
+		_ = m.wsServer.GetHub().BroadcastToRoom("manager:logs", msg)
+	}
+}
+
 func (m *Manager) startManagerHeartbeat() {
-	// 立即更新一次
 	if err := m.updateManagerHeartbeat(); err != nil {
 		logger.Error("初始 Manager 心跳更新失败", zap.Error(err))
 	}
@@ -311,13 +314,11 @@ func (m *Manager) startManagerHeartbeat() {
 	}
 }
 
-// updateManagerHeartbeat 更新 Manager 心跳
 func (m *Manager) updateManagerHeartbeat() error {
 	if m.managerNodeID == "" {
 		return nil
 	}
 
-	// 获取资源信息
 	resources, err := m.getResourceInfo()
 	if err != nil {
 		logger.Warn("获取 Manager 资源信息失败", zap.Error(err))
@@ -344,7 +345,6 @@ func (m *Manager) updateManagerHeartbeat() error {
 	return nil
 }
 
-// getResourceInfo 获取资源信息
 func (m *Manager) getResourceInfo() (*nodeResources, error) {
 	cpuUsage, err := getCPUUsagePercent()
 	if err != nil {
@@ -371,7 +371,6 @@ func (m *Manager) getResourceInfo() (*nodeResources, error) {
 	}, nil
 }
 
-// getLocalIP 获取本地 IP
 func getLocalIP() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -389,7 +388,6 @@ func getLocalIP() string {
 	return "127.0.0.1"
 }
 
-// getCPUUsagePercent 获取 CPU 使用率
 func getCPUUsagePercent() (float64, error) {
 	total, idle, err := readCPUStat()
 	if err != nil {
@@ -425,7 +423,6 @@ func getCPUUsagePercent() (float64, error) {
 	return usage, nil
 }
 
-// readCPUStat 读取 CPU 统计信息
 func readCPUStat() (uint64, uint64, error) {
 	f, err := os.Open("/proc/stat")
 	if err != nil {
@@ -469,7 +466,6 @@ func readCPUStat() (uint64, uint64, error) {
 	return total, idle, nil
 }
 
-// getMemoryUsageGB 获取内存使用量（GB）
 func getMemoryUsageGB() (usedGB, totalGB float64, err error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
@@ -504,7 +500,6 @@ func getMemoryUsageGB() (usedGB, totalGB float64, err error) {
 	return usedGB, totalGB, nil
 }
 
-// parseMemInfoKB 解析 meminfo 行
 func parseMemInfoKB(line string) (uint64, error) {
 	fields := strings.Fields(line)
 	if len(fields) < 2 {
@@ -513,7 +508,6 @@ func parseMemInfoKB(line string) (uint64, error) {
 	return strconv.ParseUint(fields[1], 10, 64)
 }
 
-// getDiskUsageGB 获取磁盘使用量（GB）
 func getDiskUsageGB(path string) (usedGB, totalGB float64, err error) {
 	var fs syscall.Statfs_t
 	if err := syscall.Statfs(path, &fs); err != nil {
