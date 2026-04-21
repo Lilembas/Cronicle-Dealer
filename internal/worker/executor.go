@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"runtime"
 
@@ -41,8 +42,9 @@ type Executor struct {
 	cfg          *config.ExecutorConfig
 	grpcServer   *grpc.Server
 	managerClient pb.CronicleServiceClient // Manager客户端，用于报告任务结果
-	runningJobs  sync.Map                 // map[eventID]*exec.Cmd
-	abortedJobs  sync.Map                 // map[eventID]string
+	runningJobs       sync.Map // map[eventID]*exec.Cmd
+	runningCancelFuncs sync.Map // map[eventID]context.CancelFunc
+	abortedJobs       sync.Map // map[eventID]string
 	jobCount     int
 	mu           sync.Mutex
 }
@@ -122,24 +124,9 @@ func (e *Executor) SubmitTask(ctx context.Context, req *pb.TaskRequest) (*pb.Tas
 	}, nil
 }
 
-// AbortTask 中止任务
+// AbortTask 中止任务（幂等：对已结束或重复调用的任务均返回成功）
 func (e *Executor) AbortTask(ctx context.Context, req *pb.AbortTaskRequest) (*pb.AbortTaskResponse, error) {
 	logger.Info("收到中止任务请求", zap.String("event_id", req.EventId))
-	val, ok := e.runningJobs.Load(req.EventId)
-	if !ok {
-		return &pb.AbortTaskResponse{
-			Success: false,
-			Message: "任务未运行或已结束",
-		}, nil
-	}
-
-	cmd, ok := val.(*exec.Cmd)
-	if !ok || cmd == nil || cmd.Process == nil {
-		return &pb.AbortTaskResponse{
-			Success: false,
-			Message: "任务进程不可用",
-		}, nil
-	}
 
 	reason := req.Reason
 	if reason == "" {
@@ -147,17 +134,71 @@ func (e *Executor) AbortTask(ctx context.Context, req *pb.AbortTaskRequest) (*pb
 	}
 	e.abortedJobs.Store(req.EventId, reason)
 
-	if err := cmd.Process.Kill(); err != nil {
-		return &pb.AbortTaskResponse{
-			Success: false,
-			Message: "终止进程失败: " + err.Error(),
-		}, nil
+	// 取消 context，触发 CommandContext 的取消逻辑
+	if cancelVal, ok := e.runningCancelFuncs.Load(req.EventId); ok {
+		if cancel, ok := cancelVal.(context.CancelFunc); ok {
+			cancel()
+		}
+		e.runningCancelFuncs.Delete(req.EventId)
 	}
 
-	return &pb.AbortTaskResponse{
-		Success: true,
-		Message: "任务中止请求已执行",
-	}, nil
+	val, ok := e.runningJobs.Load(req.EventId)
+	if !ok {
+		logger.Info("任务已结束，无需中止", zap.String("event_id", req.EventId))
+		return &pb.AbortTaskResponse{Success: true, Message: "任务已结束"}, nil
+	}
+
+	cmd, ok := val.(*exec.Cmd)
+	if !ok || cmd == nil || cmd.Process == nil {
+		return &pb.AbortTaskResponse{Success: true, Message: "任务已结束"}, nil
+	}
+
+	pid := cmd.Process.Pid
+
+	// 检查进程是否已退出（竞态窗口：任务可能在毫秒级前自然结束）
+	if !isProcessAlive(pid) {
+		logger.Info("进程已退出，无需中止", zap.String("event_id", req.EventId), zap.Int("pid", pid))
+		return &pb.AbortTaskResponse{Success: true, Message: "进程已退出"}, nil
+	}
+
+	// 1) SIGTERM 整个进程组
+	logger.Info("发送 SIGTERM 到进程组", zap.String("event_id", req.EventId), zap.Int("pid", pid))
+	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
+		logger.Warn("发送 SIGTERM 失败，直接 SIGKILL",
+			zap.String("event_id", req.EventId), zap.Int("pid", pid), zap.Error(err))
+		if killErr := syscall.Kill(-pid, syscall.SIGKILL); killErr != nil {
+			logger.Error("SIGKILL 也失败", zap.String("event_id", req.EventId), zap.Int("pid", pid), zap.Error(killErr))
+		}
+		return &pb.AbortTaskResponse{Success: true, Message: "任务中止请求已执行"}, nil
+	}
+
+	// 2) 轮询等待进程组退出（每 200ms 检查，最多 5 秒）
+	const sigtermGracePeriod = 5 * time.Second
+	const pollInterval = 200 * time.Millisecond
+	timer := time.NewTimer(sigtermGracePeriod)
+	defer timer.Stop()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			// 超时，进程组未退出，SIGKILL 兜底
+			logger.Warn("SIGTERM 超时，发送 SIGKILL 到进程组",
+				zap.String("event_id", req.EventId), zap.Int("pid", pid))
+			if killErr := syscall.Kill(-pid, syscall.SIGKILL); killErr != nil {
+				logger.Error("SIGKILL 失败",
+					zap.String("event_id", req.EventId), zap.Int("pid", pid), zap.Error(killErr))
+			}
+			return &pb.AbortTaskResponse{Success: true, Message: "任务中止请求已执行（SIGKILL）"}, nil
+		case <-ticker.C:
+			if !isProcessGroupAlive(pid) {
+				logger.Info("进程组已正常退出（SIGTERM 生效）",
+					zap.String("event_id", req.EventId), zap.Int("pid", pid))
+				return &pb.AbortTaskResponse{Success: true, Message: "任务中止请求已执行（SIGTERM）"}, nil
+			}
+		}
+	}
 }
 
 // canAcceptJob 检查是否可以接受新任务
@@ -187,6 +228,7 @@ func (e *Executor) executeTask(req *pb.TaskRequest) {
 	defer func() {
 		e.decrementJobCount()
 		e.runningJobs.Delete(req.EventId)
+		e.runningCancelFuncs.Delete(req.EventId)
 		e.abortedJobs.Delete(req.EventId)
 	}()
 
@@ -229,10 +271,15 @@ func (e *Executor) executeByType(req *pb.TaskRequest) (int, string, string, floa
 }
 
 // executeShell 执行 Shell 脚本（日志直写 Redis + 文件，通过 Pub/Sub 实时推送）
+// TODO: 若命令以 docker/podman/nerdctl run 开头，后续 Docker 执行器实现时需用 docker stop --time=5 优雅停止容器，
+// 而非直接 kill CLI 进程，因为 SIGTERM 不会传递到容器内 PID 1。
 func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, float64, int64, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e.runningCancelFuncs.Store(req.EventId, cancel)
+	defer e.runningCancelFuncs.Delete(req.EventId)
+
 	if req.Timeout > 0 {
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.Timeout)*time.Second)
 		defer cancel()
 	}
@@ -263,6 +310,7 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, float
 		logger.Info("使用标准模式执行任务", zap.String("event_id", req.EventId))
 		cmd = exec.CommandContext(ctx, "/bin/bash", "-c", req.Command)
 	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if req.WorkingDir != "" {
 		cmd.Dir = req.WorkingDir
@@ -495,6 +543,17 @@ func extractExitCode(err error) (int, error) {
 	}
 
 	return 1, err
+}
+
+// isProcessAlive 检查单个进程是否存活
+func isProcessAlive(pid int) bool {
+	return syscall.Kill(pid, 0) == nil
+}
+
+// isProcessGroupAlive 检查进程组是否仍有存活的进程
+// 通过向进程组发送信号 0 检测：返回 nil 表示至少有一个进程存活，返回 ESRCH 表示进程组已全部消失
+func isProcessGroupAlive(pid int) bool {
+	return syscall.Kill(-pid, 0) == nil
 }
 
 // processStats 保存进程资源采样数据

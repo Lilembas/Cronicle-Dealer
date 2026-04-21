@@ -237,9 +237,9 @@ onUnmounted(() => {
 
           <Column header="执行节点" style="width: 140px">
             <template #body="{ data }">
-              <span v-if="data.node_name" class="target-node">
+              <span v-if="data.node_name" class="target-node" :title="data.node_name">
                 <i class="pi pi-desktop" />
-                <span>{{ data.node_name }}</span>
+                <span class="node-name-text">{{ data.node_name }}</span>
               </span>
               <span v-else class="text-gray-400">-</span>
             </template>
@@ -544,10 +544,11 @@ onUnmounted(() => {
   max-width: 140px;
 }
 
-.target-node span {
+.node-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .target-node i {

@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cronicle/cronicle-next/internal/config"
@@ -66,7 +67,6 @@ func (h *HealthChecker) Start(ctx context.Context) {
 		case <-ticker.C:
 			h.checkAllNodes()
 
-			// 定期扫描孤儿日志（每 20 个检查周期触发一次）
 			orphanLogCheckCounter++
 			if orphanLogCheckCounter >= orphanLogCheckInterval {
 				orphanLogCheckCounter = 0
@@ -89,6 +89,11 @@ func (h *HealthChecker) Wait(timeout time.Duration) bool {
 	}
 }
 
+// isManagerNode 判断节点是否为 Manager
+func isManagerNode(tags string) bool {
+	return strings.Contains(tags, "manager")
+}
+
 // checkAllNodes 检查所有在线节点的健康状态
 func (h *HealthChecker) checkAllNodes() {
 	var nodes []models.Node
@@ -96,6 +101,17 @@ func (h *HealthChecker) checkAllNodes() {
 		logger.Error("健康检查：查询节点失败", zap.Error(err))
 		return
 	}
+
+	// 构建在线 Worker 节点 ID 集合（用于孤儿事件扫描）
+	onlineWorkerIDs := make(map[string]bool)
+	for _, node := range nodes {
+		if !isManagerNode(node.Tags) {
+			onlineWorkerIDs[node.ID] = true
+		}
+	}
+
+	// 扫描孤儿事件：running 状态但所属节点不在线（或不存在）
+	h.cleanupOrphanEventsOnNonexistentNodes(onlineWorkerIDs)
 
 	if len(nodes) == 0 {
 		return
@@ -105,12 +121,10 @@ func (h *HealthChecker) checkAllNodes() {
 	threshold := time.Now().Add(-timeout)
 
 	for _, node := range nodes {
-		// 跳过 Manager 节点（Manager 心跳由独立机制维护）
-		if node.Tags == "manager" {
+		if isManagerNode(node.Tags) {
 			continue
 		}
 
-		// 检查心跳是否超时
 		if node.LastHeartbeat.Before(threshold) {
 			h.handleOfflineNode(node)
 		}
@@ -124,28 +138,24 @@ func (h *HealthChecker) handleOfflineNode(node models.Node) {
 		zap.String("hostname", node.Hostname),
 		zap.Time("last_heartbeat", node.LastHeartbeat))
 
-	// 1. 标记节点为离线
 	if err := storage.DB.Model(&models.Node{}).Where("id = ?", node.ID).
 		Updates(map[string]interface{}{
-			"status":        nodeStatusOffline,
-			"running_jobs":  0,
+			"status":       nodeStatusOffline,
+			"running_jobs": 0,
 		}).Error; err != nil {
 		logger.Error("更新节点状态失败",
 			zap.String("node_id", node.ID),
 			zap.Error(err))
 	}
 
-	// 2. 从内存缓存中移除
 	h.grpcServer.nodes.Delete(node.ID)
 
-	// 3. 清理 Redis Worker 键
 	if err := storage.RemoveWorkerOffline(context.Background(), node.ID); err != nil {
 		logger.Warn("清理 Redis Worker 键失败",
 			zap.String("node_id", node.ID),
 			zap.Error(err))
 	}
 
-	// 4. WebSocket 广播节点下线
 	if h.wsServer != nil {
 		if err := h.wsServer.BroadcastNodeStatus(node.ID, node.Hostname, nodeStatusOffline, 0, 0, 0); err != nil {
 			logger.Warn("推送节点下线状态失败",
@@ -154,10 +164,7 @@ func (h *HealthChecker) handleOfflineNode(node models.Node) {
 		}
 	}
 
-	// 5. 清理该节点的 gRPC 连接
 	h.dispatcher.RemoveNodeClient(node.ID)
-
-	// 6. 清理孤儿事件：将该节点上所有 running 状态的事件标记为 failed
 	h.cleanupOrphanedEvents(node)
 }
 
@@ -181,76 +188,91 @@ func (h *HealthChecker) cleanupOrphanedEvents(node models.Node) {
 		zap.String("hostname", node.Hostname),
 		zap.Int("count", len(orphanedEvents)))
 
-	now := time.Now()
 	for _, event := range orphanedEvents {
 		errMsg := fmt.Sprintf("Worker 节点 %s (%s) 离线，任务被迫终止", node.Hostname, node.ID)
-		// 如果事件有实际的开始时间则保留，否则设为结束时间前的一定时间（估算）
-		var startTime time.Time
-		if event.StartTime != nil {
-			startTime = *event.StartTime
-			logger.Info("保留原有开始时间",
-				zap.String("event_id", event.ID),
-				zap.Time("start_time", startTime))
-		} else {
-			// 估算：假设任务至少运行了 1 秒
-			startTime = now.Add(-1 * time.Second)
-			logger.Info("估算开始时间",
-				zap.String("event_id", event.ID),
-				zap.Time("estimated_start_time", startTime))
-		}
-		duration := int64(now.Sub(startTime).Seconds())
-		logger.Info("更新孤儿事件",
-			zap.String("event_id", event.ID),
-			zap.String("job_id", event.JobID),
-			zap.Time("start_time", startTime),
-			zap.Time("end_time", now),
-			zap.Int64("duration", duration),
-			zap.Int("exit_code", 1))
-		if err := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).
-			Updates(map[string]interface{}{
-				"status":        eventStatusFailed,
-				"start_time":    startTime,
-				"end_time":      now,
-				"duration":      duration,
-				"exit_code":     1,
-				"error_message": errMsg,
-			}).Error; err != nil {
-			logger.Error("更新孤儿事件状态失败",
-				zap.String("event_id", event.ID),
-				zap.Error(err))
+		h.failOrphanedEvent(event, errMsg)
+	}
+}
+
+// cleanupOrphanEventsOnNonexistentNodes 清理所属节点不在线（或已删除）的孤儿事件
+func (h *HealthChecker) cleanupOrphanEventsOnNonexistentNodes(onlineWorkerIDs map[string]bool) {
+	var orphanedEvents []models.Event
+	if err := storage.DB.Where("status = ?", eventStatusRunning).
+		Find(&orphanedEvents).Error; err != nil {
+		logger.Error("查询运行中事件失败", zap.Error(err))
+		return
+	}
+
+	for _, event := range orphanedEvents {
+		if onlineWorkerIDs[event.NodeID] {
 			continue
 		}
 
-		// 写入日志
-		logMsg := fmt.Sprintf("[%s] [Manager] ❌ Worker 节点离线，任务被迫终止: %s\n",
-			now.Format("2006-01-02 15:04:05"), errMsg)
-		if err := storage.SaveLogChunk(context.Background(), event.ID, logMsg); err != nil {
-			logger.Warn("写入孤儿事件日志失败", zap.Error(err))
+		nodeName := event.NodeName
+		if nodeName == "" {
+			nodeName = event.NodeID
 		}
 
-
-			// 下载全量日志到本地并设置 Redis TTL=15min
-			h.grpcServer.DownloadAndExpireLog(context.Background(), event.ID)
-		// WebSocket 广播事件状态变更
-		if h.wsServer != nil {
-			if err := h.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, node.ID, node.Hostname, 1); err != nil {
-				logger.Warn("推送孤儿事件状态失败",
-					zap.String("event_id", event.ID),
-					zap.Error(err))
-			}
-		}
-
-		// 更新 Job 的统计信息
-		if err := storage.DB.Model(&models.Job{}).Where("id = ?", event.JobID).Updates(map[string]interface{}{
-			"last_run_time": now,
-			"failed_runs":   gorm.Expr("failed_runs + 1"),
-		}).Error; err != nil {
-			logger.Warn("更新任务统计信息失败", zap.String("job_id", event.JobID), zap.Error(err))
-		}
-
-		logger.Info("孤儿事件已标记为失败",
-			zap.String("event_id", event.ID),
-			zap.String("job_id", event.JobID),
-			zap.String("node_id", node.ID))
+		errMsg := fmt.Sprintf("Worker 节点 %s (%s) 不在线或已删除，任务被迫终止", nodeName, event.NodeID)
+		h.failOrphanedEvent(event, errMsg)
 	}
+}
+
+// failOrphanedEvent 将单个孤儿事件标记为失败，并完成日志归档、广播、统计更新
+func (h *HealthChecker) failOrphanedEvent(event models.Event, errMsg string) {
+	now := time.Now()
+	var startTime time.Time
+	if event.StartTime != nil {
+		startTime = *event.StartTime
+	} else {
+		startTime = now.Add(-1 * time.Second)
+	}
+	duration := int64(now.Sub(startTime).Seconds())
+
+	if err := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).
+		Updates(map[string]interface{}{
+			"status":        eventStatusFailed,
+			"start_time":    startTime,
+			"end_time":      now,
+			"duration":      duration,
+			"exit_code":     1,
+			"error_message": errMsg,
+		}).Error; err != nil {
+		logger.Error("更新孤儿事件状态失败",
+			zap.String("event_id", event.ID), zap.Error(err))
+		return
+	}
+
+	logMsg := fmt.Sprintf("[%s] [Manager] ❌ %s\n",
+		now.Format("2006-01-02 15:04:05"), errMsg)
+	if err := storage.SaveLogChunk(context.Background(), event.ID, logMsg); err != nil {
+		logger.Warn("写入孤儿事件日志失败", zap.Error(err))
+	}
+
+	h.grpcServer.DownloadAndExpireLog(context.Background(), event.ID)
+
+	nodeName := event.NodeName
+	if nodeName == "" {
+		nodeName = event.NodeID
+	}
+
+	if h.wsServer != nil {
+		if err := h.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, event.NodeID, nodeName, 1); err != nil {
+			logger.Warn("推送孤儿事件状态失败",
+				zap.String("event_id", event.ID),
+				zap.Error(err))
+		}
+	}
+
+	if err := storage.DB.Model(&models.Job{}).Where("id = ?", event.JobID).Updates(map[string]interface{}{
+		"last_run_time": now,
+		"failed_runs":   gorm.Expr("failed_runs + 1"),
+	}).Error; err != nil {
+		logger.Warn("更新任务统计信息失败", zap.String("job_id", event.JobID), zap.Error(err))
+	}
+
+	logger.Info("孤儿事件已标记为失败",
+		zap.String("event_id", event.ID),
+		zap.String("job_id", event.JobID),
+		zap.String("node_id", event.NodeID))
 }

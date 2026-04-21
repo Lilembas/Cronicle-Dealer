@@ -1,12 +1,12 @@
 # 服务器配置
 server:
-  mode: "manager"  # master 或 worker
+  mode: "manager"  # manager 或 worker
   host: "0.0.0.0"
   http_port: 8080
   grpc_port: 9090
   websocket_port: 8081  # WebSocket服务端口
   
-# Master 配置
+# Manager 配置
 manager:
   # 调度配置
   scheduler:
@@ -26,7 +26,7 @@ manager:
 
 # Worker 配置
 worker:
-  # Master 地址
+  # Manager 地址
   manager_address: "localhost:9090"
   
   # 节点信息
@@ -44,7 +44,7 @@ worker:
     max_concurrent_jobs: 10
     default_timeout: 3600  # 秒
 
-  # 认证 Token（必须与 Master 端 security.auth_token 一致）
+  # 认证 Token（必须与 Manager 端 security.auth_token 一致）
   auth_token: "change-me-in-production"
 
 # 数据库配置

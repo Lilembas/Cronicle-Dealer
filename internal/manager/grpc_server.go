@@ -141,6 +141,12 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 
 	node := s.buildNode(nodeID, req)
 
+	// 合并 Worker 配置的 tags 和 DB 中已有的 tags，去重
+	if !isNewNode && existingNode.Tags != "" {
+		mergedTags := mergeTags(existingNode.Tags, node.Tags)
+		node.Tags = tagsToString(mergedTags)
+	}
+
 	if isNewNode {
 		// 创建新节点记录
 		if err := storage.DB.Create(node).Error; err != nil {
@@ -534,4 +540,25 @@ func calculatePercent(value, total float64) float64 {
 func tagsToString(tags []string) string {
 	b, _ := json.Marshal(tags)
 	return string(b)
+}
+
+func mergeTags(existingJSON, incomingJSON string) []string {
+	var existing, incoming []string
+	if err := json.Unmarshal([]byte(existingJSON), &existing); err != nil {
+		logger.Warn("解析已有节点 tags 失败", zap.String("tags", existingJSON), zap.Error(err))
+	}
+	if err := json.Unmarshal([]byte(incomingJSON), &incoming); err != nil {
+		logger.Warn("解析传入节点 tags 失败", zap.String("tags", incomingJSON), zap.Error(err))
+	}
+
+	seen := make(map[string]struct{}, len(existing))
+	for _, t := range existing {
+		seen[t] = struct{}{}
+	}
+	for _, t := range incoming {
+		if _, ok := seen[t]; !ok {
+			existing = append(existing, t)
+		}
+	}
+	return existing
 }
