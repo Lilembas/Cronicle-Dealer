@@ -9,12 +9,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"runtime"
 
 	"google.golang.org/grpc"
 	"go.uber.org/zap"
@@ -48,12 +46,14 @@ type Executor struct {
 	abortedJobs       sync.Map // map[eventID]string
 	jobCount     int
 	mu           sync.Mutex
+	metrics      *sysmetrics.Collector
 }
 
 // NewExecutor 创建执行器
 func NewExecutor(cfg *config.ExecutorConfig) *Executor {
 	return &Executor{
-		cfg: cfg,
+		cfg:     cfg,
+		metrics: sysmetrics.NewCollector(),
 	}
 }
 
@@ -346,7 +346,7 @@ func (e *Executor) executeShell(req *pb.TaskRequest) (int, string, string, float
 	// 启动进程资源采样
 	var stats processStats
 	monitorStop := make(chan struct{})
-	go monitorProcess(cmd.Process.Pid, monitorStop, &stats)
+	go e.monitorProcess(cmd.Process.Pid, monitorStop, &stats)
 
 	// 用于收集完整输出和 stderr
 	var fullOutput bytes.Buffer
@@ -500,16 +500,24 @@ func (e *Executor) reportToManager(req *pb.TaskRequest, startTime, endTime time.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// 获取节点当前的资源信息（用于记录执行时的节点总量）
+	nodeInfo, _ := e.metrics.GetResourceInfo()
+	usage := &pb.ResourceUsage{
+		CpuPercent:  cpuPercent,
+		MemoryBytes: memoryBytes,
+	}
+	if nodeInfo != nil {
+		usage.CpuCores = nodeInfo.CPUCores
+		usage.MemoryTotal = int64(nodeInfo.MemoryTotal * 1024 * 1024 * 1024) // GB 转 Bytes
+	}
+
 	result := &pb.TaskResult{
-		JobId:      req.JobId,
-		EventId:    req.EventId,
-		ExitCode:   int32(exitCode),
-		StartTime:  startTime.Unix(),
-		EndTime:    endTime.Unix(),
-		ResourceUsage: &pb.ResourceUsage{
-			CpuPercent:  cpuPercent,
-			MemoryBytes: memoryBytes,
-		},
+		JobId:         req.JobId,
+		EventId:       req.EventId,
+		ExitCode:      int32(exitCode),
+		StartTime:     startTime.Unix(),
+		EndTime:       endTime.Unix(),
+		ResourceUsage: usage,
 	}
 
 	if execErr != nil {
@@ -564,30 +572,26 @@ type processStats struct {
 	mu          sync.Mutex
 }
 
-// monitorProcess 采样进程 CPU 和 RSS：启动后立即采一次，之后每 1 秒采样，停止前再采一次
-func monitorProcess(pid int, stop <-chan struct{}, stats *processStats) {
+// monitorProcess 采样进程 CPU 和 RSS
+func (e *Executor) monitorProcess(pid int, stop <-chan struct{}, stats *processStats) {
 	const sampleInterval = 1 * time.Second
-	var prevUTime, prevSTime, prevTotal uint64
-	inited := false
+	pc := e.metrics.NewProcessCollector(pid)
 
 	sample := func() {
-		cpuPercent, rssBytes, totalDelta, uTime, sTime, ok := readProcessStat(pid, prevUTime, prevSTime, prevTotal, inited)
+		metric, ok := pc.GetMetric()
 		if !ok {
 			return
 		}
 		stats.mu.Lock()
-		if cpuPercent > 0 {
-			stats.cpuPercents = append(stats.cpuPercents, cpuPercent)
+		// 只有在获得有效 CPU 读数（非首次初始化采样）时才记录
+		if metric.CPUUsage > 0 || pc.IsInitialized() {
+			stats.cpuPercents = append(stats.cpuPercents, metric.CPUUsage)
 		}
-		stats.memoryBytes = append(stats.memoryBytes, rssBytes)
+		stats.memoryBytes = append(stats.memoryBytes, metric.MemoryBytes)
 		stats.mu.Unlock()
-		prevUTime = uTime
-		prevSTime = sTime
-		prevTotal = totalDelta
-		inited = true
 	}
 
-	// 立即采样一次（初始化 prev 值 + 获取初始内存）
+	// 立即采样一次（初始化）
 	sample()
 
 	ticker := time.NewTicker(sampleInterval)
@@ -596,7 +600,6 @@ func monitorProcess(pid int, stop <-chan struct{}, stats *processStats) {
 	for {
 		select {
 		case <-stop:
-			// 停止前再采一次（进程可能仍在，捕获最后一次数据）
 			sample()
 			return
 		case <-ticker.C:
@@ -605,65 +608,6 @@ func monitorProcess(pid int, stop <-chan struct{}, stats *processStats) {
 	}
 }
 
-// readProcessStat 读取 /proc/<pid>/stat，返回 CPU% 和 RSS bytes
-func readProcessStat(pid int, prevUTime, prevSTime, prevTotal uint64, inited bool) (cpuPercent float64, rssBytes int64, total uint64, uTime, sTime uint64, ok bool) {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
-	if err != nil {
-		return 0, 0, 0, 0, 0, false
-	}
-
-	// /proc/<pid>/stat 格式：pid (comm) state ppid pgrp session tty_nr tpgid flags
-	//   minflt cminflt majflt cmajflt utime stime cutime cstime priority nice
-	//   num_threads itrealvalue starttime vsize rss ...
-	// comm 可能包含括号和空格，从最后一个 ')' 之后开始解析
-	content := string(data)
-	idx := strings.LastIndex(content, ")")
-	if idx < 0 {
-		return 0, 0, 0, 0, 0, false
-	}
-	fields := strings.Fields(content[idx+2:])
-	if len(fields) < 22 {
-		return 0, 0, 0, 0, 0, false
-	}
-
-	// fields 索引（从 ')' 之后算起，state=0）：utime=11, stime=12, rss=21
-	utime, err := strconv.ParseUint(fields[11], 10, 64)
-	if err != nil {
-		return 0, 0, 0, 0, 0, false
-	}
-	stime, err := strconv.ParseUint(fields[12], 10, 64)
-	if err != nil {
-		return 0, 0, 0, 0, 0, false
-	}
-	rss, err := strconv.ParseInt(fields[21], 10, 64)
-	if err != nil {
-		return 0, 0, 0, 0, 0, false
-	}
-
-	// 读取系统总 CPU 时间（同 /proc/stat 第一行）
-	sysTotal, _, err := sysmetrics.ReadCPUStat()
-	if err != nil {
-		return 0, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
-	}
-
-	if !inited || prevTotal == 0 {
-		return 0, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
-	}
-
-	totalDelta := sysTotal - prevTotal
-	procDelta := (utime - prevUTime) + (stime - prevSTime)
-	if totalDelta == 0 {
-		return 0, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
-	}
-
-	cpuCores := uint64(runtime.NumCPU())
-	usage := float64(procDelta) / float64(totalDelta) * 100.0 * float64(cpuCores)
-	if usage < 0 {
-		usage = 0
-	}
-
-	return usage, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
-}
 
 // calcAvgCPU 计算平均 CPU 使用率
 func calcAvgCPU(samples []float64) float64 {

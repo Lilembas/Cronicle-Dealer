@@ -374,7 +374,7 @@ const getStatusText = (status: string) => {
               </Column>
               <Column field="next_run_time" header="下次执行" style="width: 170px">
                 <template #body="{ data }">
-                  <span class="time-text">{{ data.next_run_time ? new Date(data.next_run_time).toLocaleString('zh-CN') : '-' }}</span>
+                  <span class="time-text">{{ (data.enabled && data.next_run_time) ? new Date(data.next_run_time).toLocaleString('zh-CN') : '-' }}</span>
                 </template>
               </Column>
               <Column header="操作" frozen alignFrozen="right" alignHeader="center" style="width: 160px">

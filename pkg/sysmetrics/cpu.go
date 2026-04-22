@@ -128,11 +128,19 @@ func (c *Collector) computeCPUFromCgroup(usageNanos uint64, cores int32) (float6
 
 	elapsed := now.Sub(c.lastCPUTime)
 	c.lastCPUTime = now
-	if elapsed <= 0 {
+	
+	// If called too quickly (less than 100ms), results are unreliable
+	if elapsed < 100*time.Millisecond {
 		return 0, cores, nil
 	}
 
-	wallNanos := uint64(elapsed.Seconds()) * uint64(time.Second) * uint64(cores)
+	// Correct calculation using nanoseconds for both usage delta and wall time
+	// wallNanos is the total available CPU nanoseconds across all cores in the elapsed period
+	wallNanos := uint64(elapsed.Nanoseconds()) * uint64(cores)
+	if wallNanos == 0 {
+		return 0, cores, nil
+	}
+
 	usage := float64(delta) / float64(wallNanos) * 100
 	return clampPercent(usage), cores, nil
 }
@@ -202,6 +210,154 @@ func readCgroupV2CPUUsage() (uint64, error) {
 		}
 	}
 	return 0, fmt.Errorf("cpu.stat 中未找到 usage_usec")
+}
+
+// GetMetric 采样进程及其所有子进程当前的 CPU 和内存指标之和 (进程树)
+func (pc *ProcessCollector) GetMetric() (*ProcessMetric, bool) {
+	// 1. 查找所有后代进程 PID
+	pids := pc.getAllDescendantPIDs(pc.pid)
+	pids = append(pids, pc.pid)
+
+	var totalUTime, totalSTime uint64
+	var totalRSS int64
+	var foundCount int
+
+	// 2. 累加所有进程的资源占用
+	for _, pid := range pids {
+		u, s, rss, err := pc.readIndividualPIDStat(pid)
+		if err == nil {
+			totalUTime += u
+			totalSTime += s
+			totalRSS += rss
+			foundCount++
+		}
+	}
+
+	// 如果连父进程都没找到，说明任务结束了
+	if foundCount == 0 {
+		return nil, false
+	}
+
+	// 3. 读取系统总 CPU 时间
+	sysTotal, _, err := ReadCPUStat()
+	if err != nil {
+		return &ProcessMetric{CPUUsage: 0, MemoryBytes: totalRSS}, true
+	}
+
+	// 如果是首次采样，记录初始值并返回
+	if !pc.initialized {
+		pc.lastUTime = totalUTime
+		pc.lastSTime = totalSTime
+		pc.lastSysTotal = sysTotal
+		pc.initialized = true
+		return &ProcessMetric{CPUUsage: 0, MemoryBytes: totalRSS}, true
+	}
+
+	totalDelta := sysTotal - pc.lastSysTotal
+	procDelta := (totalUTime - pc.lastUTime) + (totalSTime - pc.lastSTime)
+
+	pc.lastUTime = totalUTime
+	pc.lastSTime = totalSTime
+	pc.lastSysTotal = sysTotal
+
+	if totalDelta == 0 {
+		return &ProcessMetric{CPUUsage: 0, MemoryBytes: totalRSS}, true
+	}
+
+	// 计算相对于全系统的百分比，并乘以核心数得到进程树的总百分比 (0-100% * Cores)
+	usage := float64(procDelta) / float64(totalDelta) * 100.0 * float64(pc.parent.cpuCores)
+
+	// 对于进程监控，不需要 100% 的上限，因为可以多核并行
+	if usage < 0 {
+		usage = 0
+	}
+
+	return &ProcessMetric{
+		CPUUsage:    usage,
+		MemoryBytes: totalRSS,
+	}, true
+}
+
+// readIndividualPIDStat 读取单个 PID 的统计数据
+func (pc *ProcessCollector) readIndividualPIDStat(pid int) (uTime, sTime uint64, rss int64, err error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	content := string(data)
+	idx := strings.LastIndex(content, ")")
+	if idx < 0 {
+		return 0, 0, 0, fmt.Errorf("invalid format")
+	}
+	fields := strings.Fields(content[idx+2:])
+	if len(fields) < 22 {
+		return 0, 0, 0, fmt.Errorf("insufficient fields")
+	}
+
+	uTime, _ = strconv.ParseUint(fields[11], 10, 64)
+	sTime, _ = strconv.ParseUint(fields[12], 10, 64)
+	rssPages, _ := strconv.ParseInt(fields[21], 10, 64)
+	rss = rssPages * int64(os.Getpagesize())
+	
+	return uTime, sTime, rss, nil
+}
+
+// getAllDescendantPIDs 查找所有后代进程 ID（单次全量扫描模式）
+func (c *ProcessCollector) getAllDescendantPIDs(rootPID int) []int {
+	// 1. 一次性读取所有进程并建立 父进程 -> 子进程列表 的映射
+	parentToChildren := make(map[int][]int)
+	files, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+
+	for _, f := range files {
+		pid, err := strconv.Atoi(f.Name())
+		if err != nil {
+			continue
+		}
+		if ppid, ok := getParentPID(pid); ok {
+			parentToChildren[ppid] = append(parentToChildren[ppid], pid)
+		}
+	}
+
+	// 2. 使用广度优先搜索 (BFS) 从 rootPID 开始查找所有后代
+	descendants := make([]int, 0)
+	queue := []int{rootPID}
+	
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		
+		if children, ok := parentToChildren[curr]; ok {
+			descendants = append(descendants, children...)
+			queue = append(queue, children...)
+		}
+	}
+
+	return descendants
+}
+
+// getParentPID 获取指定进程的父进程 PID
+func getParentPID(pid int) (int, bool) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0, false
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "PPid:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				if ppid, err := strconv.Atoi(fields[1]); err == nil {
+					return ppid, true
+				}
+			}
+			break
+		}
+	}
+	return 0, false
 }
 
 func clampPercent(v float64) float64 {

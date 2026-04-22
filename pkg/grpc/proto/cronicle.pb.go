@@ -943,6 +943,8 @@ type ResourceUsage struct {
 	CpuPercent     float64                `protobuf:"fixed64,1,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"`
 	MemoryBytes    int64                  `protobuf:"varint,2,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
 	ElapsedSeconds float64                `protobuf:"fixed64,3,opt,name=elapsed_seconds,json=elapsedSeconds,proto3" json:"elapsed_seconds,omitempty"`
+	CpuCores       int32                  `protobuf:"varint,4,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	MemoryTotal    int64                  `protobuf:"varint,5,opt,name=memory_total,json=memoryTotal,proto3" json:"memory_total,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -994,6 +996,20 @@ func (x *ResourceUsage) GetMemoryBytes() int64 {
 func (x *ResourceUsage) GetElapsedSeconds() float64 {
 	if x != nil {
 		return x.ElapsedSeconds
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *ResourceUsage) GetMemoryTotal() int64 {
+	if x != nil {
+		return x.MemoryTotal
 	}
 	return 0
 }
@@ -1075,12 +1091,14 @@ const file_pkg_grpc_proto_cronicle_proto_rawDesc = "" +
 	"disk_usage\x18\x04 \x01(\x01R\tdiskUsage\x12\x1d\n" +
 	"\n" +
 	"disk_total\x18\x05 \x01(\x01R\tdiskTotal\x12\x1b\n" +
-	"\tcpu_cores\x18\x06 \x01(\x05R\bcpuCores\"|\n" +
+	"\tcpu_cores\x18\x06 \x01(\x05R\bcpuCores\"\xbc\x01\n" +
 	"\rResourceUsage\x12\x1f\n" +
 	"\vcpu_percent\x18\x01 \x01(\x01R\n" +
 	"cpuPercent\x12!\n" +
 	"\fmemory_bytes\x18\x02 \x01(\x03R\vmemoryBytes\x12'\n" +
-	"\x0felapsed_seconds\x18\x03 \x01(\x01R\x0eelapsedSeconds*+\n" +
+	"\x0felapsed_seconds\x18\x03 \x01(\x01R\x0eelapsedSeconds\x12\x1b\n" +
+	"\tcpu_cores\x18\x04 \x01(\x05R\bcpuCores\x12!\n" +
+	"\fmemory_total\x18\x05 \x01(\x03R\vmemoryTotal*+\n" +
 	"\bTaskType\x12\t\n" +
 	"\x05SHELL\x10\x00\x12\b\n" +
 	"\x04HTTP\x10\x01\x12\n" +

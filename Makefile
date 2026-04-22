@@ -7,8 +7,9 @@ all: proto build
 proto:
 	@echo "生成 Protobuf 代码..."
 	@export PATH=$$(go env GOPATH)/bin:$$PATH; \
-	protoc --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	protoc --go_out=pkg/grpc/pb --go_opt=paths=source_relative \
+		--go-grpc_out=pkg/grpc/pb --go-grpc_opt=paths=source_relative \
+		--proto_path=pkg/grpc/proto \
 		pkg/grpc/proto/*.proto
 	@echo "✅ Protobuf 代码生成完成"
 

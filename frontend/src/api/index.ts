@@ -58,7 +58,9 @@ export interface Event {
     log_path: string
     log_size: number
     cpu_percent: number
+    cpu_cores?: number
     memory_bytes: number
+    memory_total?: number
     retry_count: number
     is_retry: boolean
     parent_event_id: string

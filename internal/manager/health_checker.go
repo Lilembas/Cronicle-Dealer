@@ -54,6 +54,7 @@ func (h *HealthChecker) Start(ctx context.Context) {
 	// 启动时立即执行一次检查
 	h.checkAllNodes()
 	h.cleanupLogs()
+	h.cleanupMetrics()
 
 	interval := time.Duration(h.cfg.CheckInterval) * time.Second
 	ticker := time.NewTicker(interval)
@@ -75,6 +76,7 @@ func (h *HealthChecker) Start(ctx context.Context) {
 				maintenanceCounter = 0
 				h.grpcServer.RecoverOrphanLogs(ctx)
 				h.cleanupLogs()
+				h.cleanupMetrics()
 			}
 		}
 	}
@@ -291,5 +293,24 @@ func (h *HealthChecker) cleanupLogs() {
 	}
 	if err := storage.TruncateOverSizeLogs(h.storageCfg.MaxLogSizeMB); err != nil {
 		logger.Warn("截断超大日志失败", zap.Error(err))
+	}
+}
+
+// cleanupMetrics 执行指标数据清理：删除过期历史负载记录
+func (h *HealthChecker) cleanupMetrics() {
+	if h.storageCfg == nil || h.storageCfg.LogRetentionDays <= 0 {
+		return
+	}
+
+	retention := time.Duration(h.storageCfg.LogRetentionDays) * 24 * time.Hour
+	threshold := time.Now().Add(-retention)
+
+	result := storage.DB.Where("timestamp < ?", threshold).Delete(&models.NodeMetric{})
+	if result.Error != nil {
+		logger.Warn("清理过期负载指标失败", zap.Error(result.Error))
+	} else if result.RowsAffected > 0 {
+		logger.Info("已清理过期负载指标",
+			zap.Int64("count", result.RowsAffected),
+			zap.Int("retention_days", h.storageCfg.LogRetentionDays))
 	}
 }

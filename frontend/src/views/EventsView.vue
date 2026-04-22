@@ -322,11 +322,19 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column field="cpu_percent" header="CPU" style="width: 100px" alignHeader="center">
+          <Column field="cpu_percent" header="CPU" style="width: 130px" alignHeader="center">
             <template #body="{ data }">
               <div class="cpu-metric" v-if="data.cpu_percent !== undefined && data.cpu_percent !== null">
-                <ProgressBar :value="Math.min(data.cpu_percent, 100)" :showValue="false" class="mini-progress" />
-                <span class="metric-text">{{ data.cpu_percent.toFixed(1) }}%</span>
+                <!-- 进度条显示总体占比：(当前等效核数 / 总核数) * 100 -->
+                <ProgressBar 
+                  :value="data.cpu_cores ? Math.min((data.cpu_percent / (data.cpu_cores * 100)) * 100, 100) : Math.min(data.cpu_percent, 100)" 
+                  :showValue="false" 
+                  class="mini-progress" 
+                />
+                <span class="metric-text">
+                  {{ data.cpu_percent.toFixed(1) }}%
+                  <span v-if="data.cpu_cores" class="text-xs opacity-60"> / {{ data.cpu_cores }} Cores</span>
+                </span>
               </div>
               <span v-else>-</span>
             </template>

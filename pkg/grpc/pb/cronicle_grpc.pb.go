@@ -31,19 +31,19 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// Manager 与 Worker 之间的核心通信服务
+// Master 与 Worker 之间的核心通信服务
 type CronicleServiceClient interface {
-	// Worker 向 Manager 注册
+	// Worker 向 Master 注册
 	RegisterNode(ctx context.Context, in *RegisterNodeRequest, opts ...grpc.CallOption) (*RegisterNodeResponse, error)
 	// Worker 发送心跳
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// Worker 下线通知
 	UnregisterNode(ctx context.Context, in *UnregisterNodeRequest, opts ...grpc.CallOption) (*UnregisterNodeResponse, error)
-	// Manager 向 Worker 提交任务
+	// Master 向 Worker 提交任务
 	SubmitTask(ctx context.Context, in *TaskRequest, opts ...grpc.CallOption) (*TaskResponse, error)
 	// Worker 上报任务执行结果
 	ReportTaskResult(ctx context.Context, in *TaskResult, opts ...grpc.CallOption) (*TaskResultAck, error)
-	// Manager 中止任务
+	// Master 中止任务
 	AbortTask(ctx context.Context, in *AbortTaskRequest, opts ...grpc.CallOption) (*AbortTaskResponse, error)
 }
 
@@ -119,19 +119,19 @@ func (c *cronicleServiceClient) AbortTask(ctx context.Context, in *AbortTaskRequ
 // All implementations must embed UnimplementedCronicleServiceServer
 // for forward compatibility.
 //
-// Manager 与 Worker 之间的核心通信服务
+// Master 与 Worker 之间的核心通信服务
 type CronicleServiceServer interface {
-	// Worker 向 Manager 注册
+	// Worker 向 Master 注册
 	RegisterNode(context.Context, *RegisterNodeRequest) (*RegisterNodeResponse, error)
 	// Worker 发送心跳
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// Worker 下线通知
 	UnregisterNode(context.Context, *UnregisterNodeRequest) (*UnregisterNodeResponse, error)
-	// Manager 向 Worker 提交任务
+	// Master 向 Worker 提交任务
 	SubmitTask(context.Context, *TaskRequest) (*TaskResponse, error)
 	// Worker 上报任务执行结果
 	ReportTaskResult(context.Context, *TaskResult) (*TaskResultAck, error)
-	// Manager 中止任务
+	// Master 中止任务
 	AbortTask(context.Context, *AbortTaskRequest) (*AbortTaskResponse, error)
 	mustEmbedUnimplementedCronicleServiceServer()
 }

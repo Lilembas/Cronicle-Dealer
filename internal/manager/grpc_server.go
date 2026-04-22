@@ -33,8 +33,8 @@ type GRPCServer struct {
 
 	cfg        *config.Config
 	grpcServer *grpc.Server
-	nodes      sync.Map
-	wsServer   *WebSocketServer // WebSocket服务器
+	nodes          sync.Map
+	wsServer       *WebSocketServer // WebSocket服务器
 }
 
 // NewGRPCServer 创建 gRPC 服务器
@@ -307,7 +307,9 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 		"duration":     req.EndTime - req.StartTime,
 		"exit_code":    req.ExitCode,
 		"cpu_percent":  req.ResourceUsage.CpuPercent,
+		"cpu_cores":    req.ResourceUsage.CpuCores,
 		"memory_bytes": req.ResourceUsage.MemoryBytes,
+		"memory_total": req.ResourceUsage.MemoryTotal,
 	}
 
 	if req.ErrorMessage != "" {
@@ -485,6 +487,25 @@ func (s *GRPCServer) updateNodeHeartbeat(node *models.Node, req *pb.HeartbeatReq
 			float64(node.CPUUsage), float64(node.MemoryPercent), node.RunningJobs); err != nil {
 			logger.Warn("推送节点状态失败", zap.String("node_id", node.ID), zap.Error(err))
 		}
+	}
+
+	// 指标持久化逻辑：每次心跳均存一次数据到 DB
+	now := time.Now()
+	metric := &models.NodeMetric{
+		NodeID:        node.ID,
+		CPUUsage:      node.CPUUsage,
+		CPUCores:      int(req.Resources.CpuCores),
+		MemoryPercent: node.MemoryPercent,
+		MemoryTotal:   req.Resources.MemoryTotal,
+		MemoryUsage:   req.Resources.MemoryUsage,
+		DiskPercent:   node.DiskPercent,
+		DiskTotal:     req.Resources.DiskTotal,
+		DiskUsage:     req.Resources.DiskUsage,
+		RunningJobs:   node.RunningJobs,
+		Timestamp:     now,
+	}
+	if err := storage.DB.Create(metric).Error; err != nil {
+		logger.Warn("保存节点指标历史失败", zap.String("node_id", node.ID), zap.Error(err))
 	}
 
 	// 执行任务对账，清理僵尸任务

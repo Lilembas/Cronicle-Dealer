@@ -121,3 +121,29 @@ func isUnlimitedMemory(val uint64) bool {
 	const maxInt64 uint64 = 9223372036854771712
 	return val >= maxInt64
 }
+
+// getProcessMemory 读取特定进程的内存占用 (RSS) 字节数
+func (c *Collector) getProcessMemory(pid int) (int64, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	if err != nil {
+		return 0, err
+	}
+
+	content := string(data)
+	idx := strings.LastIndex(content, ")")
+	if idx < 0 {
+		return 0, fmt.Errorf("invalid stat format")
+	}
+	fields := strings.Fields(content[idx+2:])
+	if len(fields) < 22 {
+		return 0, fmt.Errorf("insufficient fields in stat")
+	}
+
+	// rss 是第 21 个字段 (从 ')' 之后算起)
+	rssPages, err := strconv.ParseInt(fields[21], 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return rssPages * int64(os.Getpagesize()), nil
+}

@@ -488,11 +488,16 @@ onUnmounted(() => {
               <span class="uptime-text">{{ formatUptime(data.registered_at) }}</span>
             </template>
           </Column>
-          <Column header="CPU 负载" style="width: 130px" alignHeader="center">
+          <Column header="CPU 负载" style="width: 180px" alignHeader="center">
             <template #body="{ data }">
               <div class="usage-metric" v-if="data.status === 'online'">
                 <ProgressBar :value="Math.min(data.cpu_usage || 0, 100)" :showValue="false" class="mini-progress" :class="getUsageClass(data.cpu_usage)" />
-                <span class="usage-text">{{ (data.cpu_usage || 0).toFixed(1) }}%</span>
+                <div class="flex items-center gap-1.5 whitespace-nowrap">
+                  <span class="usage-text font-bold">{{ (data.cpu_usage || 0).toFixed(1) }}%</span>
+                  <span class="text-[10px] text-gray-400 font-medium">
+                    ({{ ((data.cpu_usage || 0) * (data.cpu_cores || 1)).toFixed(1) }}% / {{ data.cpu_cores || 1 }} Cores)
+                  </span>
+                </div>
               </div>
               <span v-else class="text-gray-300">-</span>
             </template>

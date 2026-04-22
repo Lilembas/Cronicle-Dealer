@@ -2,6 +2,7 @@ package sysmetrics
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -19,6 +20,12 @@ type ResourceInfo struct {
 	DiskTotal   float64 // GB
 }
 
+// ProcessMetric 进程级资源指标
+type ProcessMetric struct {
+	CPUUsage    float64 // 百分比 (0-100 * 核心数)
+	MemoryBytes int64   // 字节 (RSS)
+}
+
 // Collector 系统指标采集器，每个进程创建一个实例
 type Collector struct {
 	mu           sync.Mutex
@@ -29,6 +36,17 @@ type Collector struct {
 	// 启动时一次性检测，之后只读
 	isContainer   bool
 	cgroupVersion int // 1 或 2
+	cpuCores      int32
+}
+
+// ProcessCollector 进程级指标采集器，用于跟踪特定 PID 的历史状态
+type ProcessCollector struct {
+	pid          int
+	parent       *Collector
+	lastUTime    uint64
+	lastSTime    uint64
+	lastSysTotal uint64
+	initialized  bool
 }
 
 // NewCollector 创建采集器，执行一次性的容器和 cgroup 版本检测
@@ -39,14 +57,31 @@ func NewCollector() *Collector {
 	}
 
 	if c.isContainer {
+		c.cpuCores = c.getCPUCoresCgroup()
 		logger.Info("检测到容器环境",
 			zap.Int("cgroup_version", c.cgroupVersion),
+			zap.Int32("cpu_cores", c.cpuCores),
 		)
 	} else {
-		logger.Info("检测到宿主机环境（非容器）")
+		c.cpuCores = int32(runtime.NumCPU())
+		logger.Info("检测到宿主机环境（非容器）",
+			zap.Int32("cpu_cores", c.cpuCores))
 	}
 
 	return c
+}
+
+// NewProcessCollector 为特定进程创建采集器
+func (c *Collector) NewProcessCollector(pid int) *ProcessCollector {
+	return &ProcessCollector{
+		pid:    pid,
+		parent: c,
+	}
+}
+
+// IsInitialized 返回采集器是否已完成初始化采样
+func (pc *ProcessCollector) IsInitialized() bool {
+	return pc.initialized
 }
 
 // GetResourceInfo 采集当前 CPU、内存、磁盘指标

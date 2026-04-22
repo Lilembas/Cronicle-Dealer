@@ -331,6 +331,19 @@ func (m *Manager) updateManagerHeartbeat() error {
 		return err
 	}
 
+	// 持久化 Manager 节点的历史指标数据
+	metric := &models.NodeMetric{
+		NodeID:        m.managerNodeID,
+		CPUUsage:      resources.CPUUsage,
+		MemoryPercent: calculatePercent(resources.MemoryUsed, resources.MemoryTotal),
+		DiskPercent:   calculatePercent(resources.DiskUsed, resources.DiskTotal),
+		RunningJobs:   0, // Manager 节点目前不直接运行任务
+		Timestamp:     time.Now(),
+	}
+	if err := storage.DB.Create(metric).Error; err != nil {
+		logger.Warn("保存 Manager 节点指标历史失败", zap.Error(err))
+	}
+
 	return nil
 }
 

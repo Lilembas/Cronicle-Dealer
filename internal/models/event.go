@@ -33,7 +33,9 @@ type Event struct {
 	
 	// 资源使用
 	CPUPercent   float64 `json:"cpu_percent"`
+	CPUCores     int32   `json:"cpu_cores"`    // 节点总核数
 	MemoryBytes  int64   `json:"memory_bytes"`
+	MemoryTotal  int64   `json:"memory_total"` // 节点总内存 (字节)
 	
 	// 重试信息
 	RetryCount   int    `gorm:"default:0" json:"retry_count"`

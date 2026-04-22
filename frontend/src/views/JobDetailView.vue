@@ -232,7 +232,7 @@ const formatDuration = (seconds: number) => {
                 <i class="pi pi-calendar-plus"></i>
                 <span>下次执行</span>
               </div>
-              <div class="info-value">{{ job.next_run_time ? new Date(job.next_run_time).toLocaleString('zh-CN') : '-' }}</div>
+              <div class="info-value">{{ (job.enabled && job.next_run_time) ? new Date(job.next_run_time).toLocaleString('zh-CN') : '-' }}</div>
             </div>
           </div>
           <div v-if="job.description" class="desc-row">

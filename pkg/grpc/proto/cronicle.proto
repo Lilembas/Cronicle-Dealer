@@ -138,4 +138,6 @@ message ResourceUsage {
   double cpu_percent = 1;
   int64 memory_bytes = 2;
   double elapsed_seconds = 3;
+  int32 cpu_cores = 4;
+  int64 memory_total = 5;
 }

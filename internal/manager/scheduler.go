@@ -70,6 +70,11 @@ func (s *Scheduler) LoadJobs() error {
 		}
 	}
 
+	// Clear next_run_time for all disabled jobs
+	if err := storage.DB.Model(&models.Job{}).Where("enabled = ?", false).Update("next_run_time", nil).Error; err != nil {
+		logger.Warn("清理禁用任务的下次执行时间失败", zap.Error(err))
+	}
+
 	return nil
 }
 
@@ -128,6 +133,11 @@ func (s *Scheduler) RemoveJob(jobID string) {
 		s.jobs.Delete(jobID)
 		s.entries.Delete(jobID)
 		logger.Info("从调度器移除任务", zap.String("job_id", jobID))
+	}
+
+	// Always clear next_run_time in DB when removing from scheduler (disabling or deleting)
+	if err := storage.DB.Model(&models.Job{}).Where("id = ?", jobID).Update("next_run_time", nil).Error; err != nil {
+		logger.Warn("清除任务下次执行时间失败", zap.String("job_id", jobID), zap.Error(err))
 	}
 }
 

@@ -101,6 +101,7 @@ func (s *APIServer) setupRoutes() {
 		nodes.GET("", s.listNodes)
 		nodes.GET("/tags", s.listNodeTags)
 		nodes.GET("/:id", s.getNode)
+		nodes.GET("/:id/metrics", s.getNodeMetrics)
 	}
 
 	nodesAdmin := protected.Group("/nodes")
@@ -611,6 +612,30 @@ func (s *APIServer) listNodeTags(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tags)
+}
+
+func (s *APIServer) getNodeMetrics(c *gin.Context) {
+	nodeID := c.Param("id")
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "100"))
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	var metrics []models.NodeMetric
+	if err := storage.DB.Where("node_id = ?", nodeID).
+		Order("timestamp DESC").
+		Limit(limit).
+		Find(&metrics).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 返回时按时间升序排列，方便前端绘图
+	for i, j := 0, len(metrics)-1; i < j; i, j = i+1, j-1 {
+		metrics[i], metrics[j] = metrics[j], metrics[i]
+	}
+
+	c.JSON(http.StatusOK, metrics)
 }
 
 func (s *APIServer) getNode(c *gin.Context) {
