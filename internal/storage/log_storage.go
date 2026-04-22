@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -312,19 +314,7 @@ func SubscribeLog(ctx context.Context) (<-chan string, func()) {
 
 // CloseLogHandle 关闭指定 eventID 的日志文件句柄
 func CloseLogHandle(eventID string) {
-	logFilePath := getLogFilePath(eventID)
-
-	fileCacheMutex.Lock()
-	defer fileCacheMutex.Unlock()
-
-	if file, ok := fileCache[logFilePath]; ok {
-		if err := file.Close(); err != nil {
-			logger.Warn("关闭日志文件句柄失败",
-				zap.String("event_id", eventID),
-				zap.Error(err))
-		}
-		delete(fileCache, logFilePath)
-	}
+	closeCachedFile(getLogFilePath(eventID))
 }
 
 // ParseLogMessage 解析 Pub/Sub 日志消息，返回 eventID 和 content
@@ -336,8 +326,12 @@ func ParseLogMessage(msg string) (eventID, content string) {
 	return msg[:idx], msg[idx+len(logMessageSep):]
 }
 
-// CleanupOldLogs 清理旧日志文件（定期调用）
+// CleanupOldLogs 清理过期日志文件
 func CleanupOldLogs(days int) error {
+	if days <= 0 {
+		return nil
+	}
+
 	cutoffTime := time.Now().AddDate(0, 0, -days)
 
 	entries, err := os.ReadDir(logDir)
@@ -356,9 +350,10 @@ func CleanupOldLogs(days int) error {
 			continue
 		}
 
-		// 删除过期文件
 		if info.ModTime().Before(cutoffTime) {
 			path := filepath.Join(logDir, entry.Name())
+			// 先关闭可能缓存的文件句柄
+			closeCachedFile(path)
 			if err := os.Remove(path); err != nil {
 				logger.Warn("删除旧日志文件失败",
 					zap.String("path", path),
@@ -369,9 +364,125 @@ func CleanupOldLogs(days int) error {
 		}
 	}
 
-	logger.Info("清理旧日志完成",
-		zap.Int("days", days),
-		zap.Int("cleaned_count", cleanedCount))
+	if cleanedCount > 0 {
+		logger.Info("清理过期日志完成",
+			zap.Int("retention_days", days),
+			zap.Int("cleaned_count", cleanedCount))
+	}
 
 	return nil
+}
+
+// TruncateOverSizeLogs 截断超过大小限制的日志文件（保留尾部内容）
+func TruncateOverSizeLogs(maxSizeMB int) error {
+	if maxSizeMB <= 0 {
+		return nil
+	}
+
+	maxBytes := int64(maxSizeMB) * 1024 * 1024
+
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return fmt.Errorf("读取日志目录失败: %w", err)
+	}
+
+	truncatedCount := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		if info.Size() <= maxBytes {
+			continue
+		}
+
+		path := filepath.Join(logDir, entry.Name())
+		// 先关闭可能缓存的文件句柄
+		closeCachedFile(path)
+
+		// 保留文件尾部 maxSizeMB 的内容
+		if err := truncateFileTail(path, maxBytes); err != nil {
+			logger.Warn("截断日志文件失败",
+				zap.String("path", path),
+				zap.Int64("size", info.Size()),
+				zap.Error(err))
+		} else {
+			truncatedCount++
+		}
+	}
+
+	if truncatedCount > 0 {
+		logger.Info("截断超大日志完成",
+			zap.Int("max_size_mb", maxSizeMB),
+			zap.Int("truncated_count", truncatedCount))
+	}
+
+	return nil
+}
+
+// closeCachedFile 关闭并移除指定路径的缓存文件句柄
+func closeCachedFile(path string) {
+	fileCacheMutex.Lock()
+	defer fileCacheMutex.Unlock()
+
+	if file, ok := fileCache[path]; ok {
+		file.Close()
+		delete(fileCache, path)
+	}
+}
+
+// truncateFileTail 截断文件，只保留尾部 maxBytes 字节
+func truncateFileTail(path string, maxBytes int64) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Size() <= maxBytes {
+		return nil
+	}
+
+	if _, err := f.Seek(fi.Size()-maxBytes, io.SeekStart); err != nil {
+		return err
+	}
+
+	// 跳到第一个换行符，避免截断在行中间
+	buf := make([]byte, 4096)
+	for {
+		n, readErr := f.Read(buf)
+		if n > 0 {
+			if idx := bytes.IndexByte(buf[:n], '\n'); idx >= 0 {
+				f.Seek(fi.Size()-maxBytes+int64(idx)+1, io.SeekStart)
+				break
+			}
+		}
+		if readErr != nil {
+			break
+		}
+	}
+
+	tmpPath := path + ".tmp"
+	tf, err := os.Create(tmpPath)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(tf, f); err != nil {
+		tf.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+	tf.Close()
+
+	return os.Rename(tmpPath, path)
 }

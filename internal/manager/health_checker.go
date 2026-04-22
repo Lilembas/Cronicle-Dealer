@@ -18,6 +18,7 @@ import (
 // 定期扫描 Worker 节点心跳，检测离线节点并清理孤儿事件
 type HealthChecker struct {
 	cfg        *config.HeartbeatConfig
+	storageCfg *config.StorageConfig
 	dispatcher *Dispatcher
 	grpcServer *GRPCServer
 	wsServer   *WebSocketServer
@@ -27,12 +28,14 @@ type HealthChecker struct {
 // NewHealthChecker 创建健康检查器
 func NewHealthChecker(
 	cfg *config.HeartbeatConfig,
+	storageCfg *config.StorageConfig,
 	dispatcher *Dispatcher,
 	grpcServer *GRPCServer,
 	wsServer *WebSocketServer,
 ) *HealthChecker {
 	return &HealthChecker{
 		cfg:        cfg,
+		storageCfg: storageCfg,
 		dispatcher: dispatcher,
 		grpcServer: grpcServer,
 		wsServer:   wsServer,
@@ -50,14 +53,14 @@ func (h *HealthChecker) Start(ctx context.Context) {
 
 	// 启动时立即执行一次检查
 	h.checkAllNodes()
+	h.cleanupLogs()
 
 	interval := time.Duration(h.cfg.CheckInterval) * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	// 定期扫描孤儿日志（每 20 个检查周期触发一次）
-	orphanLogCheckCounter := 0
-	const orphanLogCheckInterval = 20
+	maintenanceCounter := 0
+	const maintenanceInterval = 20
 
 	for {
 		select {
@@ -67,10 +70,11 @@ func (h *HealthChecker) Start(ctx context.Context) {
 		case <-ticker.C:
 			h.checkAllNodes()
 
-			orphanLogCheckCounter++
-			if orphanLogCheckCounter >= orphanLogCheckInterval {
-				orphanLogCheckCounter = 0
+			maintenanceCounter++
+			if maintenanceCounter >= maintenanceInterval {
+				maintenanceCounter = 0
 				h.grpcServer.RecoverOrphanLogs(ctx)
+				h.cleanupLogs()
 			}
 		}
 	}
@@ -275,4 +279,17 @@ func (h *HealthChecker) failOrphanedEvent(event models.Event, errMsg string) {
 		zap.String("event_id", event.ID),
 		zap.String("job_id", event.JobID),
 		zap.String("node_id", event.NodeID))
+}
+
+// cleanupLogs 执行日志清理：删除过期日志、截断超大日志
+func (h *HealthChecker) cleanupLogs() {
+	if h.storageCfg == nil {
+		return
+	}
+	if err := storage.CleanupOldLogs(h.storageCfg.LogRetentionDays); err != nil {
+		logger.Warn("清理过期日志失败", zap.Error(err))
+	}
+	if err := storage.TruncateOverSizeLogs(h.storageCfg.MaxLogSizeMB); err != nil {
+		logger.Warn("截断超大日志失败", zap.Error(err))
+	}
 }

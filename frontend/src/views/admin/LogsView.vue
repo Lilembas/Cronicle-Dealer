@@ -260,8 +260,9 @@ function clearLogs() {
 }
 
 .log-fields {
-  color: #585b70;
+  color: #9399b2;
   font-size: 12px;
+  opacity: 0.85;
 }
 
 .log-container::-webkit-scrollbar {

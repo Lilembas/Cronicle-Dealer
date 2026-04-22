@@ -99,9 +99,6 @@ const cron = ref({
 })
 
 const cronPresets = [
-  { label: '每秒', value: '* * * * * *' },
-  { label: '每10秒', value: '*/10 * * * * *' },
-  { label: '每30秒', value: '*/30 * * * * *' },
   { label: '每分钟', value: '0 * * * * *' },
   { label: '每5分钟', value: '0 */5 * * * *' },
   { label: '每30分钟', value: '0 */30 * * * *' },
@@ -216,6 +213,7 @@ const loadJob = async () => {
 }
 
 const buildCronExpr = () => {
+  cronManualEdit.value = true
   formData.value.cron_expr = [
     cron.value.second,
     cron.value.minute,
@@ -253,10 +251,15 @@ const updateCronFromExpr = (value: string) => {
 const selectPreset = (value: string) => {
   formData.value.cron_expr = value
   updateCronFromExpr(value)
-  validateCronExpr()
 }
 
 const cronError = ref('')
+
+const isPresetActive = (value: string) => {
+  if (cronManualEdit.value) return false
+  return formData.value.cron_expr === value
+}
+const cronManualEdit = ref(false)
 
 const validateCronField = (value: string, min: number, max: number): boolean => {
   if (value === '*') return true
@@ -444,13 +447,16 @@ onMounted(() => {
 
             <div class="flex flex-col gap-2 mb-8">
               <label class="font-medium text-sm">快速预设</label>
-              <SelectButton
-                v-model="formData.cron_expr"
-                :options="cronPresets"
-                optionLabel="label"
-                optionValue="value"
-                @change="(e: any) => selectPreset(e.value)"
-              />
+              <div class="preset-grid">
+                <button
+                  v-for="preset in cronPresets"
+                  :key="preset.value"
+                  :class="['preset-chip', isPresetActive(preset.value) ? 'preset-active' : '']"
+                  @click="selectPreset(preset.value)"
+                >
+                  {{ preset.label }}
+                </button>
+              </div>
             </div>
 
             <div class="flex flex-col gap-1 mb-2">
@@ -702,6 +708,49 @@ onMounted(() => {
   margin-left: 12px;
   font-size: 12px;
   color: #ef4444;
+}
+
+.preset-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.preset-chip:hover {
+  background: #e0f2fe;
+  border-color: #bae6fd;
+  color: #0284c7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px -1px rgba(14, 165, 233, 0.08);
+}
+
+.preset-active {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 600;
+  box-shadow: 0 1px 3px -1px rgba(59, 130, 246, 0.15);
+}
+
+.preset-active:hover {
+  background: #bfdbfe;
+  border-color: #60a5fa;
+  color: #1e40af;
 }
 
 .env-row {

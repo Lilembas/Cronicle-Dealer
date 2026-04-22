@@ -1,6 +1,8 @@
 package manager
 
 import (
+	"time"
+
 	"go.uber.org/zap/zapcore"
 )
 
@@ -31,6 +33,10 @@ func (c *logHookCore) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapc
 }
 
 func (c *logHookCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
+	if entry.Time.IsZero() {
+		entry.Time = time.Now()
+	}
+
 	fieldsJSON := "{}"
 	if len(fields) > 0 {
 		buf, _ := fieldsEncoder.EncodeEntry(entry, fields)
