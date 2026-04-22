@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Frontend dev artifacts
+frontend/node_modules
+frontend/dist
+
+# Build artifacts
+bin/
+*.exe
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+
+# Coverage
+coverage.out
+coverage.html
+
+# Docker
+deployments/
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Test
+test/

@@ -1,36 +1,57 @@
-FROM golang:1.22-alpine AS builder
+# ===== Stage 1: 前端构建 =====
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ .
+RUN npm run build
+
+# ===== Stage 2: 后端构建 =====
+FROM golang:1.25-bookworm AS backend-builder
 
 WORKDIR /app
 
-# 安装构建依赖
-RUN apk add --no-cache git make protobuf-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/* \
+    && go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
+    && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-# 复制 go.mod 和 go.sum
 COPY go.mod go.sum ./
 RUN go mod download
 
-# 复制源代码
 COPY . .
 
-# 构建 Manager
-RUN go build -o /app/bin/manager cmd/manager/main.go
+# 生成 protobuf 代码
+RUN PATH="$PATH:$(go env GOPATH)/bin" protoc --go_out=pkg/grpc/pb --go_opt=paths=source_relative \
+    --go-grpc_out=pkg/grpc/pb --go-grpc_opt=paths=source_relative \
+    --proto_path=pkg/grpc/proto \
+    pkg/grpc/proto/*.proto
 
-# 运行镜像
-FROM alpine:latest
+# 从前端阶段复制构建产物
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+# 构建 Manager
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/bin/manager cmd/manager/main.go
+
+# ===== Stage 3: 运行环境 =====
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
-# 安装运行时依赖
-RUN apk add --no-cache ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
-# 从构建镜像复制二进制文件
-COPY --from=builder /app/bin/manager /app/manager
+COPY --from=backend-builder /app/bin/manager /app/manager
+COPY --from=backend-builder /app/frontend/dist /app/frontend/dist
 
-# 创建日志目录
 RUN mkdir -p /app/logs
 
-# 暴露端口
-EXPOSE 8080 9090
+EXPOSE 8080 9090 8081
 
-# 运行 Manager
 CMD ["/app/manager"]

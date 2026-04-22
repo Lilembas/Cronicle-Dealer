@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Redis 缓存
+  # Redis
   redis:
     image: redis:7-alpine
     container_name: cronicle-redis
@@ -18,21 +18,25 @@ services:
     networks:
       - cronicle_network
 
-  # Manager 节点
+  # Manager
   manager:
     build:
-      context: ../..
-      dockerfile: deployments/docker/manager.Dockerfile
+      context: ..
+      dockerfile: docker/manager.Dockerfile
     container_name: cronicle-manager
     ports:
       - "8080:8080"
       - "9090:9090"
+      - "8081:8081"
     environment:
-      - SERVER_MODE=manager
+      - DATABASE_DRIVER=sqlite
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SECURITY_JWT_SECRET=change-me-in-production
+      - SECURITY_AUTH_TOKEN=change-me-in-production
+      - LOGGING_LEVEL=info
     volumes:
-      - ./config.yaml:/app/config.yaml
+      - manager_data:/app/data
       - manager_logs:/app/logs
     depends_on:
       redis:
@@ -41,15 +45,15 @@ services:
       - cronicle_network
     restart: unless-stopped
 
-  # Worker 节点（可扩展）
+  # Worker
   worker:
     build:
-      context: ../..
-      dockerfile: deployments/docker/worker.Dockerfile
+      context: ..
+      dockerfile: docker/worker.Dockerfile
     environment:
-      - SERVER_MODE=worker
-      - MASTER_ADDRESS=manager:9090
-      - WORKER_TAGS=["default","docker"]
+      - WORKER_MANAGER_ADDRESS=manager:9090
+      - WORKER_AUTH_TOKEN=change-me-in-production
+      - WORKER_NODE_TAGS=["default"]
     volumes:
       - worker_logs:/app/logs
     depends_on:
@@ -62,6 +66,7 @@ services:
 
 volumes:
   redis_data:
+  manager_data:
   manager_logs:
   worker_logs:
 

@@ -1,33 +1,42 @@
-FROM golang:1.22-alpine AS builder
+# ===== Stage 1: 后端构建 =====
+FROM golang:1.25-bookworm AS builder
 
 WORKDIR /app
 
-# 安装构建依赖
-RUN apk add --no-cache git make protobuf-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/* \
+    && go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
+    && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
-# 复制 go.mod 和 go.sum
 COPY go.mod go.sum ./
 RUN go mod download
 
-# 复制源代码
 COPY . .
 
-# 构建 Worker
-RUN go build -o /app/bin/worker cmd/worker/main.go
+# 生成 protobuf 代码
+RUN PATH="$PATH:$(go env GOPATH)/bin" protoc --go_out=pkg/grpc/pb --go_opt=paths=source_relative \
+    --go-grpc_out=pkg/grpc/pb --go-grpc_opt=paths=source_relative \
+    --proto_path=pkg/grpc/proto \
+    pkg/grpc/proto/*.proto
 
-# 运行镜像
-FROM alpine:latest
+# 构建 Worker
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/bin/worker cmd/worker/main.go
+
+# ===== Stage 2: 运行环境 (Debian + Python) =====
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# 安装运行时依赖（Worker 需要能执行 shell 命令）
-RUN apk add --no-cache ca-certificates tzdata bash curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    bash \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# 从构建镜像复制二进制文件
 COPY --from=builder /app/bin/worker /app/worker
 
-# 创建日志目录
 RUN mkdir -p /app/logs
 
-# 运行 Worker
 CMD ["/app/worker"]
