@@ -356,7 +356,6 @@ cronicle-next/
 ├── deployments/           # 部署
 │   └── docker/           # Docker 配置
 ├── docs/                  # 文档
-├── test/                  # 测试
 └── config.example.yaml    # 配置模板
 ```
 
@@ -673,19 +672,9 @@ curl -X POST http://localhost:8080/api/v1/jobs \
 
 ### 7.1 运行测试
 
-**集成测试**：
 ```bash
-./test/run_integration_test.sh
-```
-
-**E2E 测试**：
-```bash
-./test/run_e2e_test.sh
-```
-
-**Worker 测试**：
-```bash
-./test/run_worker_test.sh
+go test ./internal/manager/...
+go test ./internal/worker/...
 ```
 
 ### 7.2 单元测试
@@ -985,7 +974,7 @@ make run-worker
 cd frontend && npm run dev
 
 # 运行测试
-./test/run_e2e_test.sh
+go test ./...
 
 # 构建
 make build

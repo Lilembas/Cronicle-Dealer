@@ -127,8 +127,6 @@ npm run dev -- --host=0.0.0.0
 
 ### 开发文档
 - [项目总结](docs/SUMMARY.md) - 高层状态与下一步
-- [测试指南](test/TESTING_GUIDE.md) - 测试相关说明
-- [故障排查](test/TROUBLESHOOTING.md) - 常见问题解决
 
 ## 🗺️ 路线图
 
