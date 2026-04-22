@@ -93,7 +93,7 @@ func (m *Manager) startServices() error {
 	m.consumerCancel = cancel
 	go m.taskConsumer.Start(consumerCtx)
 
-	m.scheduler = NewScheduler(&m.cfg.Manager.Scheduler)
+	m.scheduler = NewScheduler(m.cfg)
 	if err := m.scheduler.Start(); err != nil {
 		return err
 	}

@@ -20,11 +20,12 @@ manager:
     timeout: 30  # 秒，超过此时间未收到心跳视为离线
     check_interval: 5  # 秒
 
-  # 分发重试配置
-  dispatch_retry:
-    max_retries: 1          # 最大重试次数（最多重试1次，共2次调度机会）
-    base_delay_sec: 2       # 基础退避延迟（秒），指数退避 base * 2^(n-1)
     max_delay_sec: 30       # 退避上限（秒）
+  
+  # 数据保留策略
+  history:
+    event_retention_days: 30   # 任务执行记录保留天数
+    metric_retention_days: 7   # 节点负载历史保留天数
 
 # Worker 配置
 worker:

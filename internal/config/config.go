@@ -25,6 +25,13 @@ type ManagerConfig struct {
 	Scheduler      SchedulerConfig     `mapstructure:"scheduler"`
 	Heartbeat      HeartbeatConfig     `mapstructure:"heartbeat"`
 	DispatchRetry  DispatchRetryConfig `mapstructure:"dispatch_retry"`
+	History        HistoryConfig       `mapstructure:"history"`
+}
+
+// HistoryConfig 历史数据保留配置
+type HistoryConfig struct {
+	EventRetentionDays  int `mapstructure:"event_retention_days"`  // 任务记录保留天数，默认 30
+	MetricRetentionDays int `mapstructure:"metric_retention_days"` // 节点负载保留天数，默认 7
 }
 
 // DispatchRetryConfig 分发重试配置
@@ -170,6 +177,8 @@ func setDefaults() {
 	viper.SetDefault("manager.dispatch_retry.max_retries", 1)
 	viper.SetDefault("manager.dispatch_retry.base_delay_sec", 2)
 	viper.SetDefault("manager.dispatch_retry.max_delay_sec", 30)
+	viper.SetDefault("manager.history.event_retention_days", 30)
+	viper.SetDefault("manager.history.metric_retention_days", 7)
 
 	// Worker 默认值
 	viper.SetDefault("worker.executor.grpc_port", 9090)

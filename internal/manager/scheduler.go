@@ -19,14 +19,14 @@ import (
 
 // Scheduler 任务调度器
 type Scheduler struct {
-	cfg    *config.SchedulerConfig
+	cfg    *config.Config
 	cron   *cron.Cron
 	jobs   sync.Map // map[string]*models.Job
 	entries sync.Map // map[string]cron.EntryID
 }
 
 // NewScheduler 创建调度器
-func NewScheduler(cfg *config.SchedulerConfig) *Scheduler {
+func NewScheduler(cfg *config.Config) *Scheduler {
 	return &Scheduler{
 		cfg:  cfg,
 		cron: cron.New(cron.WithSeconds()),
@@ -35,7 +35,7 @@ func NewScheduler(cfg *config.SchedulerConfig) *Scheduler {
 
 // Start 启动调度器
 func (s *Scheduler) Start() error {
-	if !s.cfg.Enabled {
+	if !s.cfg.Manager.Scheduler.Enabled {
 		logger.Info("调度器已禁用")
 		return nil
 	}
@@ -47,9 +47,67 @@ func (s *Scheduler) Start() error {
 	}
 
 	s.cron.Start()
+	s.StartCleanupJob() // 启动数据清理任务
 
 	logger.Info("调度器启动成功")
 	return nil
+}
+
+// StartCleanupJob 启动数据清理任务（每天凌晨 3 点执行）
+func (s *Scheduler) StartCleanupJob() {
+	retention := s.cfg.Manager.History
+	if retention.EventRetentionDays <= 0 {
+		retention.EventRetentionDays = 30 // 默认 30 天
+	}
+	if retention.MetricRetentionDays <= 0 {
+		retention.MetricRetentionDays = 7 // 默认 7 天
+	}
+
+	// 每天凌晨 3:00 执行一次
+	_, err := s.cron.AddFunc("0 0 3 * * *", func() {
+		s.cleanupHistory(retention)
+	})
+
+	if err != nil {
+		logger.Error("添加清理任务到调度器失败", zap.Error(err))
+	} else {
+		logger.Info("已添加数据清理定时任务 (每日 03:00)",
+			zap.Int("event_retention_days", retention.EventRetentionDays),
+			zap.Int("metric_retention_days", retention.MetricRetentionDays))
+	}
+}
+
+// cleanupHistory 执行实际的清理逻辑
+func (s *Scheduler) cleanupHistory(retention config.HistoryConfig) {
+	logger.Info("开始执行历史数据清理...")
+
+	// 1. 清理数据库记录
+	s.deleteOldRecords("任务记录", "created_at < ?", retention.EventRetentionDays, &models.Event{})
+	s.deleteOldRecords("节点指标", "timestamp < ?", retention.MetricRetentionDays, &models.NodeMetric{})
+
+	// 2. 清理物理日志文件
+	storageCfg := s.cfg.Storage
+	if err := storage.CleanupOldLogs(storageCfg.LogRetentionDays); err != nil {
+		logger.Error("清理过期日志文件失败", zap.Error(err))
+	}
+	if err := storage.TruncateOverSizeLogs(storageCfg.MaxLogSizeMB); err != nil {
+		logger.Error("截断超大日志文件失败", zap.Error(err))
+	}
+
+	logger.Info("历史数据清理完成")
+}
+
+// deleteOldRecords 通用的过期记录清理助手
+func (s *Scheduler) deleteOldRecords(name, query string, days int, model interface{}) {
+	cutoff := time.Now().AddDate(0, 0, -days)
+	res := storage.DB.Where(query, cutoff).Delete(model)
+	if res.Error != nil {
+		logger.Error(fmt.Sprintf("清理%s失败", name), zap.Error(res.Error))
+		return
+	}
+	if res.RowsAffected > 0 {
+		logger.Info(fmt.Sprintf("已清理旧%s", name), zap.Int64("count", res.RowsAffected))
+	}
 }
 
 // LoadJobs 从数据库加载任务
