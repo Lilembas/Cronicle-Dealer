@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"time"
 )
 
@@ -56,4 +57,18 @@ func BoolValue(b *bool) bool {
 // BoolPtr 创建布尔指针
 func BoolPtr(b bool) *bool {
 	return &b
+}
+
+// GetLocalIP 获取本机非回环 IPv4 地址
+func GetLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "127.0.0.1"
+	}
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+			return ipNet.IP.String()
+		}
+	}
+	return "127.0.0.1"
 }

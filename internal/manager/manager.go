@@ -1,16 +1,9 @@
 package manager
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"os"
-	"runtime"
-	"strconv"
-	"strings"
-	"sync"
-	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -20,23 +13,8 @@ import (
 	"github.com/cronicle/cronicle-next/internal/models"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-next/pkg/sysmetrics"
 	"github.com/cronicle/cronicle-next/pkg/utils"
-)
-
-type nodeResources struct {
-	CpuUsage     float64
-	MemoryUsage  float64
-	MemoryTotal  float64
-	DiskUsage    float64
-	DiskTotal    float64
-	CpuCores     int32
-}
-
-var (
-	cpuStatsMu     sync.Mutex
-	lastCPUTotal   uint64
-	lastCPUIdle    uint64
-	cpuStatsInited bool
 )
 
 type Manager struct {
@@ -52,12 +30,14 @@ type Manager struct {
 	healthChecker  *HealthChecker
 	healthCancel   context.CancelFunc
 	logSubCancel   context.CancelFunc // 日志订阅器取消函数
-	managerNodeID   string // Manager 节点自己的 ID
+	managerNodeID  string             // Manager 节点自己的 ID
+	metrics        *sysmetrics.Collector
 }
 
 func NewManager(cfg *config.Config) *Manager {
 	return &Manager{
-		cfg: cfg,
+		cfg:     cfg,
+		metrics: sysmetrics.NewCollector(),
 	}
 }
 
@@ -197,9 +177,17 @@ func (m *Manager) registerManagerAsNode() error {
 		return fmt.Errorf("获取主机名失败: %w", err)
 	}
 
-	ip := getLocalIP()
+	ip := utils.GetLocalIP()
 	pid := int32(os.Getpid())
 	resources, _ := m.getResourceInfo()
+	logger.Info("Manager 资源信息",
+		zap.Float64("cpu_usage", resources.CPUUsage),
+		zap.Int32("cpu_cores", resources.CPUCores),
+		zap.Float64("mem_used_gb", resources.MemoryUsed),
+		zap.Float64("mem_total_gb", resources.MemoryTotal),
+		zap.Float64("disk_used_gb", resources.DiskUsed),
+		zap.Float64("disk_total_gb", resources.DiskTotal),
+	)
 
 	var existingNode models.Node
 	err = storage.DB.Where("hostname = ? AND ip = ?", hostname, ip).First(&existingNode).Error
@@ -212,15 +200,15 @@ func (m *Manager) registerManagerAsNode() error {
 			"tags":            "manager",
 			"pid":             pid,
 			"status":          "online",
-			"last_heartbeat":   time.Now(),
-			"cpu_usage":       resources.CpuUsage,
-			"cpu_cores":       resources.CpuCores,
-			"memory_usage":    resources.MemoryUsage,
+			"last_heartbeat":  time.Now(),
+			"cpu_usage":       resources.CPUUsage,
+			"cpu_cores":       resources.CPUCores,
+			"memory_usage":    resources.MemoryUsed,
 			"memory_total":    resources.MemoryTotal,
-			"memory_percent":  calculatePercent(resources.MemoryUsage, resources.MemoryTotal),
-			"disk_usage":      resources.DiskUsage,
+			"memory_percent":  calculatePercent(resources.MemoryUsed, resources.MemoryTotal),
+			"disk_usage":      resources.DiskUsed,
 			"disk_total":      resources.DiskTotal,
-			"disk_percent":    calculatePercent(resources.DiskUsage, resources.DiskTotal),
+			"disk_percent":    calculatePercent(resources.DiskUsed, resources.DiskTotal),
 		}
 		if err := storage.DB.Model(&models.Node{}).Where("id = ?", nodeID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("更新 Manager 节点失败: %w", err)
@@ -243,14 +231,14 @@ func (m *Manager) registerManagerAsNode() error {
 			Status:         "online",
 			Version:        "0.1.0",
 			LastHeartbeat:  time.Now(),
-			CPUUsage:       resources.CpuUsage,
-			CPUCores:       int(resources.CpuCores),
-			MemoryUsage:    resources.MemoryUsage,
+			CPUUsage:       resources.CPUUsage,
+			CPUCores:       int(resources.CPUCores),
+			MemoryUsage:    resources.MemoryUsed,
 			MemoryTotal:    resources.MemoryTotal,
-			MemoryPercent:  calculatePercent(resources.MemoryUsage, resources.MemoryTotal),
-			DiskUsage:      resources.DiskUsage,
+			MemoryPercent:  calculatePercent(resources.MemoryUsed, resources.MemoryTotal),
+			DiskUsage:      resources.DiskUsed,
 			DiskTotal:      resources.DiskTotal,
-			DiskPercent:    calculatePercent(resources.DiskUsage, resources.DiskTotal),
+			DiskPercent:    calculatePercent(resources.DiskUsed, resources.DiskTotal),
 		}
 		if err := storage.DB.Create(node).Error; err != nil {
 			return fmt.Errorf("创建 Manager 节点失败: %w", err)
@@ -323,20 +311,20 @@ func (m *Manager) updateManagerHeartbeat() error {
 	resources, err := m.getResourceInfo()
 	if err != nil {
 		logger.Warn("获取 Manager 资源信息失败", zap.Error(err))
-		resources = &nodeResources{}
+		resources = &sysmetrics.ResourceInfo{}
 	}
 
 	updates := map[string]interface{}{
-		"last_heartbeat":   time.Now(),
-		"status":           "online",
-		"cpu_usage":        resources.CpuUsage,
-		"cpu_cores":        resources.CpuCores,
-		"memory_usage":     resources.MemoryUsage,
-		"memory_total":     resources.MemoryTotal,
-		"memory_percent":   calculatePercent(resources.MemoryUsage, resources.MemoryTotal),
-		"disk_usage":       resources.DiskUsage,
-		"disk_total":       resources.DiskTotal,
-		"disk_percent":     calculatePercent(resources.DiskUsage, resources.DiskTotal),
+		"last_heartbeat": time.Now(),
+		"status":         "online",
+		"cpu_usage":      resources.CPUUsage,
+		"cpu_cores":      resources.CPUCores,
+		"memory_usage":   resources.MemoryUsed,
+		"memory_total":   resources.MemoryTotal,
+		"memory_percent": calculatePercent(resources.MemoryUsed, resources.MemoryTotal),
+		"disk_usage":     resources.DiskUsed,
+		"disk_total":     resources.DiskTotal,
+		"disk_percent":   calculatePercent(resources.DiskUsed, resources.DiskTotal),
 	}
 
 	if err := storage.DB.Model(&models.Node{}).Where("id = ?", m.managerNodeID).Updates(updates).Error; err != nil {
@@ -346,180 +334,6 @@ func (m *Manager) updateManagerHeartbeat() error {
 	return nil
 }
 
-func (m *Manager) getResourceInfo() (*nodeResources, error) {
-	cpuUsage, err := getCPUUsagePercent()
-	if err != nil {
-		return nil, err
-	}
-
-	memUsedGB, memTotalGB, err := getMemoryUsageGB()
-	if err != nil {
-		return nil, err
-	}
-
-	diskUsedGB, diskTotalGB, err := getDiskUsageGB("/")
-	if err != nil {
-		return nil, err
-	}
-
-	return &nodeResources{
-		CpuUsage:    cpuUsage,
-		MemoryUsage: memUsedGB,
-		MemoryTotal: memTotalGB,
-		DiskUsage:   diskUsedGB,
-		DiskTotal:   diskTotalGB,
-		CpuCores:    int32(runtime.NumCPU()),
-	}, nil
-}
-
-func getLocalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "127.0.0.1"
-	}
-
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String()
-			}
-		}
-	}
-
-	return "127.0.0.1"
-}
-
-func getCPUUsagePercent() (float64, error) {
-	total, idle, err := readCPUStat()
-	if err != nil {
-		return 0, err
-	}
-
-	cpuStatsMu.Lock()
-	defer cpuStatsMu.Unlock()
-
-	if !cpuStatsInited {
-		lastCPUTotal = total
-		lastCPUIdle = idle
-		cpuStatsInited = true
-		return 0, nil
-	}
-
-	totalDelta := total - lastCPUTotal
-	idleDelta := idle - lastCPUIdle
-	lastCPUTotal = total
-	lastCPUIdle = idle
-
-	if totalDelta == 0 {
-		return 0, nil
-	}
-
-	usage := (1 - float64(idleDelta)/float64(totalDelta)) * 100
-	if usage < 0 {
-		usage = 0
-	}
-	if usage > 100 {
-		usage = 100
-	}
-	return usage, nil
-}
-
-func readCPUStat() (uint64, uint64, error) {
-	f, err := os.Open("/proc/stat")
-	if err != nil {
-		return 0, 0, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	if !scanner.Scan() {
-		if scanErr := scanner.Err(); scanErr != nil {
-			return 0, 0, scanErr
-		}
-		return 0, 0, fmt.Errorf("读取 /proc/stat 失败")
-	}
-
-	fields := strings.Fields(scanner.Text())
-	if len(fields) < 5 || fields[0] != "cpu" {
-		return 0, 0, fmt.Errorf("无效的 /proc/stat 格式")
-	}
-
-	var total uint64
-	for i := 1; i < len(fields); i++ {
-		v, parseErr := strconv.ParseUint(fields[i], 10, 64)
-		if parseErr != nil {
-			return 0, 0, parseErr
-		}
-		total += v
-	}
-
-	idle, err := strconv.ParseUint(fields[4], 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-	if len(fields) > 5 {
-		iowait, parseErr := strconv.ParseUint(fields[5], 10, 64)
-		if parseErr == nil {
-			idle += iowait
-		}
-	}
-
-	return total, idle, nil
-}
-
-func getMemoryUsageGB() (usedGB, totalGB float64, err error) {
-	f, err := os.Open("/proc/meminfo")
-	if err != nil {
-		return 0, 0, err
-	}
-	defer f.Close()
-
-	var totalKB, availableKB uint64
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "MemTotal:") {
-			totalKB, _ = parseMemInfoKB(line)
-		} else if strings.HasPrefix(line, "MemAvailable:") {
-			availableKB, _ = parseMemInfoKB(line)
-		}
-	}
-	if scanErr := scanner.Err(); scanErr != nil {
-		return 0, 0, scanErr
-	}
-
-	if totalKB == 0 {
-		return 0, 0, fmt.Errorf("MemTotal 无效")
-	}
-	if availableKB > totalKB {
-		availableKB = 0
-	}
-
-	usedKB := totalKB - availableKB
-	totalGB = float64(totalKB) / 1024.0 / 1024.0
-	usedGB = float64(usedKB) / 1024.0 / 1024.0
-	return usedGB, totalGB, nil
-}
-
-func parseMemInfoKB(line string) (uint64, error) {
-	fields := strings.Fields(line)
-	if len(fields) < 2 {
-		return 0, fmt.Errorf("无效 meminfo 行: %s", line)
-	}
-	return strconv.ParseUint(fields[1], 10, 64)
-}
-
-func getDiskUsageGB(path string) (usedGB, totalGB float64, err error) {
-	var fs syscall.Statfs_t
-	if err := syscall.Statfs(path, &fs); err != nil {
-		return 0, 0, err
-	}
-
-	total := fs.Blocks * uint64(fs.Bsize)
-	available := fs.Bfree * uint64(fs.Bsize)
-	used := total - available
-
-	totalGB = float64(total) / 1024.0 / 1024.0 / 1024.0
-	usedGB = float64(used) / 1024.0 / 1024.0 / 1024.0
-	return usedGB, totalGB, nil
+func (m *Manager) getResourceInfo() (*sysmetrics.ResourceInfo, error) {
+	return m.metrics.GetResourceInfo()
 }

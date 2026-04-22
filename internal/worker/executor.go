@@ -23,6 +23,7 @@ import (
 	"github.com/cronicle/cronicle-next/internal/config"
 	"github.com/cronicle/cronicle-next/internal/storage"
 	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-next/pkg/sysmetrics"
 )
 
 const (
@@ -640,7 +641,7 @@ func readProcessStat(pid int, prevUTime, prevSTime, prevTotal uint64, inited boo
 	}
 
 	// 读取系统总 CPU 时间（同 /proc/stat 第一行）
-	sysTotal, _, err := readCPUStat()
+	sysTotal, _, err := sysmetrics.ReadCPUStat()
 	if err != nil {
 		return 0, rss * int64(os.Getpagesize()), sysTotal, utime, stime, true
 	}
