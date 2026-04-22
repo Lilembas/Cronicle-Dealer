@@ -41,8 +41,7 @@ func main() {
 
 	logger.Info("节点启动中...",
 		zap.String("node_type", nodeType),
-		zap.String("version", version),
-		zap.String("mode", cfg.Server.Mode))
+		zap.String("version", version))
 
 	// 初始化存储
 	logger.Info("连接数据库...")
@@ -92,8 +91,8 @@ func main() {
 	defer m.Stop()
 
 	logger.Info("节点启动成功",
-		zap.Int("http_port", cfg.Server.HTTPPort),
-		zap.Int("grpc_port", cfg.Server.GRPCPort))
+		zap.Int("http_port", cfg.Manager.HTTPPort),
+		zap.Int("grpc_port", cfg.Manager.GRPCPort))
 
 	// 等待退出信号
 	sigChan := make(chan os.Signal, 1)

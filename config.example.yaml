@@ -1,13 +1,15 @@
-# 服务器配置
-server:
-  mode: "manager"  # manager 或 worker
+# 前端配置
+web:
+  host: "0.0.0.0"
+  port: 5173
+
+# Manager 配置
+manager:
   host: "0.0.0.0"
   http_port: 8080
   grpc_port: 9090
-  websocket_port: 8081  # WebSocket服务端口
-  
-# Manager 配置
-manager:
+  websocket_port: 8081
+
   # 调度配置
   scheduler:
     enabled: true
@@ -41,7 +43,6 @@ worker:
   # 任务执行配置
   executor:
     grpc_port: 9091
-    max_concurrent_jobs: 10
     default_timeout: 3600  # 秒
 
   # 认证 Token（必须与 Manager 端 security.auth_token 一致）

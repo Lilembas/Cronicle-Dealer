@@ -4,6 +4,13 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var fieldsEncoder = zapcore.NewJSONEncoder(zapcore.EncoderConfig{
+	EncodeLevel:    zapcore.LowercaseLevelEncoder,
+	EncodeTime:     zapcore.ISO8601TimeEncoder,
+	EncodeDuration: zapcore.SecondsDurationEncoder,
+	EncodeCaller:   zapcore.ShortCallerEncoder,
+})
+
 type logHookCore struct {
 	zapcore.Core
 	buffer *LogBuffer
@@ -15,29 +22,18 @@ func (c *logHookCore) With(fields []zapcore.Field) zapcore.Core {
 
 func (c *logHookCore) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
 	if c.Enabled(entry.Level) {
+		if ce == nil {
+			ce = &zapcore.CheckedEntry{}
+		}
 		ce = ce.AddCore(entry, c)
 	}
-	return c.Core.Check(entry, ce)
+	return ce
 }
 
 func (c *logHookCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	fieldsJSON := "{}"
 	if len(fields) > 0 {
-		enc := zapcore.NewJSONEncoder(zapcore.EncoderConfig{
-			TimeKey:        "",
-			LevelKey:       "",
-			NameKey:        "",
-			CallerKey:      "",
-			FunctionKey:    "",
-			MessageKey:     "",
-			StacktraceKey:  "",
-			LineEnding:     "",
-			EncodeLevel:    zapcore.LowercaseLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.SecondsDurationEncoder,
-			EncodeCaller:   zapcore.ShortCallerEncoder,
-		})
-		buf, _ := enc.EncodeEntry(entry, fields)
+		buf, _ := fieldsEncoder.EncodeEntry(entry, fields)
 		fieldsJSON = buf.String()
 		buf.Free()
 	}

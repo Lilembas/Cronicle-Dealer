@@ -74,7 +74,7 @@ func main() {
 	}
 
 	// 启动Web服务器
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, 8888)
+	addr := fmt.Sprintf("%s:%d", cfg.Manager.Host, 8888)
 
 	fmt.Println("\n========================================")
 	fmt.Println("🌐 Shell测试Web服务器启动成功！")

@@ -168,7 +168,7 @@ func (s *APIServer) setupRoutes() {
 }
 
 func (s *APIServer) Start() error {
-	addr := s.cfg.Server.Host + ":" + strconv.Itoa(s.cfg.Server.HTTPPort)
+	addr := s.cfg.Manager.Host + ":" + strconv.Itoa(s.cfg.Manager.HTTPPort)
 	
 	logger.Info("API 服务器启动", zap.String("address", addr))
 	

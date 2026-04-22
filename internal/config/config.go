@@ -7,7 +7,6 @@ import (
 
 // Config 全局配置结构
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
 	Manager  ManagerConfig  `mapstructure:"manager"`
 	Worker   WorkerConfig   `mapstructure:"worker"`
 	Database DatabaseConfig `mapstructure:"database"`
@@ -17,20 +16,15 @@ type Config struct {
 	Storage  StorageConfig  `mapstructure:"storage"`
 }
 
-// ServerConfig 服务器配置
-type ServerConfig struct {
-	Mode         string `mapstructure:"mode"` // manager 或 worker
-	Host         string `mapstructure:"host"`
-	HTTPPort     int    `mapstructure:"http_port"`
-	GRPCPort     int    `mapstructure:"grpc_port"`
-	WebSocketPort int   `mapstructure:"websocket_port"`
-}
-
 // ManagerConfig Manager 配置
 type ManagerConfig struct {
-	Scheduler      SchedulerConfig      `mapstructure:"scheduler"`
-	Heartbeat      HeartbeatConfig      `mapstructure:"heartbeat"`
-	DispatchRetry  DispatchRetryConfig  `mapstructure:"dispatch_retry"`
+	Host           string              `mapstructure:"host"`
+	HTTPPort       int                 `mapstructure:"http_port"`
+	GRPCPort       int                 `mapstructure:"grpc_port"`
+	WebSocketPort  int                 `mapstructure:"websocket_port"`
+	Scheduler      SchedulerConfig     `mapstructure:"scheduler"`
+	Heartbeat      HeartbeatConfig     `mapstructure:"heartbeat"`
+	DispatchRetry  DispatchRetryConfig `mapstructure:"dispatch_retry"`
 }
 
 // DispatchRetryConfig 分发重试配置
@@ -164,34 +158,15 @@ func Load(configPath string) (*Config, error) {
 
 // setDefaults 设置默认值
 func setDefaults() {
-	// 服务器默认值
-	viper.SetDefault("server.host", "0.0.0.0")
-	viper.SetDefault("server.http_port", 8080)
-	viper.SetDefault("server.grpc_port", 9090)
-
-	// 数据库默认值
-	viper.SetDefault("database.driver", "sqlite")
-	viper.SetDefault("database.path", "./cronicle.db")
-	viper.SetDefault("database.max_open_conns", 25)
-	viper.SetDefault("database.max_idle_conns", 10)
-	viper.SetDefault("database.conn_max_lifetime", 300)
-
-	// Redis 默认值
-	viper.SetDefault("redis.db", 0)
-	viper.SetDefault("redis.pool_size", 10)
-
-	// 日志默认值
-	viper.SetDefault("logging.level", "info")
-	viper.SetDefault("logging.format", "json")
-	viper.SetDefault("logging.output", "stdout")
-
 	// Manager 默认值
+	viper.SetDefault("manager.host", "0.0.0.0")
+	viper.SetDefault("manager.http_port", 8080)
+	viper.SetDefault("manager.grpc_port", 9090)
+	viper.SetDefault("manager.websocket_port", 8081)
 	viper.SetDefault("manager.scheduler.enabled", true)
 	viper.SetDefault("manager.scheduler.tick_interval", 1)
 	viper.SetDefault("manager.heartbeat.timeout", 60)
 	viper.SetDefault("manager.heartbeat.check_interval", 30)
-
-	// 分发重试默认值
 	viper.SetDefault("manager.dispatch_retry.max_retries", 1)
 	viper.SetDefault("manager.dispatch_retry.base_delay_sec", 2)
 	viper.SetDefault("manager.dispatch_retry.max_delay_sec", 30)

@@ -51,7 +51,7 @@ func (s *GRPCServer) SetWebSocketServer(wsServer *WebSocketServer) {
 
 // Start 启动 gRPC 服务器
 func (s *GRPCServer) Start() error {
-	addr := fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.GRPCPort)
+	addr := fmt.Sprintf("%s:%d", s.cfg.Manager.Host, s.cfg.Manager.GRPCPort)
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {

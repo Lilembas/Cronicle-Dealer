@@ -83,7 +83,7 @@ func (m *Manager) Start() error {
 func (m *Manager) startServices() error {
 	logger.Info("启动 Manager 核心服务...")
 
-	m.wsServer = NewWebSocketServer(m.cfg.Server.WebSocketPort)
+	m.wsServer = NewWebSocketServer(m.cfg.Manager.WebSocketPort)
 	if err := m.wsServer.Start(); err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func (m *Manager) registerManagerAsNode() error {
 			ID:             nodeID,
 			Hostname:       hostname,
 			IP:             ip,
-			GRPCAddress:    fmt.Sprintf("%s:%d", m.cfg.Server.Host, m.cfg.Server.GRPCPort),
+			GRPCAddress:    fmt.Sprintf("%s:%d", m.cfg.Manager.Host, m.cfg.Manager.GRPCPort),
 			Tags:           "manager",
 			PID:            pid,
 			Status:         "online",

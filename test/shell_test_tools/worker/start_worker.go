@@ -58,7 +58,7 @@ func main() {
 	defer workerClient.Close()
 
 	// 设置 executor gRPC 地址（用于Manager连接Worker）
-	workerClient.SetGRPCAddress(cfg.Server.Host, cfg.Worker.Executor.GRPCPort)
+	workerClient.SetGRPCAddress(cfg.Manager.Host, cfg.Worker.Executor.GRPCPort)
 
 	if err := workerClient.Register(); err != nil {
 		logger.Fatal("Worker 注册失败", zap.Error(err))
@@ -92,7 +92,7 @@ func main() {
 	fmt.Println("✅ Worker 节点启动成功！")
 	fmt.Println("========================================")
 	fmt.Printf("🆔 节点ID: %s\n", nodeID)
-	fmt.Printf("📡 gRPC 地址: %s:%d\n", cfg.Server.Host, cfg.Worker.Executor.GRPCPort)
+	fmt.Printf("📡 gRPC 地址: %s:%d\n", cfg.Manager.Host, cfg.Worker.Executor.GRPCPort)
 	fmt.Printf("🎯 标签: %v\n", cfg.Worker.Node.Tags)
 	fmt.Println("========================================\n")
 	fmt.Println("📝 按 Ctrl+C 停止服务")

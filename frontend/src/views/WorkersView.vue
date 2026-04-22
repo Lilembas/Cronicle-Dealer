@@ -56,21 +56,25 @@ function isManagerNode(node: Node): boolean {
   return node.tags?.includes('manager') ?? false
 }
 
-function isRemovableNode(node: Node): boolean {
-  return !isManagerNode(node) && node.id !== getManagerNodeId()
-}
-
-function getManagerNodeId(): string | null {
-  const manager = nodes.value.find(node => isManagerNode(node))
+const managerNodeId = computed(() => {
+  const manager = nodes.value.find(n => isManagerNode(n))
   if (manager) return manager.id
-
   if (nodes.value.length > 0) {
     const sorted = [...nodes.value].sort((a, b) =>
       new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
     )
     return sorted[0].id
   }
+  return null
+})
 
+const managerCount = computed(() => nodes.value.filter(n => isManagerNode(n)).length)
+
+function getRemoveDenialReason(node: Node): string | null {
+  if (!isManagerNode(node)) return null
+  if (node.id === managerNodeId.value) return '不能删除主 Manager 节点'
+  if (node.status === 'online') return '不能删除在线的 Manager 节点'
+  if (managerCount.value <= 1) return '不能删除唯一的 Manager 节点'
   return null
 }
 
@@ -131,14 +135,15 @@ const loadNodes = async () => {
 }
 
 const handleDelete = async (node: Node) => {
-  if (!isRemovableNode(node)) {
-    showToast({ severity: 'warn', summary: '不能删除 Manager 节点', life: 3000 })
+  const reason = getRemoveDenialReason(node)
+  if (reason) {
+    showToast({ severity: 'warn', summary: reason, life: 3000 })
     return
   }
 
   showConfirm({
     message: `确定要删除节点 ${hl(node.hostname)} (${hl(node.ip)}) 吗？`,
-    header: '删除 Worker 节点',
+    header: isManagerNode(node) ? '删除 Manager 节点' : '删除 Worker 节点',
     icon: 'pi pi-exclamation-triangle',
     acceptProps: { label: '确定', severity: 'danger' },
     rejectProps: { label: '取消', severity: 'secondary', outlined: true },
@@ -503,7 +508,7 @@ onUnmounted(() => {
           </Column>
           <Column header="操作" frozen alignFrozen="right" style="width: 100px">
             <template #body="{ data }">
-              <div v-if="isRemovableNode(data)" class="action-buttons">
+              <div v-if="!getRemoveDenialReason(data)" class="action-buttons">
                 <Button
                   v-tooltip.top="authStore.isAdmin ? '编辑标签' : '需管理员权限'"
                   icon="pi pi-pencil"

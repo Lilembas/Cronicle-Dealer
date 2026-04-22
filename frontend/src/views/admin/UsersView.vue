@@ -17,7 +17,6 @@ import InputToggle from 'primevue/inputswitch'
 const authStore = useAuthStore()
 const loading = ref(false)
 const users = ref<AdminUser[]>([])
-const total = ref(0)
 
 const editDialogVisible = ref(false)
 const editUser = ref<Partial<AdminUser> & { password?: string } | null>(null)
@@ -30,18 +29,14 @@ const roleOptions = [
   { label: '只读用户', value: 'viewer' },
 ]
 
-const totalUsers = computed(() => users.value.length)
-const activeUsers = computed(() => users.value.filter(u => u.active).length)
 const adminCount = computed(() => users.value.filter(u => u.role === 'admin').length)
 const activeAdminCount = computed(() => users.value.filter(u => u.role === 'admin' && u.active).length)
-const disabledCount = computed(() => users.value.filter(u => !u.active).length)
 
 async function loadUsers() {
   loading.value = true
   try {
     const res = await adminApi.listUsers({ page: 1, page_size: 100 }) as any
     users.value = res.data || []
-    total.value = res.total || 0
   } catch {
     showToast({ severity: 'error', summary: '加载用户列表失败', life: 5000 })
   } finally {
@@ -171,61 +166,6 @@ onMounted(loadUsers)
 
 <template>
   <div class="users-page">
-    <div class="stats-grid mb-6">
-      <Card class="stat-card">
-        <template #content>
-          <div class="flex items-center gap-4">
-            <div class="stat-icon bg-blue-50 text-blue-500">
-              <i class="pi pi-users text-xl"></i>
-            </div>
-            <div>
-              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">总用户</div>
-              <div class="text-2xl font-bold">{{ totalUsers }}</div>
-            </div>
-          </div>
-        </template>
-      </Card>
-      <Card class="stat-card">
-        <template #content>
-          <div class="flex items-center gap-4">
-            <div class="stat-icon bg-green-50 text-green-500">
-              <i class="pi pi-user-check text-xl"></i>
-            </div>
-            <div>
-              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">已启用</div>
-              <div class="text-2xl font-bold">{{ activeUsers }}</div>
-            </div>
-          </div>
-        </template>
-      </Card>
-      <Card class="stat-card">
-        <template #content>
-          <div class="flex items-center gap-4">
-            <div class="stat-icon bg-amber-50 text-amber-500">
-              <i class="pi pi-shield text-xl"></i>
-            </div>
-            <div>
-              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">管理员</div>
-              <div class="text-2xl font-bold">{{ adminCount }}</div>
-            </div>
-          </div>
-        </template>
-      </Card>
-      <Card class="stat-card">
-        <template #content>
-          <div class="flex items-center gap-4">
-            <div class="stat-icon bg-red-50 text-red-500">
-              <i class="pi pi-user-minus text-xl"></i>
-            </div>
-            <div>
-              <div class="text-gray-400 text-xs font-semibold uppercase tracking-wider">已禁用</div>
-              <div class="text-2xl font-bold">{{ disabledCount }}</div>
-            </div>
-          </div>
-        </template>
-      </Card>
-    </div>
-
     <Card class="table-card">
       <template #content>
         <div class="flex justify-between items-center mb-4">
@@ -331,25 +271,6 @@ onMounted(loadUsers)
 </template>
 
 <style scoped>
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-}
-
-.stat-card :deep(.p-card-content) {
-  padding: 1rem;
-}
-
-.stat-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .status-badge {
   display: inline-flex;
   padding: 2px 10px;

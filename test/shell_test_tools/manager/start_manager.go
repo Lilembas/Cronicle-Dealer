@@ -67,8 +67,8 @@ func main() {
 	fmt.Println("\n========================================")
 	fmt.Println("✅ Manager 节点启动成功！")
 	fmt.Println("========================================")
-	fmt.Printf("📡 gRPC 地址: %s:%d\n", cfg.Server.Host, cfg.Server.GRPCPort)
-	fmt.Printf("🌐 API 地址: %s:%d\n", cfg.Server.Host, cfg.Server.HTTPPort)
+	fmt.Printf("📡 gRPC 地址: %s:%d\n", cfg.Manager.Host, cfg.Manager.GRPCPort)
+	fmt.Printf("🌐 API 地址: %s:%d\n", cfg.Manager.Host, cfg.Manager.HTTPPort)
 	fmt.Println("========================================")
 	fmt.Println("📝 按 Ctrl+C 停止服务")
 

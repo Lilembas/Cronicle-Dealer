@@ -17,8 +17,10 @@ const getBackendConfig = () => {
 }
 
 const backendConfig = getBackendConfig()
-const apiPort = backendConfig?.server?.http_port || 8080
-const wsPort = backendConfig?.server?.websocket_port || 8081
+const apiPort = backendConfig?.manager?.http_port || 8080
+const wsPort = backendConfig?.manager?.websocket_port || 8081
+const webHost = backendConfig?.web?.host || '0.0.0.0'
+const webPort = backendConfig?.web?.port || 5173
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -29,7 +31,8 @@ export default defineConfig({
         },
     },
     server: {
-        port: 5173,
+        host: webHost,
+        port: webPort,
         proxy: {
             '/api': {
                 target: `http://localhost:${apiPort}`,

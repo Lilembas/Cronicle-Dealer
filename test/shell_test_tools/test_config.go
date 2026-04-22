@@ -23,11 +23,11 @@ func main() {
 		log.Fatalf("加载配置失败: %v\n", err)
 	}
 
-	// 服务器配置
-	fmt.Println("\n🖥️  服务器配置:")
-	fmt.Printf("   Host: %s\n", cfg.Server.Host)
-	fmt.Printf("   gRPC端口: %d\n", cfg.Server.GRPCPort)
-	fmt.Printf("   HTTP端口: %d\n", cfg.Server.HTTPPort)
+	// Manager配置
+	fmt.Println("\n🖥️  Manager配置:")
+	fmt.Printf("   Host: %s\n", cfg.Manager.Host)
+	fmt.Printf("   gRPC端口: %d\n", cfg.Manager.GRPCPort)
+	fmt.Printf("   HTTP端口: %d\n", cfg.Manager.HTTPPort)
 
 	// Worker配置
 	fmt.Println("\n👷 Worker配置:")
