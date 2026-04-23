@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	defaultWorkerPort = 9090
+	defaultWorkerPort = 50051
 	logTimeFormat     = "2006-01-02 15:04:05"
 )
 

@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # Redis
+  # Redis: 任务队列和日志流
   redis:
     image: redis:7-alpine
     container_name: cronicle-redis
@@ -17,24 +17,46 @@ services:
       retries: 5
     networks:
       - cronicle_network
+    restart: unless-stopped
 
-  # Manager
+  # PostgreSQL: 可选数据库（默认使用 SQLite）
+  # db:
+  #   image: postgres:16-alpine
+  #   container_name: cronicle-db
+  #   environment:
+  #     - POSTGRES_USER=cronicle
+  #     - POSTGRES_PASSWORD=cronicle_password
+  #     - POSTGRES_DB=cronicle
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U cronicle"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - cronicle_network
+  #   restart: unless-stopped
+
+  # Manager: 核心调度和管理节点
   manager:
     build:
       context: ..
-      dockerfile: docker/manager.Dockerfile
+      dockerfile: deployments/docker/manager.Dockerfile
     container_name: cronicle-manager
     ports:
       - "8080:8080"
-      - "8081:8081"
       - "9090:9090"
     environment:
-      - DATABASE_DRIVER=sqlite
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - SECURITY_JWT_SECRET=change-me-in-production
-      - SECURITY_AUTH_TOKEN=change-me-in-production
-      - LOGGING_LEVEL=info
+      - CRONICLE_DATABASE_DRIVER=sqlite
+      - CRONICLE_DATABASE_PATH=/app/data/cronicle.db
+      - CRONICLE_REDIS_HOST=redis
+      - CRONICLE_REDIS_PORT=6379
+      - CRONICLE_SECURITY_JWT_SECRET=change-me-in-production
+      - CRONICLE_SECURITY_AUTH_TOKEN=change-me-in-production
+      - CRONICLE_LOGGING_LEVEL=info
+      - CRONICLE_MANAGER_HISTORY_EVENT_RETENTION_DAYS=30
+      - CRONICLE_MANAGER_HISTORY_METRIC_RETENTION_DAYS=7
     volumes:
       - manager_data:/app/data
       - manager_logs:/app/logs
@@ -45,15 +67,17 @@ services:
       - cronicle_network
     restart: unless-stopped
 
-  # Worker
+  # Worker: 任务执行节点
   worker:
     build:
       context: ..
-      dockerfile: docker/worker.Dockerfile
+      dockerfile: deployments/docker/worker.Dockerfile
     environment:
-      - WORKER_MANAGER_ADDRESS=manager:9090
-      - WORKER_AUTH_TOKEN=change-me-in-production
-      - WORKER_NODE_TAGS=["default"]
+      - CRONICLE_WORKER_MANAGER_ADDRESS=manager:9090
+      - CRONICLE_WORKER_AUTH_TOKEN=change-me-in-production
+      - CRONICLE_WORKER_NODE_TAGS=["default", "docker"]
+      - CRONICLE_REDIS_HOST=redis
+      - CRONICLE_REDIS_PORT=6379
     volumes:
       - worker_logs:/app/logs
     depends_on:
@@ -69,6 +93,7 @@ volumes:
   manager_data:
   manager_logs:
   worker_logs:
+  # postgres_data:
 
 networks:
   cronicle_network:

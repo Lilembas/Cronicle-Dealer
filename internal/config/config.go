@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/spf13/viper"
 )
 
@@ -150,6 +152,11 @@ func Load(configPath string) (*Config, error) {
 
 	setDefaults()
 
+	// 允许从环境变量读取
+	viper.SetEnvPrefix("CRONICLE")
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
@@ -179,7 +186,7 @@ func setDefaults() {
 	viper.SetDefault("manager.history.metric_retention_days", 7)
 
 	// Worker 默认值
-	viper.SetDefault("worker.executor.grpc_port", 9090)
+	viper.SetDefault("worker.executor.grpc_port", 50051)
 	viper.SetDefault("worker.executor.default_timeout", 300)
 	viper.SetDefault("worker.heartbeat.interval", 30)
 }
