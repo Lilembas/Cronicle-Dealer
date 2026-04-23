@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status](https://img.shields.io/badge/Status-Beta-yellow.svg)
 
-> A high-performance, scalable, and visual distributed task scheduling and execution platform built with Go + Vue 3
+> A lightweight, scalable, and visual distributed task scheduling and execution platform built with Go + Vue 3
 
 ![alt text](docs/images/framework.png)
 

@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 ![Status](https://img.shields.io/badge/Status-Beta-yellow.svg)
 
-> 一个高性能、可扩展、可视化的分布式任务调度与执行平台，基于 Go + Vue 3 构建
+> 一个轻量、可扩展、可视化的分布式任务调度与执行平台，基于 Go + Vue 3 构建
 
 ![alt text](docs/images/framework.png)
 
