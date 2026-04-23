@@ -26,7 +26,7 @@ var configPath = flag.String("config", "config.yaml", "配置文件路径")
 func main() {
 	flag.Parse()
 
-	fmt.Printf("Cronicle-Next %s 节点 v%s\n", nodeType, version)
+	fmt.Printf("Cronicle-Dealer %s 节点 v%s\n", nodeType, version)
 	fmt.Printf("加载配置文件: %s\n", *configPath)
 
 	cfg, err := config.Load(*configPath)

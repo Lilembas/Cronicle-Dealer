@@ -189,4 +189,32 @@ func setDefaults() {
 	viper.SetDefault("worker.executor.grpc_port", 50051)
 	viper.SetDefault("worker.executor.default_timeout", 300)
 	viper.SetDefault("worker.heartbeat.interval", 30)
+
+	// Database 默认值
+	viper.SetDefault("database.driver", "sqlite")
+	viper.SetDefault("database.path", "./cronicle.db")
+	viper.SetDefault("database.max_open_conns", 25)
+	viper.SetDefault("database.max_idle_conns", 10)
+	viper.SetDefault("database.conn_max_lifetime", 300)
+
+	// Redis 默认值
+	viper.SetDefault("redis.host", "localhost")
+	viper.SetDefault("redis.port", 6379)
+	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("redis.pool_size", 10)
+
+	// Security 默认值
+	viper.SetDefault("security.jwt.secret", "default-secret-change-me")
+	viper.SetDefault("security.jwt.expire_hours", 24)
+	viper.SetDefault("security.auth_token", "default-token-change-me")
+
+	// Logging 默认值
+	viper.SetDefault("logging.level", "info")
+	viper.SetDefault("logging.format", "json")
+	viper.SetDefault("logging.output", "stdout")
+
+	// Storage 默认值
+	viper.SetDefault("storage.log_dir", "./logs")
+	viper.SetDefault("storage.log_retention_days", 30)
+	viper.SetDefault("storage.max_log_size_mb", 100)
 }
