@@ -1,4 +1,4 @@
-module github.com/cronicle/cronicle-next
+module github.com/cronicle/cronicle-dealer
 
 go 1.25.0
 

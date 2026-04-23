@@ -6,8 +6,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/cronicle/cronicle-next/internal/storage"
-	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/internal/storage"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
 )
 
 // LogSubscriber 订阅 Redis Pub/Sub 日志频道，推送到 WebSocket 前端

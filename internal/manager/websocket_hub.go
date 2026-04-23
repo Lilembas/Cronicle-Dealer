@@ -8,9 +8,9 @@ import (
 	"github.com/olahol/melody"
 	"go.uber.org/zap"
 
-	"github.com/cronicle/cronicle-next/internal/models"
-	"github.com/cronicle/cronicle-next/internal/storage"
-	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/internal/models"
+	"github.com/cronicle/cronicle-dealer/internal/storage"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
 )
 
 // Hub WebSocket房间管理器

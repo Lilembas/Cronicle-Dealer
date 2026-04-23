@@ -9,10 +9,10 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/cronicle/cronicle-next/internal/config"
-	"github.com/cronicle/cronicle-next/internal/storage"
-	"github.com/cronicle/cronicle-next/internal/worker"
-	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/internal/config"
+	"github.com/cronicle/cronicle-dealer/internal/storage"
+	"github.com/cronicle/cronicle-dealer/internal/worker"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
 )
 
 const (

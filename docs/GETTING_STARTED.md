@@ -1,4 +1,4 @@
-# Cronicle-Next 项目完整指南
+# Cronicle-Dealer 项目完整指南
 
 > 一个高性能、可扩展、可视化的分布式任务调度平台
 
@@ -88,7 +88,7 @@ docker-compose -f deployments/docker-compose.yml up -d redis
 #### 3. 配置文件
 
 ```bash
-cd s:\projects\cronicle-next
+cd s:\projects\cronicle-dealer
 
 # 复制配置模板
 copy config.example.yaml config.yaml
@@ -123,7 +123,7 @@ go run cmd/worker/main.go
 #### 5. 前端启动
 
 ```bash
-cd s:\projects\cronicle-next\frontend
+cd s:\projects\cronicle-dealer\frontend
 
 # 安装依赖
 npm install
@@ -144,7 +144,7 @@ npm run dev
 ## 📁 项目结构
 
 ```
-cronicle-next/
+cronicle-dealer/
 ├── cmd/                    # 主程序入口
 │   ├── manager/            # Manager 节点
 │   └── worker/            # Worker 节点
@@ -395,7 +395,7 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 1. **安装依赖并运行**
    ```bash
    # 后端（如果有 Go）
-   cd s:\projects\cronicle-next
+   cd s:\projects\cronicle-dealer
    go mod download
    
    # 前端

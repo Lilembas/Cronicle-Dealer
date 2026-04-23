@@ -1,4 +1,4 @@
-# Cronicle-Next 清除历史记录指南
+# Cronicle-Dealer 清除历史记录指南
 
 ## 📋 可用方法
 
@@ -249,7 +249,7 @@ sqlite3 cronicle.db "DELETE FROM events WHERE id IN (SELECT id FROM events ORDER
 crontab -e
 
 # 每周日凌晨 2 点删除 30 天前的记录
-0 2 * * 0 /path/to/cronicle-next/scripts/clear_events_selective.sh
+0 2 * * 0 /path/to/cronicle-dealer/scripts/clear_events_selective.sh
 ```
 
 ---
@@ -358,4 +358,4 @@ psql -U cronicle cronicle < cronicle_backup_20240414.sql
 **📞 需要帮助？**
 
 查看文档：[CLAUDE.md](../CLAUDE.md)
-提交问题：[GitHub Issues](https://github.com/cronicle/cronicle-next/issues)
+提交问题：[GitHub Issues](https://github.com/cronicle/cronicle-dealer/issues)

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
 	"go.uber.org/zap"
 )
 

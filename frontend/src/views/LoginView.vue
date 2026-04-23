@@ -59,9 +59,9 @@ const handleLogin = async () => {
       <!-- Logo 和标题 -->
       <div class="text-center mb-8">
         <div class="login-logo">
-          <img src="@/assets/logo.svg" class="logo-img" alt="Cronicle-Next" />
+          <img src="@/assets/logo.svg" class="logo-img" alt="Cronicle-Dealer" />
         </div>
-        <h1 class="text-2xl font-bold text-gray-800 mb-1">Cronicle-Next</h1>
+        <h1 class="text-2xl font-bold text-gray-800 mb-1">Cronicle-Dealer</h1>
         <p class="text-gray-400 text-sm">分布式任务调度平台</p>
       </div>
 

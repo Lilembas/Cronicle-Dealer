@@ -5,7 +5,7 @@
 ### 选项 1：交互式清理（推荐）
 
 ```bash
-cd /codespace/developers/linnan/claudeProjects/cronicle-next
+cd /codespace/developers/linnan/claudeProjects/cronicle-dealer
 
 # 方式 A：选择性清理（最安全）
 ./scripts/clear_events_selective.sh

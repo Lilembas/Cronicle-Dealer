@@ -109,8 +109,8 @@ function handleGlobalRefresh() {
   <div class="layout-container">
     <div class="head-home">
       <div class="container">
-        <img src="@/assets/logo.svg" class="logo-img" alt="Cronicle-Next" />
-        <div class="h1-head-home">Cronicle-Next</div>
+        <img src="@/assets/logo.svg" class="logo-img" alt="Cronicle-Dealer" />
+        <div class="h1-head-home">Cronicle-Dealer</div>
       </div>
       <div class="head-user">
         <Button

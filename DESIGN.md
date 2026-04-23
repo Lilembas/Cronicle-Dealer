@@ -1,4 +1,4 @@
-# Cronicle-Next 设计文档
+# Cronicle-Dealer 设计文档
 
 > **版本**: v0.5.0
 > **最后更新**: 2026-04-21
@@ -23,7 +23,7 @@
 
 ### 1.1 项目简介
 
-Cronicle-Next 是一个高性能、可扩展、可视化的分布式任务调度与执行平台。采用 Manager-Worker 架构，支持水平扩展、高可用性和实时监控。
+Cronicle-Dealer 是一个高性能、可扩展、可视化的分布式任务调度与执行平台。采用 Manager-Worker 架构，支持水平扩展、高可用性和实时监控。
 
 ### 1.2 核心特性
 
@@ -1179,7 +1179,7 @@ func (s *Server) HealthCheck(c *gin.Context) {
 
 **文档版本**: v0.5.0
 **最后更新**: 2026-04-21
-**维护者**: Cronicle-Next Team
+**维护者**: Cronicle-Dealer Team
 
 ---
 
@@ -1258,4 +1258,4 @@ func (s *Server) HealthCheck(c *gin.Context) {
 
 **文档版本**: v0.3.1
 **最后更新**: 2026-04-13
-**维护者**: Cronicle-Next Team
+**维护者**: Cronicle-Dealer Team

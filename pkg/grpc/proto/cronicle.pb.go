@@ -1111,7 +1111,7 @@ const file_pkg_grpc_proto_cronicle_proto_rawDesc = "" +
 	"\n" +
 	"SubmitTask\x12\x15.cronicle.TaskRequest\x1a\x16.cronicle.TaskResponse\x12A\n" +
 	"\x10ReportTaskResult\x12\x14.cronicle.TaskResult\x1a\x17.cronicle.TaskResultAck\x12D\n" +
-	"\tAbortTask\x12\x1a.cronicle.AbortTaskRequest\x1a\x1b.cronicle.AbortTaskResponseB/Z-github.com/cronicle/cronicle-next/pkg/grpc/pbb\x06proto3"
+	"\tAbortTask\x12\x1a.cronicle.AbortTaskRequest\x1a\x1b.cronicle.AbortTaskResponseB/Z-github.com/cronicle/cronicle-dealer/pkg/grpc/pbb\x06proto3"
 
 var (
 	file_pkg_grpc_proto_cronicle_proto_rawDescOnce sync.Once

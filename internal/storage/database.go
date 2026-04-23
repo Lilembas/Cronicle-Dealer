@@ -11,8 +11,8 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 
-	"github.com/cronicle/cronicle-next/internal/config"
-	"github.com/cronicle/cronicle-next/internal/models"
+	"github.com/cronicle/cronicle-dealer/internal/config"
+	"github.com/cronicle/cronicle-dealer/internal/models"
 )
 
 var DB *gorm.DB

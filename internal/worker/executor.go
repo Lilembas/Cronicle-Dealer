@@ -17,11 +17,11 @@ import (
 	"google.golang.org/grpc"
 	"go.uber.org/zap"
 
-	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
-	"github.com/cronicle/cronicle-next/internal/config"
-	"github.com/cronicle/cronicle-next/internal/storage"
-	"github.com/cronicle/cronicle-next/pkg/logger"
-	"github.com/cronicle/cronicle-next/pkg/sysmetrics"
+	pb "github.com/cronicle/cronicle-dealer/pkg/grpc/pb"
+	"github.com/cronicle/cronicle-dealer/internal/config"
+	"github.com/cronicle/cronicle-dealer/internal/storage"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/pkg/sysmetrics"
 )
 
 const (

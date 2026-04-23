@@ -7,7 +7,7 @@ import (
 
 	"github.com/Knetic/govaluate"
 
-	"github.com/cronicle/cronicle-next/internal/models"
+	"github.com/cronicle/cronicle-dealer/internal/models"
 )
 
 // FormulaParams 公式参数

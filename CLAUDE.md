@@ -1,10 +1,10 @@
 # Claude AI 开发指导文档
 
-> **Cronicle-Next** - 分布式任务调度平台
+> **Cronicle-Dealer** - 分布式任务调度平台
 > **版本**: v0.2.0 Beta
 > **最后更新**: 2026-04-16
 
-本文档为 Claude AI 提供 Cronicle-Next 项目的开发指导，包括项目架构、开发规范、最佳实践等。
+本文档为 Claude AI 提供 Cronicle-Dealer 项目的开发指导，包括项目架构、开发规范、最佳实践等。
 
 ---
 
@@ -27,7 +27,7 @@
 
 ### 1.1 项目简介
 
-Cronicle-Next 是一个基于 Go + Vue 3 的分布式任务调度平台，采用 Manager-Worker 架构。
+Cronicle-Dealer 是一个基于 Go + Vue 3 的分布式任务调度平台，采用 Manager-Worker 架构。
 
 **核心特性**：
 - 🚀 高性能：Go 原生并发
@@ -332,7 +332,7 @@ Closes #123
 ### 4.1 目录结构
 
 ```
-cronicle-next/
+cronicle-dealer/
 ├── cmd/                    # 主程序
 │   ├── manager/            # Manager 主程序
 │   └── worker/            # Worker 主程序
@@ -1010,4 +1010,4 @@ docker-compose up -d
 
 **文档版本**: v0.1.0
 **最后更新**: 2026-04-10
-**维护者**: Cronicle-Next Team
+**维护者**: Cronicle-Dealer Team

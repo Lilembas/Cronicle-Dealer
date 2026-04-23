@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/cronicle/cronicle-next/internal/config"
+	"github.com/cronicle/cronicle-dealer/internal/config"
 )
 
 // RedisClient 全局 Redis 客户端

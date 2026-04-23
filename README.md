@@ -9,6 +9,8 @@
 
 > A high-performance, scalable, and visual distributed task scheduling and execution platform built with Go + Vue 3
 
+![alt text](docs/images/framework.png)
+
 ## 📦 Quick Start
 
 ### Scenarios

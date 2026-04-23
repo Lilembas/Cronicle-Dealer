@@ -12,11 +12,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/cronicle/cronicle-next/internal/config"
-	"github.com/cronicle/cronicle-next/internal/models"
-	"github.com/cronicle/cronicle-next/internal/storage"
-	"github.com/cronicle/cronicle-next/pkg/utils"
-	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/internal/config"
+	"github.com/cronicle/cronicle-dealer/internal/models"
+	"github.com/cronicle/cronicle-dealer/internal/storage"
+	"github.com/cronicle/cronicle-dealer/pkg/utils"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
 )
 
 type APIServer struct {

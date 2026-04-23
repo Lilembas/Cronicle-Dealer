@@ -1,4 +1,4 @@
-# Cronicle-Next 配置文件核查报告
+# Cronicle-Dealer 配置文件核查报告
 
 本报告针对 `config.yaml` 中的配置项进行了代码层面的全路径追踪，旨在识别哪些配置在当前版本中实际未生效。
 

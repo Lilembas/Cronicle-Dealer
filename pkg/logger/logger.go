@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/cronicle/cronicle-next/internal/config"
+	"github.com/cronicle/cronicle-dealer/internal/config"
 )
 
 var (

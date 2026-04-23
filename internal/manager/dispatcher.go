@@ -14,11 +14,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/cronicle/cronicle-next/pkg/grpc/pb"
-	"github.com/cronicle/cronicle-next/internal/models"
-	"github.com/cronicle/cronicle-next/internal/storage"
-	"github.com/cronicle/cronicle-next/pkg/logger"
-	"github.com/cronicle/cronicle-next/pkg/utils"
+	pb "github.com/cronicle/cronicle-dealer/pkg/grpc/pb"
+	"github.com/cronicle/cronicle-dealer/internal/models"
+	"github.com/cronicle/cronicle-dealer/internal/storage"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/pkg/utils"
 )
 
 const (

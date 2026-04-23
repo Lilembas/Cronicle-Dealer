@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** Cronicle-Next
+**Project:** Cronicle-Dealer
 **Generated:** 2026-04-21 22:29:58
 **Category:** Analytics Dashboard
 

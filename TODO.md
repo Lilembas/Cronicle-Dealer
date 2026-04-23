@@ -1,4 +1,4 @@
-# Cronicle-Next 待办事项 (TODO)
+# Cronicle-Dealer 待办事项 (TODO)
 
 > 最后更新: 2026-04-21 | 目标版本: v0.6.0
 

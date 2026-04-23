@@ -9,6 +9,8 @@
 
 > 一个高性能、可扩展、可视化的分布式任务调度与执行平台，基于 Go + Vue 3 构建
 
+![alt text](docs/images/framework.png)
+
 ## 📦 快速开始
 
 ### 场景

@@ -3,7 +3,7 @@ package manager
 import (
 	"fmt"
 
-	"github.com/cronicle/cronicle-next/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/pkg/logger"
 )
 
 // WebSocketServer WebSocket服务器（WebSocket 处理已集成到 API Server，不再独立监听端口）
