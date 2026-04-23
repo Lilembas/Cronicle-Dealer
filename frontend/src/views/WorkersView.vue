@@ -5,6 +5,7 @@ import { useWebSocketStore } from '@/stores/websocket'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from '@/utils/toast'
 import { showConfirm, hl } from '@/utils/confirm'
+import { getUsageClass } from '@/utils/usage'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import DataTable from 'primevue/datatable'
@@ -110,12 +111,6 @@ const filteredNodes = computed(() => {
     return new Date(a.registered_at).getTime() - new Date(b.registered_at).getTime()
   })
 })
-
-const getUsageClass = (value: number) => {
-  if (value < 60) return 'usage-low'
-  if (value < 80) return 'usage-medium'
-  return 'usage-high'
-}
 
 const getRowClass = (data: Node) => {
   return data.status === 'offline' ? 'offline-row' : ''
@@ -822,24 +817,6 @@ onUnmounted(() => {
   gap: 4px;
   width: 100%;
 }
-
-.mini-progress {
-  height: 5px !important;
-  background: #f1f5f9 !important;
-  border-radius: 3px;
-}
-
-.usage-text {
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  font-size: 11px;
-  color: var(--p-surface-400);
-  text-align: right;
-  font-weight: 500;
-}
-
-.usage-low :deep(.p-progressbar-value) { background: #10b981; }
-.usage-medium :deep(.p-progressbar-value) { background: #f59e0b; }
-.usage-high :deep(.p-progressbar-value) { background: #ef4444; }
 
 .premium-badge {
   display: inline-flex;

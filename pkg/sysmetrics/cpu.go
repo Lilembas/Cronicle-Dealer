@@ -238,34 +238,31 @@ func (pc *ProcessCollector) GetMetric() (*ProcessMetric, bool) {
 		return nil, false
 	}
 
-	// 3. 读取系统总 CPU 时间
-	sysTotal, _, err := ReadCPUStat()
-	if err != nil {
-		return &ProcessMetric{CPUUsage: 0, MemoryBytes: totalRSS}, true
-	}
+	// 3. 使用墙钟时间计算 CPU 占比（避免容器中 /proc/stat 包含宿主机所有核心的问题）
+	now := time.Now()
 
 	// 如果是首次采样，记录初始值并返回
 	if !pc.initialized {
 		pc.lastUTime = totalUTime
 		pc.lastSTime = totalSTime
-		pc.lastSysTotal = sysTotal
+		pc.lastSampleTime = now
 		pc.initialized = true
 		return &ProcessMetric{CPUUsage: 0, MemoryBytes: totalRSS}, true
 	}
 
-	totalDelta := sysTotal - pc.lastSysTotal
 	procDelta := (totalUTime - pc.lastUTime) + (totalSTime - pc.lastSTime)
+	elapsed := now.Sub(pc.lastSampleTime)
 
 	pc.lastUTime = totalUTime
 	pc.lastSTime = totalSTime
-	pc.lastSysTotal = sysTotal
+	pc.lastSampleTime = now
 
-	if totalDelta == 0 {
+	if elapsed == 0 {
 		return &ProcessMetric{CPUUsage: 0, MemoryBytes: totalRSS}, true
 	}
 
-	// 计算相对于全系统的百分比，并乘以核心数得到进程树的总百分比 (0-100% * Cores)
-	usage := float64(procDelta) / float64(totalDelta) * 100.0 * float64(pc.parent.cpuCores)
+	// procDelta 单位为 USER_HZ ticks (Linux 默认 100 Hz)，除以墙钟秒数即得总占用百分比 (可超 100%)
+	usage := float64(procDelta) / elapsed.Seconds()
 
 	// 对于进程监控，不需要 100% 的上限，因为可以多核并行
 	if usage < 0 {

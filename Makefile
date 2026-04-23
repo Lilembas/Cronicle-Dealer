@@ -1,7 +1,7 @@
-.PHONY: all proto build clean run-manager run-worker docker test
+.PHONY: all proto build clean run-manager run-worker docker test build-frontend
 
 # 默认目标
-all: proto build
+all: proto build-frontend build
 
 # 生成 Protobuf 代码
 proto:
@@ -12,6 +12,12 @@ proto:
 		--proto_path=pkg/grpc/proto \
 		pkg/grpc/proto/*.proto
 	@echo "✅ Protobuf 代码生成完成"
+
+# 构建前端
+build-frontend:
+	@echo "构建前端..."
+	cd frontend && npm install && npm run build
+	@echo "✅ 前端构建完成"
 
 # 构建二进制文件
 build: build-manager build-worker
@@ -109,6 +115,7 @@ stats-events:
 clean:
 	@echo "清理构建文件..."
 	rm -rf bin/
+	rm -rf frontend/dist/
 	rm -rf logs/
 	rm -f coverage.out coverage.html
 	@echo "✅ 清理完成"
@@ -137,6 +144,7 @@ help:
 	@echo "可用命令："
 	@echo "  make proto                - 生成 Protobuf 代码"
 	@echo "  make build                - 构建所有二进制文件"
+	@echo "  make build-frontend       - 构建前端"
 	@echo "  make run-manager           - 运行 Manager"
 	@echo "  make run-worker           - 运行 Worker"
 	@echo "  make docker               - 构建 Docker 镜像"

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, inject, watch, type Re
 import { useRouter, useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { eventsApi, jobsApi, nodesApi, adminApi, type Event } from '@/api'
+import { getUsageClass, perCoreUsage } from '@/utils/usage'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useAuthStore } from '@/stores/auth'
 import { useSystemStore } from '@/stores/system'
@@ -322,19 +323,21 @@ onUnmounted(() => {
             </template>
           </Column>
 
-          <Column field="cpu_percent" header="CPU" style="width: 130px" alignHeader="center">
+          <Column field="cpu_percent" header="CPU" style="width: 180px" alignHeader="center">
             <template #body="{ data }">
               <div class="cpu-metric" v-if="data.cpu_percent !== undefined && data.cpu_percent !== null">
-                <!-- 进度条显示总体占比：(当前等效核数 / 总核数) * 100 -->
-                <ProgressBar 
-                  :value="data.cpu_cores ? Math.min((data.cpu_percent / (data.cpu_cores * 100)) * 100, 100) : Math.min(data.cpu_percent, 100)" 
-                  :showValue="false" 
-                  class="mini-progress" 
+                <ProgressBar
+                  :value="Math.min(perCoreUsage(data.cpu_percent, data.cpu_cores), 100)"
+                  :showValue="false"
+                  class="mini-progress"
+                  :class="getUsageClass(perCoreUsage(data.cpu_percent, data.cpu_cores))"
                 />
-                <span class="metric-text">
-                  {{ data.cpu_percent.toFixed(1) }}%
-                  <span v-if="data.cpu_cores" class="text-xs opacity-60"> / {{ data.cpu_cores }} Cores</span>
-                </span>
+                <div class="flex items-center gap-1.5 whitespace-nowrap">
+                  <span class="usage-text font-bold">{{ perCoreUsage(data.cpu_percent, data.cpu_cores).toFixed(1) }}%</span>
+                  <span v-if="data.cpu_cores" class="text-[10px] text-gray-400 font-medium">
+                    ({{ data.cpu_percent.toFixed(1) }}% / {{ data.cpu_cores }} Cores)
+                  </span>
+                </div>
               </div>
               <span v-else>-</span>
             </template>
@@ -542,16 +545,6 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 4px;
   width: 100%;
-}
-
-.mini-progress {
-  height: 4px !important;
-  background: #f1f5f9 !important;
-}
-
-.mini-progress :deep(.p-progressbar-value) {
-  background: #0ea5e9;
-  border-radius: 2px;
 }
 
 .metric-text {

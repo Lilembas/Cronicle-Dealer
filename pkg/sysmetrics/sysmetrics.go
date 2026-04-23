@@ -41,12 +41,12 @@ type Collector struct {
 
 // ProcessCollector 进程级指标采集器，用于跟踪特定 PID 的历史状态
 type ProcessCollector struct {
-	pid          int
-	parent       *Collector
-	lastUTime    uint64
-	lastSTime    uint64
-	lastSysTotal uint64
-	initialized  bool
+	pid             int
+	parent          *Collector
+	lastUTime       uint64
+	lastSTime       uint64
+	lastSampleTime  time.Time
+	initialized     bool
 }
 
 // NewCollector 创建采集器，执行一次性的容器和 cgroup 版本检测

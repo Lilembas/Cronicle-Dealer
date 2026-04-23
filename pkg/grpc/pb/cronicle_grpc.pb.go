@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v3.21.12
-// source: pkg/grpc/proto/cronicle.proto
+// source: cronicle.proto
 
 package pb
 
@@ -323,5 +323,5 @@ var CronicleService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/grpc/proto/cronicle.proto",
+	Metadata: "cronicle.proto",
 }

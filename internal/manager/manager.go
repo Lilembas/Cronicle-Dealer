@@ -63,10 +63,7 @@ func (m *Manager) Start() error {
 func (m *Manager) startServices() error {
 	logger.Info("启动 Manager 核心服务...")
 
-	m.wsServer = NewWebSocketServer(m.cfg.Manager.WebSocketPort)
-	if err := m.wsServer.Start(); err != nil {
-		return err
-	}
+	m.wsServer = NewWebSocketServer()
 
 	m.grpcServer = NewGRPCServer(m.cfg)
 	m.grpcServer.SetWebSocketServer(m.wsServer) // 设置WebSocket服务器

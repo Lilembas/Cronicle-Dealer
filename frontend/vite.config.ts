@@ -18,7 +18,6 @@ const getBackendConfig = () => {
 
 const backendConfig = getBackendConfig()
 const apiPort = backendConfig?.manager?.http_port || 8080
-const wsPort = backendConfig?.manager?.websocket_port || 8081
 const webHost = backendConfig?.web?.host || '0.0.0.0'
 const webPort = backendConfig?.web?.port || 5173
 
@@ -39,7 +38,7 @@ export default defineConfig({
                 changeOrigin: true,
             },
             '/ws': {
-                target: `ws://localhost:${wsPort}`,
+                target: `ws://localhost:${apiPort}`,
                 ws: true,
             },
         },

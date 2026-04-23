@@ -1,30 +1,14 @@
 # 二进制文件
 /bin/
 /dist/
-cmd/master/master
-cmd/master/master.exe
+manager
+manager.exe
+worker
+worker.exe
+cmd/manager/manager
+cmd/manager/manager.exe
 cmd/worker/worker
 cmd/worker/worker.exe
-
-# 项目根目录的可执行文件（go build或go run生成）
-start_master
-start_worker
-start_master.exe
-start_worker.exe
-clean_db
-clean_db.exe
-test_config
-test_config.exe
-shell_web_server
-shell_web_server.exe
-worker_test
-worker_test.exe
-
-# test目录下的可执行文件
-test/worker_test
-test/worker_test.exe
-test/*_test
-test/*_test.exe
 
 # 日志文件
 /logs/
@@ -45,8 +29,6 @@ go.sum
 .idea/
 *.swp
 *.swo
-.agent
-.serena
 
 # 前端
 /frontend/node_modules/
@@ -68,10 +50,10 @@ docker-compose.override.yml
 # 操作系统
 .DS_Store
 Thumbs.db
-PROMPT.md
-# 生成的 Protobuf 代码（可选，看是否提交）
-# pkg/grpc/pb/
-.claude
-CLAUDE.md
-.codex
+
+# AI 工具
+.agent
 .serena
+.claude
+.codex
+PROMPT.md

@@ -1,14 +1,8 @@
-# 前端配置
-web:
-  host: "0.0.0.0"
-  port: 5173
-
 # Manager 配置
 manager:
   host: "0.0.0.0"
   http_port: 8080
-  grpc_port: 9090
-  websocket_port: 8081
+  grpc_port: 9090  # 如果Manager和Worker共用一个节点，他们应当配置不同的grpc端口
 
   # 调度配置
   scheduler:
@@ -43,7 +37,7 @@ worker:
   
   # 任务执行配置
   executor:
-    grpc_port: 9091
+    grpc_port: 50051
     default_timeout: 3600  # 秒
 
   # 认证 Token（必须与 Manager 端 security.auth_token 一致）

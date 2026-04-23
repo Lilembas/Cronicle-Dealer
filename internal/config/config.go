@@ -18,14 +18,13 @@ type Config struct {
 
 // ManagerConfig Manager 配置
 type ManagerConfig struct {
-	Host           string              `mapstructure:"host"`
-	HTTPPort       int                 `mapstructure:"http_port"`
-	GRPCPort       int                 `mapstructure:"grpc_port"`
-	WebSocketPort  int                 `mapstructure:"websocket_port"`
-	Scheduler      SchedulerConfig     `mapstructure:"scheduler"`
-	Heartbeat      HeartbeatConfig     `mapstructure:"heartbeat"`
-	DispatchRetry  DispatchRetryConfig `mapstructure:"dispatch_retry"`
-	History        HistoryConfig       `mapstructure:"history"`
+	Host          string              `mapstructure:"host"`
+	HTTPPort      int                 `mapstructure:"http_port"`
+	GRPCPort      int                 `mapstructure:"grpc_port"`
+	Scheduler     SchedulerConfig     `mapstructure:"scheduler"`
+	Heartbeat     HeartbeatConfig     `mapstructure:"heartbeat"`
+	DispatchRetry DispatchRetryConfig `mapstructure:"dispatch_retry"`
+	History       HistoryConfig       `mapstructure:"history"`
 }
 
 // HistoryConfig 历史数据保留配置
@@ -169,7 +168,6 @@ func setDefaults() {
 	viper.SetDefault("manager.host", "0.0.0.0")
 	viper.SetDefault("manager.http_port", 8080)
 	viper.SetDefault("manager.grpc_port", 9090)
-	viper.SetDefault("manager.websocket_port", 8081)
 	viper.SetDefault("manager.scheduler.enabled", true)
 	viper.SetDefault("manager.scheduler.tick_interval", 1)
 	viper.SetDefault("manager.heartbeat.timeout", 60)

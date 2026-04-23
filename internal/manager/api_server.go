@@ -57,6 +57,7 @@ func (s *APIServer) setupRoutes() {
 	api := s.router.Group("/api/v1")
 	
 	s.router.GET("/health", s.healthCheck)
+	s.router.GET("/ws", s.handleWebSocket)
 
 	auth := api.Group("/auth")
 	{
@@ -195,6 +196,16 @@ func (s *APIServer) healthCheck(c *gin.Context) {
 		"status": "ok",
 		"time":   time.Now().Unix(),
 	})
+}
+
+func (s *APIServer) handleWebSocket(c *gin.Context) {
+	if s.wsServer == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "WebSocket 服务未就绪"})
+		return
+	}
+	if err := s.wsServer.hub.melody.HandleRequest(c.Writer, c.Request); err != nil {
+		logger.Error("WebSocket连接失败", zap.Error(err))
+	}
 }
 
 func (s *APIServer) listJobs(c *gin.Context) {
