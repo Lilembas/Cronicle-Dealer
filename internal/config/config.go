@@ -186,6 +186,11 @@ func setDefaults() {
 	viper.SetDefault("manager.history.metric_retention_days", 7)
 
 	// Worker 默认值
+	viper.SetDefault("worker.manager_address", "localhost:9090")
+	viper.SetDefault("worker.auth_token", "default-token-change-me")
+	viper.SetDefault("worker.node.hostname", "")
+	viper.SetDefault("worker.node.node_id", "")
+	viper.SetDefault("worker.node.tags", []string{"default"})
 	viper.SetDefault("worker.executor.grpc_port", 50051)
 	viper.SetDefault("worker.executor.default_timeout", 300)
 	viper.SetDefault("worker.heartbeat.interval", 30)
