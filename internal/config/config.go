@@ -158,7 +158,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("读取配置文件失败: %w", err)
+		fmt.Printf("警告: 无法读取配置文件 (%s)，将尝试使用默认配置和环境变量\n", err)
 	}
 
 	var cfg Config
