@@ -166,6 +166,14 @@ func (s *APIServer) setupRoutes() {
 		adminCategories.DELETE("/:id", s.deleteCategory)
 	}
 
+	// 前端静态文件服务
+	s.router.Static("/assets", "./frontend/dist/assets")
+	s.router.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")
+	s.router.StaticFile("/vite.svg", "./frontend/dist/vite.svg")
+	s.router.NoRoute(func(c *gin.Context) {
+		c.File("./frontend/dist/index.html")
+	})
+
 }
 
 func (s *APIServer) Start() error {
