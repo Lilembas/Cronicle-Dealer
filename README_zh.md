@@ -74,7 +74,7 @@
 - **数据请求**：TanStack Query
 - **日志终端**：xterm.js
 
-## 🛠️ TODO
+## 📋 TODO
 - [ ] Dockerfile
 
 ## 🙏 致谢

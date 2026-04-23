@@ -74,7 +74,7 @@
 - **Data Fetching**: TanStack Query
 - **Log Terminal**: xterm.js
 
-## 🛠️ TODO
+## 📋 TODO
 - [ ] Dockerfile
 - [ ] English Version
 
