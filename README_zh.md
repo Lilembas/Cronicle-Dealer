@@ -79,6 +79,14 @@
 ## 📋 TODO
 - [ ] Dockerfile
 
+## 📸 ScreenShots
+![🖥️ Dashboard](docs/screenshots/dashboard.png)
+![📋 Events](docs/screenshots/events-manage.png)
+![📜 Task History](docs/screenshots/task-history.png)
+![⚖️ Load Balance](docs/screenshots/loadbalance-strategy-edit.png)
+![💻 Run Commands](docs/screenshots/run-commands.png)
+![⚙️ Administrator](docs/screenshots/administrator.png)
+
 ## 🙏 致谢
 
 灵感来源于 [Cronicle](https://github.com/jhuckaby/Cronicle)。

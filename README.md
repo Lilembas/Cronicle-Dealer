@@ -9,7 +9,7 @@
 
 > A lightweight, scalable, and visual distributed task scheduling and execution platform built with Go + Vue 3
 
-![alt text](docs/images/framework.png)
+![framework](docs/images/framework.png)
 
 ## 📦 Quick Start
 
@@ -79,6 +79,14 @@
 ## 📋 TODO
 - [ ] Dockerfile
 - [ ] English Version
+
+## 📸 ScreenShots
+![🖥️ Dashboard](docs/screenshots/dashboard.png)
+![📋 Events](docs/screenshots/events-manage.png)
+![📜 Task History](docs/screenshots/task-history.png)
+![⚖️ Load Balance](docs/screenshots/loadbalance-strategy-edit.png)
+![💻 Run Commands](docs/screenshots/run-commands.png)
+![⚙️ Administrator](docs/screenshots/administrator.png)
 
 ## 🙏 Acknowledgements
 
