@@ -15,8 +15,8 @@ import (
 	"github.com/cronicle/cronicle-dealer/internal/config"
 	"github.com/cronicle/cronicle-dealer/internal/models"
 	"github.com/cronicle/cronicle-dealer/internal/storage"
-	"github.com/cronicle/cronicle-dealer/pkg/utils"
 	"github.com/cronicle/cronicle-dealer/pkg/logger"
+	"github.com/cronicle/cronicle-dealer/pkg/utils"
 )
 
 type APIServer struct {
@@ -38,24 +38,24 @@ func NewAPIServer(cfg *config.Config, scheduler *Scheduler, dispatcher *Dispatch
 	} else {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	
+
 	router := gin.Default()
-	
+
 	server := &APIServer{
 		cfg:        cfg,
 		router:     router,
 		scheduler:  scheduler,
 		dispatcher: dispatcher,
 	}
-	
+
 	server.setupRoutes()
-	
+
 	return server
 }
 
 func (s *APIServer) setupRoutes() {
 	api := s.router.Group("/api/v1")
-	
+
 	s.router.GET("/health", s.healthCheck)
 	s.router.GET("/ws", s.handleWebSocket)
 
@@ -67,12 +67,12 @@ func (s *APIServer) setupRoutes() {
 
 	protected := api.Group("")
 	protected.Use(s.authMiddleware())
-	
+
 	jobs := protected.Group("/jobs")
 	{
 		jobs.GET("", s.listJobs)
 		jobs.GET("/:id", s.getJob)
-		
+
 		// 写入和触发操作需要普通用户或管理员权限
 		jobsWrite := jobs.Group("")
 		jobsWrite.Use(s.userMiddleware())
@@ -96,7 +96,7 @@ func (s *APIServer) setupRoutes() {
 			eventsWrite.POST("/:id/abort", s.abortEvent)
 		}
 	}
-	
+
 	nodes := protected.Group("/nodes")
 	{
 		nodes.GET("", s.listNodes)
@@ -111,13 +111,13 @@ func (s *APIServer) setupRoutes() {
 		nodesAdmin.PUT("/:id", s.updateNode)
 		nodesAdmin.DELETE("/:id", s.deleteNode)
 	}
-	
+
 	protected.GET("/stats", s.getStats)
 
 	shell := protected.Group("/shell")
 	{
 		shell.GET("/logs/:event_id", s.getShellLogs)
-		
+
 		// Shell 执行需要普通用户或管理员权限
 		shellWrite := shell.Group("")
 		shellWrite.Use(s.userMiddleware())
@@ -179,15 +179,15 @@ func (s *APIServer) setupRoutes() {
 
 func (s *APIServer) Start() error {
 	addr := s.cfg.Manager.Host + ":" + strconv.Itoa(s.cfg.Manager.HTTPPort)
-	
+
 	logger.Info("API 服务器启动", zap.String("address", addr))
-	
+
 	go func() {
 		if err := s.router.Run(addr); err != nil {
 			logger.Fatal("API 服务器启动失败", zap.Error(err))
 		}
 	}()
-	
+
 	return nil
 }
 
@@ -286,11 +286,11 @@ func (s *APIServer) createJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	if job.ID == "" {
 		job.ID = utils.GenerateID("job")
 	}
-	
+
 	logger.Info("[API] 创建任务详情",
 		zap.String("name", job.Name),
 		zap.Bool("strict_mode", job.StrictMode))
@@ -299,13 +299,13 @@ func (s *APIServer) createJob(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	if utils.BoolValue(job.Enabled) {
 		if err := s.scheduler.AddJob(&job); err != nil {
 			logger.Error("添加任务到调度器失败", zap.Error(err))
 		}
 	}
-	
+
 	c.JSON(http.StatusCreated, job)
 }
 
@@ -315,7 +315,7 @@ func (s *APIServer) getJob(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, job)
 }
 
@@ -357,14 +357,14 @@ func (s *APIServer) updateJob(c *gin.Context) {
 
 func (s *APIServer) deleteJob(c *gin.Context) {
 	jobID := c.Param("id")
-	
+
 	if err := storage.DB.Where("id = ?", jobID).Delete(&models.Job{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	s.scheduler.RemoveJob(jobID)
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
@@ -397,17 +397,20 @@ func (s *APIServer) triggerJob(c *gin.Context) {
 	ctx := context.Background()
 	taskKey := fmt.Sprintf("%s:%s", job.ID, eventID)
 	taskData := map[string]interface{}{
-		"job_id":          job.ID,
-		"event_id":        eventID,
-		"job_name":        job.Name,
-		"command":         job.Command,
-		"task_type":       job.TaskType,
-		"timeout":         job.Timeout,
-		"working_dir":     job.WorkingDir,
-		"env":             job.Env,
-		"strict_mode":     fmt.Sprintf("%v", job.StrictMode),
-		"scheduled_time":  now.Unix(),
-		"manual_trigger":  "true",
+		"job_id":         job.ID,
+		"event_id":       eventID,
+		"job_name":       job.Name,
+		"command":        job.Command,
+		"task_type":      job.TaskType,
+		"timeout":        job.Timeout,
+		"working_dir":    job.WorkingDir,
+		"env":            job.Env,
+		"target_type":    job.TargetType,
+		"target_value":   job.TargetValue,
+		"strict_mode":    fmt.Sprintf("%v", job.StrictMode),
+		"strategy_id":    job.StrategyID,
+		"scheduled_time": now.Unix(),
+		"manual_trigger": "true",
 	}
 
 	logger.Info("手动触发任务详情",
@@ -415,8 +418,8 @@ func (s *APIServer) triggerJob(c *gin.Context) {
 		zap.Bool("strict_mode", job.StrictMode))
 
 	if err := storage.RedisClient.HSet(ctx, "tasks:details:"+taskKey, taskData).Err(); err != nil {
-			storage.DB.Delete(event)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "写入任务详情失败: " + err.Error()})
+		storage.DB.Delete(event)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "写入任务详情失败: " + err.Error()})
 		return
 	}
 
@@ -448,9 +451,9 @@ func (s *APIServer) triggerJob(c *gin.Context) {
 
 func (s *APIServer) listEvents(c *gin.Context) {
 	var events []models.Event
-	
+
 	query := storage.DB
-	
+
 	if jobID := c.Query("job_id"); jobID != "" {
 		query = query.Where("job_id = ?", jobID)
 	}
@@ -476,10 +479,10 @@ func (s *APIServer) listEvents(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	offset := (page - 1) * pageSize
-	
+
 	var total int64
 	query.Model(&models.Event{}).Count(&total)
-	
+
 	if err := query.Offset(offset).Limit(pageSize).Order("start_time DESC, id DESC").Find(&events).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -500,7 +503,7 @@ func (s *APIServer) listEvents(c *gin.Context) {
 			events[i].JobCategory = jobCategoryMap[events[i].JobID]
 		}
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"total": total,
 		"page":  page,
@@ -514,7 +517,7 @@ func (s *APIServer) getEvent(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "记录不存在"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, event)
 }
 
@@ -524,7 +527,7 @@ func (s *APIServer) abortEvent(c *gin.Context) {
 	var req struct {
 		Reason string `json:"reason"`
 	}
-	_ = c.ShouldBindJSON(&req) 
+	_ = c.ShouldBindJSON(&req)
 	var event models.Event
 	if err := storage.DB.Where("id = ?", eventID).First(&event).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "执行记录不存在"})
@@ -583,18 +586,18 @@ func (s *APIServer) abortEvent(c *gin.Context) {
 
 func (s *APIServer) listNodes(c *gin.Context) {
 	var nodes []models.Node
-	
+
 	query := storage.DB
-	
+
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
 	}
-	
+
 	if err := query.Order("last_heartbeat DESC").Find(&nodes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, nodes)
 }
 
@@ -663,7 +666,7 @@ func (s *APIServer) getNode(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "节点不存在"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, node)
 }
 
@@ -707,23 +710,23 @@ func (s *APIServer) deleteNode(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
 func (s *APIServer) getStats(c *gin.Context) {
 	var stats struct {
-		TotalJobs      int64 `json:"total_jobs"`
-		EnabledJobs    int64 `json:"enabled_jobs"`
-		TotalEvents    int64 `json:"total_events"`
-		RunningEvents  int64 `json:"running_events"`
-		SuccessEvents  int64 `json:"success_events"`
-		FailedEvents   int64 `json:"failed_events"`
-		OnlineNodes    int64 `json:"online_nodes"`
-		OfflineNodes   int64 `json:"offline_nodes"`
-		ServerTime     int64 `json:"server_time"`
+		TotalJobs     int64 `json:"total_jobs"`
+		EnabledJobs   int64 `json:"enabled_jobs"`
+		TotalEvents   int64 `json:"total_events"`
+		RunningEvents int64 `json:"running_events"`
+		SuccessEvents int64 `json:"success_events"`
+		FailedEvents  int64 `json:"failed_events"`
+		OnlineNodes   int64 `json:"online_nodes"`
+		OfflineNodes  int64 `json:"offline_nodes"`
+		ServerTime    int64 `json:"server_time"`
 	}
-	
+
 	storage.DB.Model(&models.Job{}).Count(&stats.TotalJobs)
 	storage.DB.Model(&models.Job{}).Where("enabled = ?", true).Count(&stats.EnabledJobs)
 	storage.DB.Model(&models.Event{}).Count(&stats.TotalEvents)
@@ -733,15 +736,15 @@ func (s *APIServer) getStats(c *gin.Context) {
 	storage.DB.Model(&models.Node{}).Where("status = ?", nodeStatusOnline).Count(&stats.OnlineNodes)
 	storage.DB.Model(&models.Node{}).Where("status = ?", nodeStatusOffline).Count(&stats.OfflineNodes)
 	stats.ServerTime = time.Now().UnixNano() / 1e6
-	
+
 	c.JSON(http.StatusOK, stats)
 }
 
 func (s *APIServer) executeShell(c *gin.Context) {
 	var req struct {
 		Command    string `json:"command" binding:"required"`
-		NodeID     string `json:"node_id"`    // 可选：指定执行节点
-		Timeout    int    `json:"timeout"`    // 可选：超时时间（秒），默认 30
+		NodeID     string `json:"node_id"`     // 可选：指定执行节点
+		Timeout    int    `json:"timeout"`     // 可选：超时时间（秒），默认 30
 		StrictMode bool   `json:"strict_mode"` // 可选：严格模式
 	}
 

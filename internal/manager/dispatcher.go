@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,9 +16,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"gorm.io/gorm"
 
-	pb "github.com/cronicle/cronicle-dealer/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-dealer/internal/models"
 	"github.com/cronicle/cronicle-dealer/internal/storage"
+	pb "github.com/cronicle/cronicle-dealer/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-dealer/pkg/logger"
 	"github.com/cronicle/cronicle-dealer/pkg/utils"
 )
@@ -28,10 +29,10 @@ const (
 )
 
 type Dispatcher struct {
-	mu           sync.Mutex
-	grpcClients  map[string]pb.CronicleServiceClient
-	conns        map[string]*grpc.ClientConn
-	wsServer     *WebSocketServer
+	mu            sync.Mutex
+	grpcClients   map[string]pb.CronicleServiceClient
+	conns         map[string]*grpc.ClientConn
+	wsServer      *WebSocketServer
 	strategyCache sync.Map // 策略缓存，key=策略ID，value=*models.LoadBalanceStrategy
 }
 
@@ -52,29 +53,29 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 	err := storage.DB.Where("id = ?", event.ID).First(&existingEvent).Error
 
 	if err == nil {
-			if existingEvent.Status == "running" {
+		if existingEvent.Status == "running" {
 			logger.Warn("任务已在运行中，跳过重复调度",
 				zap.String("event_id", event.ID),
 				zap.String("current_status", existingEvent.Status))
 			return nil
 		}
 		if existingEvent.Status == "failed" || existingEvent.Status == "success" ||
-		   existingEvent.Status == "aborted" || existingEvent.Status == "timeout" {
+			existingEvent.Status == "aborted" || existingEvent.Status == "timeout" {
 			logger.Warn("任务已完成，跳过重复调度",
 				zap.String("event_id", event.ID),
 				zap.String("current_status", existingEvent.Status))
 			return nil
 		}
-				if existingEvent.StartTime != nil && !existingEvent.StartTime.IsZero() {
-				event.StartTime = existingEvent.StartTime
-				event.LogPath = existingEvent.LogPath
-			}
+		if existingEvent.StartTime != nil && !existingEvent.StartTime.IsZero() {
+			event.StartTime = existingEvent.StartTime
+			event.LogPath = existingEvent.LogPath
+		}
 	}
 
 	if event.LogPath == "" {
 		event.LogPath = fmt.Sprintf("/var/log/cronicle/events/%s.log", event.ID)
 
-			if err := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).
+		if err := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).
 			Update("log_path", event.LogPath).Error; err != nil {
 			logger.Warn("更新事件 log_path 失败",
 				zap.String("event_id", event.ID),
@@ -106,11 +107,11 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 			WorkingDir:  taskDetails["working_dir"],
 			StrategyID:  taskDetails["strategy_id"],
 		}
-		
+
 	} else {
 		job, err = d.getJob(event.JobID)
 		if err != nil {
-					errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取任务配置失败: %v\n", time.Now().Format(logTimeFormat), err)
+			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取任务配置失败: %v\n", time.Now().Format(logTimeFormat), err)
 			storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
 			event.Status = "failed"
@@ -141,7 +142,7 @@ func (d *Dispatcher) DispatchEvent(event *models.Event, taskDetails map[string]s
 
 	candidates, err := d.selectCandidates(job)
 	if err != nil {
-			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取候选节点失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取候选节点失败: %v\n", time.Now().Format(logTimeFormat), err)
 		errorLog += fmt.Sprintf("[%s] [Manager] 可能原因：\n", time.Now().Format(logTimeFormat))
 		errorLog += fmt.Sprintf("[%s] [Manager] - 没有在线的 Worker 节点\n", time.Now().Format(logTimeFormat))
 		errorLog += fmt.Sprintf("[%s] [Manager] - 没有符合查询条件的节点\n", time.Now().Format(logTimeFormat))
@@ -422,31 +423,25 @@ func (d *Dispatcher) selectCandidates(job *models.Job) ([]models.Node, error) {
 
 	query := storage.DB.Where("status = ?", "online").
 		Where("last_heartbeat > ?", heartbeatThreshold).
-			Where("(tags NOT LIKE '%manager%' OR tags IS NULL OR tags = '')")
+		Where("(tags NOT LIKE '%manager%' OR tags IS NULL OR tags = '')")
 
 	switch job.TargetType {
 	case "node_id":
 		query = query.Where("id = ?", job.TargetValue)
 	case "tags":
-			var targetTags []string
+		var targetTags []string
 		if err := json.Unmarshal([]byte(job.TargetValue), &targetTags); err != nil {
-					targetTags = []string{job.TargetValue}
+			targetTags = []string{job.TargetValue}
 		}
 
 		if len(targetTags) > 0 {
-			tagSubQuery := storage.DB
-			for i, tag := range targetTags {
-							cond := "%\"" + tag + "\"%"
-				if i == 0 {
-					tagSubQuery = tagSubQuery.Where("tags LIKE ?", cond)
-				} else {
-					tagSubQuery = tagSubQuery.Or("tags LIKE ?", cond)
-				}
+			for _, tag := range targetTags {
+				cond := "%\"" + tag + "\"%"
+				query = query.Where("tags LIKE ?", cond)
 			}
-			query = query.Where(tagSubQuery)
 		}
 	case "any":
-		}
+	}
 
 	if err := query.Find(&nodes).Error; err != nil {
 		return nil, err
@@ -469,22 +464,27 @@ func (d *Dispatcher) pickOneNode(nodes []models.Node, strategyID string) (*model
 }
 
 func (d *Dispatcher) selectLeastBusyNode(nodes []models.Node) (*models.Node, error) {
-	var selectedNode *models.Node
+	var candidates []*models.Node
 	minJobs := math.MaxInt
 
 	for i := range nodes {
 		node := &nodes[i]
-		if node.CanAcceptJob() && node.RunningJobs < minJobs {
+		if !node.CanAcceptJob() {
+			continue
+		}
+		if node.RunningJobs < minJobs {
 			minJobs = node.RunningJobs
-			selectedNode = node
+			candidates = []*models.Node{node}
+		} else if node.RunningJobs == minJobs {
+			candidates = append(candidates, node)
 		}
 	}
 
-	if selectedNode == nil {
+	if len(candidates) == 0 {
 		return nil, fmt.Errorf("所有节点都已满载")
 	}
 
-	return selectedNode, nil
+	return candidates[rand.Intn(len(candidates))], nil
 }
 
 func (d *Dispatcher) dispatchBroadcast(event *models.Event, candidates []models.Node, job *models.Job) error {
@@ -496,7 +496,7 @@ func (d *Dispatcher) dispatchBroadcast(event *models.Event, candidates []models.
 		node := &candidates[i]
 		targetEvent := event
 
-			if i > 0 {
+		if i > 0 {
 			newEventID := utils.GenerateID("event")
 			targetEvent = &models.Event{
 				ID:            newEventID,
@@ -519,7 +519,7 @@ func (d *Dispatcher) dispatchBroadcast(event *models.Event, candidates []models.
 			}
 		}
 
-			if err := d.updateEventAndDispatch(targetEvent, node, job); err != nil {
+		if err := d.updateEventAndDispatch(targetEvent, node, job); err != nil {
 			logger.Error("广播分发到节点失败",
 				zap.String("event_id", targetEvent.ID),
 				zap.String("node_id", node.ID),
@@ -554,7 +554,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 
 	if err := storage.DB.Save(event).Error; err != nil {
 		releaseNodeSlot(node.ID)
-			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 更新任务记录失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog := fmt.Sprintf("[%s] [Manager] ❌ 更新任务记录失败: %v\n", time.Now().Format(logTimeFormat), err)
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 		return fmt.Errorf("更新任务记录失败: %w", err)
 	}
@@ -566,7 +566,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		storage.DB.Save(event)
 		releaseNodeSlot(node.ID)
 
-			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取 gRPC 客户端失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取 gRPC 客户端失败: %v\n", time.Now().Format(logTimeFormat), err)
 		errorLog += fmt.Sprintf("[%s] [Manager] 节点地址: %s, gRPC地址: %s\n", time.Now().Format(logTimeFormat), node.IP, node.GRPCAddress)
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
@@ -618,7 +618,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		storage.DB.Save(event)
 		releaseNodeSlot(node.ID)
 
-			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 发送任务到 Worker 失败: %v\n", time.Now().Format(logTimeFormat), err)
+		errorLog := fmt.Sprintf("[%s] [Manager] ❌ 发送任务到 Worker 失败: %v\n", time.Now().Format(logTimeFormat), err)
 		errorLog += fmt.Sprintf("[%s] [Manager] 任务已标记为失败状态\n", time.Now().Format(logTimeFormat))
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
@@ -631,7 +631,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		storage.DB.Save(event)
 		releaseNodeSlot(node.ID)
 
-			errorLog := fmt.Sprintf("[%s] [Manager] ❌ Worker 拒绝任务: %s\n", time.Now().Format(logTimeFormat), resp.Message)
+		errorLog := fmt.Sprintf("[%s] [Manager] ❌ Worker 拒绝任务: %s\n", time.Now().Format(logTimeFormat), resp.Message)
 		errorLog += fmt.Sprintf("[%s] [Manager] 可能原因: Worker 已达到最大并发数或其他限制\n", time.Now().Format(logTimeFormat))
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 
@@ -671,9 +671,9 @@ func (d *Dispatcher) getGRPCClient(node *models.Node) (pb.CronicleServiceClient,
 
 	var addr string
 	if node.GRPCAddress != "" && !strings.HasSuffix(node.GRPCAddress, ":0") {
-			addr = node.GRPCAddress
+		addr = node.GRPCAddress
 	} else {
-			addr = fmt.Sprintf("%s:%d", node.IP, defaultWorkerPort)
+		addr = fmt.Sprintf("%s:%d", node.IP, defaultWorkerPort)
 		logger.Warn("Worker grpc_address无效，使用IP和默认端口",
 			zap.String("node_id", node.ID),
 			zap.String("grpc_address", node.GRPCAddress),
