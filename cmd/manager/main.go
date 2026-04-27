@@ -140,7 +140,7 @@ func cleanupDuplicateNodes() error {
 		Select("hostname, ip, count(*) as count").
 		Where("tags NOT LIKE '%manager%' OR tags IS NULL").
 		Group("hostname, ip").
-		Having("count > 1").
+		Having("count(*) > 1").
 		Scan(&groups).Error; err != nil {
 		return err
 	}
