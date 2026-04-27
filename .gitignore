@@ -61,5 +61,6 @@ CLAUDE.md
 DESIGN.md
 /design-system/
 go1.25.0.linux-amd64.tar.gz
+data
 
-
+data/
