@@ -105,6 +105,21 @@ func (c *Client) Register() error {
 		resources = &pb.NodeResources{}
 	}
 
+	// 加载本地 node_id 映射
+	var storedNodeID string
+	var nodeStore *NodeIDStore
+	if c.cfg.NodeIDFile != "" {
+		store, loadErr := LoadNodeIDStore(c.cfg.NodeIDFile)
+		if loadErr != nil {
+			logger.Warn("加载本地 node_id 文件失败", zap.Error(loadErr))
+		}
+		nodeStore = store
+		storedNodeID = GetNodeIDForHostname(store, c.hostname)
+		if storedNodeID != "" {
+			logger.Info("从本地存储加载节点ID", zap.String("stored_node_id", storedNodeID))
+		}
+	}
+
 	// 获取当前进程 PID
 	pid := int32(os.Getpid())
 
@@ -116,6 +131,7 @@ func (c *Client) Register() error {
 		Version:     workerVersion,
 		GrpcAddress: c.grpcAddress,
 		Pid:         pid,
+		NodeId:      storedNodeID,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
@@ -131,6 +147,16 @@ func (c *Client) Register() error {
 	}
 
 	c.nodeID = resp.NodeId
+
+	// 注册成功后持久化 node_id（复用已加载的 store）
+	if nodeStore != nil {
+		SetNodeIDForHostname(nodeStore, c.hostname, resp.NodeId)
+		if saveErr := SaveNodeIDStore(c.cfg.NodeIDFile, nodeStore); saveErr != nil {
+			logger.Warn("保存 node_id 到本地文件失败", zap.Error(saveErr))
+		} else {
+			logger.Info("已保存节点ID到本地存储", zap.String("node_id", resp.NodeId))
+		}
+	}
 
 	logger.Info("节点注册成功",
 		zap.String("node_id", c.nodeID),

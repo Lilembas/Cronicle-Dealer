@@ -79,6 +79,7 @@ type RegisterNodeRequest struct {
 	Version       string                 `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"`
 	GrpcAddress   string                 `protobuf:"bytes,6,opt,name=grpc_address,json=grpcAddress,proto3" json:"grpc_address,omitempty"` // Worker executor gRPC 服务地址（格式：host:port）
 	Pid           int32                  `protobuf:"varint,7,opt,name=pid,proto3" json:"pid,omitempty"`                                   // Worker 进程 ID
+	NodeId        string                 `protobuf:"bytes,8,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`                // Worker 本地存储的 node_id（可选，用于身份复用）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -160,6 +161,13 @@ func (x *RegisterNodeRequest) GetPid() int32 {
 		return x.Pid
 	}
 	return 0
+}
+
+func (x *RegisterNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
 }
 
 type RegisterNodeResponse struct {
@@ -1018,7 +1026,7 @@ var File_cronicle_proto protoreflect.FileDescriptor
 
 const file_cronicle_proto_rawDesc = "" +
 	"\n" +
-	"\x0ecronicle.proto\x12\bcronicle\"\xdb\x01\n" +
+	"\x0ecronicle.proto\x12\bcronicle\"\xf4\x01\n" +
 	"\x13RegisterNodeRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
 	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x12\n" +
@@ -1026,7 +1034,8 @@ const file_cronicle_proto_rawDesc = "" +
 	"\tresources\x18\x04 \x01(\v2\x17.cronicle.NodeResourcesR\tresources\x12\x18\n" +
 	"\aversion\x18\x05 \x01(\tR\aversion\x12!\n" +
 	"\fgrpc_address\x18\x06 \x01(\tR\vgrpcAddress\x12\x10\n" +
-	"\x03pid\x18\a \x01(\x05R\x03pid\"\x8a\x01\n" +
+	"\x03pid\x18\a \x01(\x05R\x03pid\x12\x17\n" +
+	"\anode_id\x18\b \x01(\tR\x06nodeId\"\x8a\x01\n" +
 	"\x14RegisterNodeResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x18\n" +

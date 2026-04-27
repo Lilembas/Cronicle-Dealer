@@ -107,36 +107,87 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 	logger.Info("收到节点注册请求",
 		zap.String("hostname", req.Hostname),
 		zap.String("ip", req.Ip),
-		zap.Int32("pid", req.Pid))
+		zap.Int32("pid", req.Pid),
+		zap.String("node_id", req.NodeId))
 
-	// 检查是否已存在相同 hostname 的非 manager 节点
-	var existingNode models.Node
-	err := storage.DB.Where("hostname = ?", req.Hostname).
+	// 1. 检查同名在线冲突
+	var onlineNode models.Node
+	onlineErr := storage.DB.Where("hostname = ?", req.Hostname).
+		Where("status = ?", "online").
 		Where("tags NOT LIKE '%manager%'").
-		Order("created_at DESC").
-		First(&existingNode).Error
+		First(&onlineNode).Error
 
+	if onlineErr == nil {
+		// 存在同名的在线节点，直接拒绝
+		logger.Warn("拒绝注册：相同主机名的节点已在线",
+			zap.String("hostname", req.Hostname),
+			zap.String("existing_node_id", onlineNode.ID),
+			zap.Int32("existing_pid", onlineNode.PID))
+		return &pb.RegisterNodeResponse{
+			Success: false,
+			Message: fmt.Sprintf("hostname '%s' 已被在线节点占用 (node_id: %s, pid: %d)",
+				req.Hostname, onlineNode.ID, onlineNode.PID),
+		}, nil
+	}
+
+	// 2. 确定节点 ID
 	var nodeID string
 	var isNewNode bool
+	var existingNode models.Node
 
-	if err == nil {
-		// 节点已存在，复用该节点ID（节点重连）
-		nodeID = existingNode.ID
-		isNewNode = false
-		logger.Info("Worker 节点重新上线",
-			zap.String("hostname", req.Hostname),
-			zap.String("ip", req.Ip),
-			zap.String("existing_node_id", nodeID),
-			zap.String("old_status", existingNode.Status),
-			zap.Int32("old_pid", existingNode.PID))
-	} else {
-		// 新节点，生成新ID
-		nodeID = utils.GenerateID("node")
-		isNewNode = true
-		logger.Info("新 Worker 节点注册",
-			zap.String("hostname", req.Hostname),
-			zap.String("ip", req.Ip),
-			zap.Int32("pid", req.Pid))
+	if req.NodeId != "" {
+		// Worker 提供了本地存储的 node_id，优先使用
+		err := storage.DB.Where("id = ?", req.NodeId).First(&existingNode).Error
+		if err == nil {
+			// DB 中找到了该 node_id
+			if existingNode.Hostname != req.Hostname {
+				logger.Warn("拒绝注册：node_id 与 hostname 不匹配",
+					zap.String("node_id", req.NodeId),
+					zap.String("db_hostname", existingNode.Hostname),
+					zap.String("req_hostname", req.Hostname))
+				return &pb.RegisterNodeResponse{
+					Success: false,
+					Message: fmt.Sprintf("node_id '%s' 属于 hostname '%s'，与当前 '%s' 不匹配",
+						req.NodeId, existingNode.Hostname, req.Hostname),
+				}, nil
+			}
+			nodeID = req.NodeId
+			isNewNode = false
+			logger.Info("Worker 节点通过 node_id 重连",
+				zap.String("hostname", req.Hostname),
+				zap.String("node_id", nodeID),
+				zap.String("old_status", existingNode.Status),
+				zap.Int32("old_pid", existingNode.PID))
+		} else {
+			// node_id 在 DB 中不存在（DB 被清空等情况），降级到 hostname 查找
+			logger.Info("提供的 node_id 在 DB 中不存在，降级到 hostname 查找",
+				zap.String("node_id", req.NodeId))
+		}
+	}
+
+	// 3. 如果还没确定 node_id，按 hostname 查找
+	if nodeID == "" {
+		err := storage.DB.Where("hostname = ?", req.Hostname).
+			Where("tags NOT LIKE '%manager%'").
+			Order("created_at DESC").
+			First(&existingNode).Error
+
+		if err == nil {
+			nodeID = existingNode.ID
+			isNewNode = false
+			logger.Info("Worker 节点通过 hostname 重连",
+				zap.String("hostname", req.Hostname),
+				zap.String("existing_node_id", nodeID),
+				zap.String("old_status", existingNode.Status),
+				zap.Int32("old_pid", existingNode.PID))
+		} else {
+			nodeID = utils.GenerateID("node")
+			isNewNode = true
+			logger.Info("新 Worker 节点注册",
+				zap.String("hostname", req.Hostname),
+				zap.String("ip", req.Ip),
+				zap.Int32("pid", req.Pid))
+		}
 	}
 
 	node := s.buildNode(nodeID, req)
@@ -163,7 +214,7 @@ func (s *GRPCServer) RegisterNode(ctx context.Context, req *pb.RegisterNodeReque
 			"g_rpc_address": node.GRPCAddress,
 			"tags":           node.Tags,
 			"pid":            node.PID,
-			"status":         "online", // 重新上线时设置为在线
+			"status":         "online",
 			"cpu_cores":      node.CPUCores,
 			"cpu_usage":      node.CPUUsage,
 			"memory_total":   node.MemoryTotal,
@@ -321,6 +372,11 @@ func (s *GRPCServer) ReportTaskResult(ctx context.Context, req *pb.TaskResult) (
 		return &pb.TaskResultAck{Received: false}, nil
 	}
 
+	// 释放节点的并发槽位
+	if event.NodeID != "" {
+		releaseNodeSlot(event.NodeID)
+	}
+
 	// 下载全量日志到本地文件，然后设置Redis TTL=15min
 	s.DownloadAndExpireLog(ctx, req.EventId)
 
@@ -467,7 +523,6 @@ func (s *GRPCServer) updateNodeHeartbeat(node *models.Node, req *pb.HeartbeatReq
 		"memory_percent":  calculatePercent(req.Resources.MemoryUsage, req.Resources.MemoryTotal),
 		"disk_usage":      req.Resources.DiskUsage,
 		"disk_percent":    calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal),
-		"running_jobs":    len(req.RunningJobs),
 		"last_heartbeat":  time.Now(),
 		"status":          "online",
 	}
@@ -479,7 +534,18 @@ func (s *GRPCServer) updateNodeHeartbeat(node *models.Node, req *pb.HeartbeatReq
 	node.MemoryPercent = calculatePercent(req.Resources.MemoryUsage, req.Resources.MemoryTotal)
 	node.DiskUsage = req.Resources.DiskUsage
 	node.DiskPercent = calculatePercent(req.Resources.DiskUsage, req.Resources.DiskTotal)
-	node.RunningJobs = len(req.RunningJobs)
+
+	// 校准 running_jobs：从 DB 重新读取 Manager 原子计数，与 Worker 上报值对比
+	workerRunningJobs := len(req.RunningJobs)
+	var dbRunningJobs struct{ RunningJobs int }
+	storage.DB.Model(&models.Node{}).Where("id = ?", node.ID).Select("running_jobs").Scan(&dbRunningJobs)
+	node.RunningJobs = dbRunningJobs.RunningJobs
+	if node.RunningJobs != workerRunningJobs {
+		logger.Warn("running_jobs 不一致，已以 Manager 计数为准",
+			zap.String("node_id", node.ID),
+			zap.Int("manager_count", node.RunningJobs),
+			zap.Int("worker_count", workerRunningJobs))
+	}
 
 	// 通过 WebSocket 推送节点状态更新
 	if s.wsServer != nil {

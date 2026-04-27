@@ -35,6 +35,7 @@ message RegisterNodeRequest {
   string version = 5;
   string grpc_address = 6; // Worker executor gRPC 服务地址（格式：host:port）
   int32 pid = 7; // Worker 进程 ID
+  string node_id = 8; // Worker 本地存储的 node_id（可选，用于身份复用）
 }
 
 message RegisterNodeResponse {

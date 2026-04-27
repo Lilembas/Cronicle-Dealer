@@ -57,10 +57,11 @@ type HeartbeatConfig struct {
 // WorkerConfig Worker 配置
 type WorkerConfig struct {
 	ManagerAddress string         `mapstructure:"manager_address"`
-	Node          NodeConfig      `mapstructure:"node"`
-	Heartbeat     WorkerHeartbeat `mapstructure:"heartbeat"`
-	Executor      ExecutorConfig  `mapstructure:"executor"`
-	AuthToken     string          `mapstructure:"auth_token"`
+	Node           NodeConfig     `mapstructure:"node"`
+	Heartbeat      WorkerHeartbeat `mapstructure:"heartbeat"`
+	Executor       ExecutorConfig `mapstructure:"executor"`
+	AuthToken      string         `mapstructure:"auth_token"`
+	NodeIDFile     string         `mapstructure:"node_id_file"`
 }
 
 // NodeConfig 节点配置
@@ -194,6 +195,7 @@ func setDefaults() {
 	viper.SetDefault("worker.executor.grpc_port", 50051)
 	viper.SetDefault("worker.executor.default_timeout", 300)
 	viper.SetDefault("worker.heartbeat.interval", 30)
+	viper.SetDefault("worker.node_id_file", "./data/worker_nodes.json")
 
 	// Database 默认值
 	viper.SetDefault("database.driver", "sqlite")

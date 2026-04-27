@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"gorm.io/gorm"
 
 	pb "github.com/cronicle/cronicle-dealer/pkg/grpc/pb"
 	"github.com/cronicle/cronicle-dealer/internal/models"
@@ -534,6 +535,16 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 	event.NodeName = node.Hostname
 	event.Status = "running"
 
+	// 原子占用一个并发槽位：running_jobs + 1，条件为未达上限
+	result := storage.DB.Model(&models.Node{}).
+		Where("id = ? AND (max_concurrent = 0 OR running_jobs < max_concurrent)", node.ID).
+		Update("running_jobs", gorm.Expr("running_jobs + 1"))
+	if result.Error != nil {
+		return fmt.Errorf("更新节点并发计数失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("节点 %s 已达最大并发数", node.Hostname)
+	}
 	nodeLog := fmt.Sprintf("[%s] [Manager] 目标节点: %s (%s)\n", time.Now().Format(logTimeFormat), node.Hostname, node.ID)
 	nodeLog += fmt.Sprintf("[%s] [Manager] 节点地址: %s\n", time.Now().Format(logTimeFormat), node.IP)
 	if node.GRPCAddress != "" {
@@ -542,6 +553,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 	storage.SaveLogChunk(context.Background(), event.ID, nodeLog)
 
 	if err := storage.DB.Save(event).Error; err != nil {
+		releaseNodeSlot(node.ID)
 			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 更新任务记录失败: %v\n", time.Now().Format(logTimeFormat), err)
 		storage.SaveLogChunk(context.Background(), event.ID, errorLog)
 		return fmt.Errorf("更新任务记录失败: %w", err)
@@ -552,6 +564,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		event.Status = "failed"
 		event.ErrorMessage = fmt.Sprintf("获取 gRPC 客户端失败: %v", err)
 		storage.DB.Save(event)
+		releaseNodeSlot(node.ID)
 
 			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 获取 gRPC 客户端失败: %v\n", time.Now().Format(logTimeFormat), err)
 		errorLog += fmt.Sprintf("[%s] [Manager] 节点地址: %s, gRPC地址: %s\n", time.Now().Format(logTimeFormat), node.IP, node.GRPCAddress)
@@ -603,6 +616,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		event.Status = "failed"
 		event.ErrorMessage = fmt.Sprintf("发送任务失败: %v", err)
 		storage.DB.Save(event)
+		releaseNodeSlot(node.ID)
 
 			errorLog := fmt.Sprintf("[%s] [Manager] ❌ 发送任务到 Worker 失败: %v\n", time.Now().Format(logTimeFormat), err)
 		errorLog += fmt.Sprintf("[%s] [Manager] 任务已标记为失败状态\n", time.Now().Format(logTimeFormat))
@@ -615,6 +629,7 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 		event.Status = "failed"
 		event.ErrorMessage = fmt.Sprintf("Worker 拒绝任务: %s", resp.Message)
 		storage.DB.Save(event)
+		releaseNodeSlot(node.ID)
 
 			errorLog := fmt.Sprintf("[%s] [Manager] ❌ Worker 拒绝任务: %s\n", time.Now().Format(logTimeFormat), resp.Message)
 		errorLog += fmt.Sprintf("[%s] [Manager] 可能原因: Worker 已达到最大并发数或其他限制\n", time.Now().Format(logTimeFormat))
@@ -635,6 +650,15 @@ func (d *Dispatcher) updateEventAndDispatch(event *models.Event, node *models.No
 	}
 
 	return nil
+}
+
+// releaseNodeSlot 释放节点的并发槽位（running_jobs - 1）
+func releaseNodeSlot(nodeID string) {
+	if err := storage.DB.Model(&models.Node{}).
+		Where("id = ? AND running_jobs > 0", nodeID).
+		Update("running_jobs", gorm.Expr("running_jobs - 1")).Error; err != nil {
+		logger.Warn("释放节点并发槽位失败", zap.String("node_id", nodeID), zap.Error(err))
+	}
 }
 
 func (d *Dispatcher) getGRPCClient(node *models.Node) (pb.CronicleServiceClient, error) {

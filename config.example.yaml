@@ -43,6 +43,9 @@ worker:
   # 认证 Token（必须与 Manager 端 security.auth_token 一致）
   auth_token: "change-me-in-production"
 
+  # 节点 ID 持久化文件（Worker 重启后可复用原有 node_id）
+  node_id_file: "./data/worker_nodes.json"
+
 # 数据库配置
 database:
   # 驱动类型: "sqlite" 或 "postgres"

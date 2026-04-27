@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "mappings": [
+    {
+      "hostname": "worker01",
+      "node_id": "node_1776936892_057dc280783a2443",
+      "updated_at": "2026-04-27T15:13:15+08:00"
+    },
+    {
+      "hostname": "worker02",
+      "node_id": "node_1776936927_56997ae9e188404a",
+      "updated_at": "2026-04-27T15:13:14+08:00"
+    },
+    {
+      "hostname": "worker04",
+      "node_id": "node_1776936978_e5e3c3634ce70155",
+      "updated_at": "2026-04-27T15:13:14+08:00"
+    },
+    {
+      "hostname": "worker03",
+      "node_id": "node_1776936952_45a1bce927475c35",
+      "updated_at": "2026-04-27T15:13:14+08:00"
+    }
+  ]
+}
