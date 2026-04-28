@@ -39,13 +39,18 @@ func main() {
 	}
 	defer logger.Sync()
 
+	logger.Debug("已加载配置",
+		zap.Any("manager", cfg.Manager),
+		zap.Any("redis", cfg.Redis),
+		zap.Any("logging", cfg.Logging))
+
 	logger.Info("节点启动中...",
 		zap.String("node_type", nodeType),
 		zap.String("version", version))
 
 	// 初始化存储
 	logger.Info("连接数据库...")
-	if err := storage.InitDB(&cfg.Database); err != nil {
+	if err := storage.InitDB(&cfg.Manager.Database); err != nil {
 		logger.Fatal("数据库连接失败", zap.Error(err))
 	}
 
@@ -59,7 +64,7 @@ func main() {
 	}
 
 	logger.Info("初始化日志存储...")
-	if err := storage.InitLogStorage(cfg.Storage.LogDir); err != nil {
+	if err := storage.InitLogStorage(cfg.Logging.LogDir); err != nil {
 		logger.Fatal("日志存储初始化失败", zap.Error(err))
 	}
 

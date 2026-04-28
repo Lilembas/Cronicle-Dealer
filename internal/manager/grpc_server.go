@@ -84,7 +84,7 @@ func (s *GRPCServer) Stop() {
 
 // authTokenInterceptor 校验 Worker gRPC 请求中的 auth token
 func (s *GRPCServer) authTokenInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	token := s.cfg.Security.AuthToken
+	token := s.cfg.Manager.Security.AuthToken
 	if token == "" {
 		return handler(ctx, req)
 	}

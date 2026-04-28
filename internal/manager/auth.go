@@ -141,7 +141,7 @@ func (s *APIServer) authMiddleware() gin.HandlerFunc {
 }
 
 func (s *APIServer) generateToken(user *models.User) (string, error) {
-	expireHours := s.cfg.Security.JWT.ExpireHours
+	expireHours := s.cfg.Manager.Security.JWT.ExpireHours
 	if expireHours <= 0 {
 		expireHours = 24
 	}
@@ -158,7 +158,7 @@ func (s *APIServer) generateToken(user *models.User) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(s.cfg.Security.JWT.Secret))
+	return token.SignedString([]byte(s.cfg.Manager.Security.JWT.Secret))
 }
 
 func (s *APIServer) validateToken(tokenStr string) (*Claims, error) {
@@ -167,7 +167,7 @@ func (s *APIServer) validateToken(tokenStr string) (*Claims, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid signing method")
 		}
-		return []byte(s.cfg.Security.JWT.Secret), nil
+		return []byte(s.cfg.Manager.Security.JWT.Secret), nil
 	})
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid token")

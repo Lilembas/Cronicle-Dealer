@@ -328,7 +328,7 @@ func (s *APIServer) updateJob(c *gin.Context) {
 		return
 	}
 
-	var updates models.Job
+	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -336,8 +336,7 @@ func (s *APIServer) updateJob(c *gin.Context) {
 
 	logger.Info("[API] 更新任务详情",
 		zap.String("id", jobID),
-		zap.String("name", updates.Name),
-		zap.Bool("strict_mode", updates.StrictMode))
+		zap.Any("updates", updates))
 
 	if err := storage.DB.Model(&existing).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

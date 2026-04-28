@@ -21,10 +21,10 @@ const (
 
 // TaskConsumer 任务消费者
 type TaskConsumer struct {
-	dispatcher  *Dispatcher
-	wsServer    *WebSocketServer
-	retryCfg    config.DispatchRetryConfig
-	done        chan struct{}
+	dispatcher *Dispatcher
+	wsServer   *WebSocketServer
+	retryCfg   config.DispatchRetryConfig
+	done       chan struct{}
 }
 
 // NewTaskConsumer 创建任务消费者
@@ -152,6 +152,7 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 
 			select {
 			case <-ctx.Done():
+				tc.markEventAsFailed(event, retryCount, fmt.Errorf("Manager 关闭，重试中断"))
 				return
 			case <-timer.C:
 			}
@@ -163,6 +164,7 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 					zap.String("event_id", event.ID),
 					zap.Int("retry", nextRetry),
 					zap.Error(err))
+				tc.markEventAsFailed(event, retryCount, fmt.Errorf("重新入队失败: %v", err))
 			}
 		}()
 
@@ -177,41 +179,7 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 		return
 	}
 
-	now := time.Now()
-	// 从数据库查询事件的实际开始时间（CreatedAt 是事件创建时间，即首次调度开始时间）
-	var dbEvent models.Event
-	if err := storage.DB.Select("created_at, scheduled_time").Where("id = ?", event.ID).First(&dbEvent).Error; err == nil {
-		// 使用 CreatedAt 作为开始时间，它代表事件首次进入调度的时间
-		startTime := dbEvent.CreatedAt
-		if !dbEvent.ScheduledTime.IsZero() && dbEvent.ScheduledTime.After(dbEvent.CreatedAt) {
-			// 如果 ScheduledTime 更合理（晚于 CreatedAt），使用它
-			startTime = dbEvent.ScheduledTime
-		}
-		duration := int64(now.Sub(startTime).Seconds())
-		updateErr := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).Updates(map[string]interface{}{
-			"status":        eventStatusFailed,
-			"end_time":      now,
-			"start_time":    startTime,
-			"duration":      duration,
-			"exit_code":     1,
-			"error_message": fmt.Sprintf("任务分发失败（已重试%d次后放弃）: %v", retryCount, dispatchErr),
-		}).Error
-	if updateErr != nil {
-		logger.Error("更新分发失败事件状态失败",
-			zap.String("event_id", event.ID),
-			zap.String("job_id", event.JobID),
-			zap.Error(updateErr))
-	}
-		}
-
-		// 通过 WebSocket 广播任务状态变更
-		if tc.wsServer != nil {
-			if err := tc.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, event.NodeID, event.NodeName, 1); err != nil {
-				logger.Warn("广播任务失败状态失败",
-					zap.String("event_id", event.ID),
-					zap.Error(err))
-			}
-		}
+	tc.markEventAsFailed(event, retryCount, dispatchErr)
 
 	logger.Error("任务分发失败，达到最大重试次数",
 		zap.String("task_key", taskKey),
@@ -220,6 +188,44 @@ func (tc *TaskConsumer) handleDispatchFailure(ctx context.Context, taskKey strin
 		zap.Int("retry", retryCount),
 		zap.Int("max_retries", maxRetries),
 		zap.Error(dispatchErr))
+}
+
+// markEventAsFailed 将事件标记为失败，更新数据库状态、广播 WebSocket
+func (tc *TaskConsumer) markEventAsFailed(event *models.Event, retryCount int, failErr error) {
+	if event.ID == "" {
+		return
+	}
+
+	now := time.Now()
+	var dbEvent models.Event
+	if err := storage.DB.Select("created_at, scheduled_time").Where("id = ?", event.ID).First(&dbEvent).Error; err == nil {
+		startTime := dbEvent.CreatedAt
+		if !dbEvent.ScheduledTime.IsZero() && dbEvent.ScheduledTime.After(dbEvent.CreatedAt) {
+			startTime = dbEvent.ScheduledTime
+		}
+		duration := int64(now.Sub(startTime).Seconds())
+		if err := storage.DB.Model(&models.Event{}).Where("id = ?", event.ID).Updates(map[string]interface{}{
+			"status":        eventStatusFailed,
+			"end_time":      now,
+			"start_time":    startTime,
+			"duration":      duration,
+			"exit_code":     1,
+			"error_message": fmt.Sprintf("任务分发失败（已重试%d次后放弃）: %v", retryCount, failErr),
+		}).Error; err != nil {
+			logger.Error("更新分发失败事件状态失败",
+				zap.String("event_id", event.ID),
+				zap.String("job_id", event.JobID),
+				zap.Error(err))
+		}
+	}
+
+	if tc.wsServer != nil {
+		if err := tc.wsServer.BroadcastTaskStatus(event.ID, event.JobID, eventStatusFailed, event.NodeID, event.NodeName, 1); err != nil {
+			logger.Warn("广播任务失败状态失败",
+				zap.String("event_id", event.ID),
+				zap.Error(err))
+		}
+	}
 }
 
 func parseRetryCount(value string) int {

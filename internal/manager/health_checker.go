@@ -18,7 +18,7 @@ import (
 // 定期扫描 Worker 节点心跳，检测离线节点并清理孤儿事件
 type HealthChecker struct {
 	cfg        *config.HeartbeatConfig
-	storageCfg *config.StorageConfig
+	loggingCfg *config.LoggingConfig
 	dispatcher *Dispatcher
 	grpcServer *GRPCServer
 	wsServer   *WebSocketServer
@@ -28,14 +28,14 @@ type HealthChecker struct {
 // NewHealthChecker 创建健康检查器
 func NewHealthChecker(
 	cfg *config.HeartbeatConfig,
-	storageCfg *config.StorageConfig,
+	loggingCfg *config.LoggingConfig,
 	dispatcher *Dispatcher,
 	grpcServer *GRPCServer,
 	wsServer *WebSocketServer,
 ) *HealthChecker {
 	return &HealthChecker{
 		cfg:        cfg,
-		storageCfg: storageCfg,
+		loggingCfg: loggingCfg,
 		dispatcher: dispatcher,
 		grpcServer: grpcServer,
 		wsServer:   wsServer,
@@ -118,6 +118,9 @@ func (h *HealthChecker) checkAllNodes() {
 
 	// 扫描孤儿事件：running 状态但所属节点不在线（或不存在）
 	h.cleanupOrphanEventsOnNonexistentNodes(onlineWorkerIDs)
+
+	// 扫描超时的 pending 事件（未分配节点且超过阈值）
+	h.cleanupStalePendingEvents()
 
 	if len(nodes) == 0 {
 		return
@@ -224,6 +227,35 @@ func (h *HealthChecker) cleanupOrphanEventsOnNonexistentNodes(onlineWorkerIDs ma
 	}
 }
 
+// cleanupStalePendingEvents 清理超时的 pending 事件（未分配节点且超过阈值）
+func (h *HealthChecker) cleanupStalePendingEvents() {
+	pendingTimeout := h.cfg.PendingTimeout
+	if pendingTimeout <= 0 {
+		pendingTimeout = 300
+	}
+	threshold := time.Now().Add(-time.Duration(pendingTimeout) * time.Second)
+
+	var staleEvents []models.Event
+	if err := storage.DB.Where("status = ? AND start_time IS NULL AND node_id = '' AND created_at < ?",
+		eventStatusPending, threshold).Find(&staleEvents).Error; err != nil {
+		logger.Error("查询超时 pending 事件失败", zap.Error(err))
+		return
+	}
+
+	if len(staleEvents) == 0 {
+		return
+	}
+
+	logger.Warn("发现超时的 pending 事件",
+		zap.Int("count", len(staleEvents)),
+		zap.Int("pending_timeout_sec", pendingTimeout))
+
+	for _, event := range staleEvents {
+		errMsg := fmt.Sprintf("任务待执行超时（超过 %d 秒未分配到节点）", pendingTimeout)
+		h.failOrphanedEvent(event, errMsg)
+	}
+}
+
 // failOrphanedEvent 将单个孤儿事件标记为失败，并完成日志归档、广播、统计更新
 func (h *HealthChecker) failOrphanedEvent(event models.Event, errMsg string) {
 	now := time.Now()
@@ -285,24 +317,24 @@ func (h *HealthChecker) failOrphanedEvent(event models.Event, errMsg string) {
 
 // cleanupLogs 执行日志清理：删除过期日志、截断超大日志
 func (h *HealthChecker) cleanupLogs() {
-	if h.storageCfg == nil {
+	if h.loggingCfg == nil {
 		return
 	}
-	if err := storage.CleanupOldLogs(h.storageCfg.LogRetentionDays); err != nil {
+	if err := storage.CleanupOldLogs(h.loggingCfg.LogRetentionDays); err != nil {
 		logger.Warn("清理过期日志失败", zap.Error(err))
 	}
-	if err := storage.TruncateOverSizeLogs(h.storageCfg.MaxLogSizeMB); err != nil {
+	if err := storage.TruncateOverSizeLogs(h.loggingCfg.MaxLogSizeMB); err != nil {
 		logger.Warn("截断超大日志失败", zap.Error(err))
 	}
 }
 
 // cleanupMetrics 执行指标数据清理：删除过期历史负载记录
 func (h *HealthChecker) cleanupMetrics() {
-	if h.storageCfg == nil || h.storageCfg.LogRetentionDays <= 0 {
+	if h.loggingCfg == nil || h.loggingCfg.LogRetentionDays <= 0 {
 		return
 	}
 
-	retention := time.Duration(h.storageCfg.LogRetentionDays) * 24 * time.Hour
+	retention := time.Duration(h.loggingCfg.LogRetentionDays) * 24 * time.Hour
 	threshold := time.Now().Add(-retention)
 
 	result := storage.DB.Where("timestamp < ?", threshold).Delete(&models.NodeMetric{})
@@ -311,6 +343,6 @@ func (h *HealthChecker) cleanupMetrics() {
 	} else if result.RowsAffected > 0 {
 		logger.Info("已清理过期负载指标",
 			zap.Int64("count", result.RowsAffected),
-			zap.Int("retention_days", h.storageCfg.LogRetentionDays))
+			zap.Int("retention_days", h.loggingCfg.LogRetentionDays))
 	}
 }

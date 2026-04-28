@@ -47,6 +47,11 @@ func main() {
 	}
 	defer logger.Sync()
 
+	logger.Debug("已加载配置",
+		zap.Any("worker", cfg.Worker),
+		zap.Any("redis", cfg.Redis),
+		zap.Any("logging", cfg.Logging))
+
 	logger.Info("节点启动中...",
 		zap.String("node_type", nodeType),
 		zap.String("version", version),
@@ -59,7 +64,7 @@ func main() {
 	defer storage.CloseRedis()
 
 	logger.Info("初始化日志存储...")
-	if err := storage.InitLogStorage(cfg.Storage.LogDir); err != nil {
+	if err := storage.InitLogStorage(cfg.Logging.LogDir); err != nil {
 		logger.Fatal("日志存储初始化失败", zap.Error(err))
 	}
 

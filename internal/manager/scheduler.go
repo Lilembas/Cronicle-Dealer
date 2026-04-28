@@ -86,7 +86,7 @@ func (s *Scheduler) cleanupHistory(retention config.HistoryConfig) {
 	s.deleteOldRecords("节点指标", "timestamp < ?", retention.MetricRetentionDays, &models.NodeMetric{})
 
 	// 2. 清理物理日志文件
-	storageCfg := s.cfg.Storage
+	storageCfg := s.cfg.Logging
 	if err := storage.CleanupOldLogs(storageCfg.LogRetentionDays); err != nil {
 		logger.Error("清理过期日志文件失败", zap.Error(err))
 	}

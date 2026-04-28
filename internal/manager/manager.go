@@ -77,7 +77,7 @@ func (m *Manager) startServices() error {
 	m.healthCancel = healthCancel
 	m.healthChecker = NewHealthChecker(
 		&m.cfg.Manager.Heartbeat,
-		&m.cfg.Storage,
+		&m.cfg.Logging,
 		m.dispatcher,
 		m.grpcServer,
 		m.wsServer,
