@@ -435,10 +435,12 @@ func (d *Dispatcher) selectCandidates(job *models.Job) ([]models.Node, error) {
 		}
 
 		if len(targetTags) > 0 {
+			orConditions := storage.DB
 			for _, tag := range targetTags {
 				cond := "%\"" + tag + "\"%"
-				query = query.Where("tags LIKE ?", cond)
+				orConditions = orConditions.Or("tags LIKE ?", cond)
 			}
+			query = query.Where(orConditions)
 		}
 	case "any":
 	}
