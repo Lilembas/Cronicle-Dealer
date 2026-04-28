@@ -308,3 +308,11 @@ export const userApi = {
     changePassword: (data: { old_password: string; new_password: string }) =>
         request.put('/user/password', data),
 }
+
+export const settingsApi = {
+    getSettings: () =>
+        request.get<{ config: Record<string, any>; db_override: boolean }>('/admin/settings'),
+
+    updateSettings: (config: Record<string, any>) =>
+        request.put<{ message: string }>('/admin/settings', { config }),
+}

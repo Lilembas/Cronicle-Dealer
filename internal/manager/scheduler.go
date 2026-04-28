@@ -35,11 +35,6 @@ func NewScheduler(cfg *config.Config) *Scheduler {
 
 // Start 启动调度器
 func (s *Scheduler) Start() error {
-	if !s.cfg.Manager.Scheduler.Enabled {
-		logger.Info("调度器已禁用")
-		return nil
-	}
-
 	logger.Info("启动调度器...")
 
 	if err := s.LoadJobs(); err != nil {

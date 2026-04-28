@@ -63,6 +63,17 @@ func main() {
 		logger.Fatal("初始化默认管理员失败", zap.Error(err))
 	}
 
+	// 从数据库加载配置覆盖
+	var sysCfg models.SystemConfig
+	if err := storage.DB.Order("updated_at DESC").First(&sysCfg).Error; err == nil && sysCfg.Content != "" {
+		logger.Info("检测到数据库配置覆盖，正在应用...")
+		if err := config.ApplyDBOverrides(cfg, sysCfg.Content); err != nil {
+			logger.Warn("应用数据库配置覆盖失败，将使用文件配置", zap.Error(err))
+		} else {
+			logger.Info("数据库配置覆盖已应用")
+		}
+	}
+
 	logger.Info("初始化日志存储...")
 	if err := storage.InitLogStorage(cfg.Logging.LogDir); err != nil {
 		logger.Fatal("日志存储初始化失败", zap.Error(err))

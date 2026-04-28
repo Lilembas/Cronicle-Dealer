@@ -68,6 +68,7 @@ func AutoMigrate() error {
 		&models.LoadBalanceStrategy{},
 		&models.Category{},
 		&models.NodeMetric{},
+		&models.SystemConfig{},
 	)
 }
 

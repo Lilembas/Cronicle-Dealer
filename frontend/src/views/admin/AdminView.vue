@@ -9,8 +9,9 @@ const route = useRoute()
 
 const adminTabs = [
   { id: '/admin/users', label: '用户管理', icon: 'pi pi-users' },
-  { id: '/admin/logs', label: '管理日志', icon: 'pi pi-file' },
+  { id: '/admin/logs', label: '系统日志', icon: 'pi pi-file' },
   { id: '/admin/categories', label: '分组管理', icon: 'pi pi-tags' },
+  { id: '/admin/settings', label: '系统配置', icon: 'pi pi-cog' },
 ]
 
 const activeTab = computed(() => route.path)

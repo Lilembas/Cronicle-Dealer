@@ -167,6 +167,9 @@ func (s *APIServer) setupRoutes() {
 		adminCategories.DELETE("/:id", s.deleteCategory)
 	}
 
+	admin.GET("/admin/settings", s.getSettings)
+	admin.PUT("/admin/settings", s.updateSettings)
+
 	// 前端静态文件服务
 	s.router.Static("/assets", "./frontend/dist/assets")
 	s.router.StaticFile("/favicon.ico", "./frontend/dist/favicon.ico")

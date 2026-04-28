@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -20,7 +21,6 @@ type ManagerConfig struct {
 	Host          string              `mapstructure:"host"`
 	HTTPPort      int                 `mapstructure:"http_port"`
 	GRPCPort      int                 `mapstructure:"grpc_port"`
-	Scheduler     SchedulerConfig     `mapstructure:"scheduler"`
 	Heartbeat     HeartbeatConfig     `mapstructure:"heartbeat"`
 	DispatchRetry DispatchRetryConfig `mapstructure:"dispatch_retry"`
 	History       HistoryConfig       `mapstructure:"history"`
@@ -39,12 +39,6 @@ type DispatchRetryConfig struct {
 	MaxRetries   int `mapstructure:"max_retries"`    // 最大重试次数，默认 3
 	BaseDelaySec int `mapstructure:"base_delay_sec"` // 基础退避延迟（秒），默认 2
 	MaxDelaySec  int `mapstructure:"max_delay_sec"`  // 最大退避上限（秒），默认 30
-}
-
-// SchedulerConfig 调度器配置
-type SchedulerConfig struct {
-	Enabled      bool `mapstructure:"enabled"`
-	TickInterval int  `mapstructure:"tick_interval"`
 }
 
 // HeartbeatConfig 心跳配置
@@ -166,14 +160,52 @@ func Load(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
+// ApplyDBOverrides 用数据库中的 JSON 配置覆盖文件配置
+// 仅覆盖 JSON 中存在的非零值字段，未设置的字段保留文件值
+func ApplyDBOverrides(cfg *Config, jsonContent string) error {
+	if jsonContent == "" {
+		return nil
+	}
+
+	var overrides map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonContent), &overrides); err != nil {
+		return fmt.Errorf("解析数据库配置失败: %w", err)
+	}
+
+	// 将 overrides 合并到 viper 中（会覆盖文件中的值）
+	for key, val := range flattenMap(overrides, "") {
+		viper.Set(key, val)
+	}
+
+	// 重新 unmarshal 到 cfg
+	return viper.Unmarshal(cfg)
+}
+
+// flattenMap 将嵌套 map 展平为 viper 的点分隔键
+func flattenMap(m map[string]interface{}, prefix string) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range m {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		if nested, ok := v.(map[string]interface{}); ok {
+			for nk, nv := range flattenMap(nested, key) {
+				result[nk] = nv
+			}
+		} else {
+			result[key] = v
+		}
+	}
+	return result
+}
+
 // setDefaults 设置默认值
 func setDefaults() {
 	// Manager 默认值
 	viper.SetDefault("manager.host", "0.0.0.0")
 	viper.SetDefault("manager.http_port", 8080)
 	viper.SetDefault("manager.grpc_port", 9090)
-	viper.SetDefault("manager.scheduler.enabled", true)
-	viper.SetDefault("manager.scheduler.tick_interval", 1)
 	viper.SetDefault("manager.heartbeat.timeout", 60)
 	viper.SetDefault("manager.heartbeat.check_interval", 30)
 	viper.SetDefault("manager.heartbeat.pending_timeout", 10)

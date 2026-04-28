@@ -91,13 +91,19 @@ const routes: RouteRecordRaw[] = [
                         path: 'logs',
                         name: 'AdminLogs',
                         component: () => import('@/views/admin/LogsView.vue'),
-                        meta: { title: '管理日志' }
+                        meta: { title: '系统日志' }
                     },
                     {
                         path: 'categories',
                         name: 'AdminCategories',
                         component: () => import('@/views/admin/CategoriesView.vue'),
                         meta: { title: '分组管理' }
+                    },
+                    {
+                        path: 'settings',
+                        name: 'AdminSettings',
+                        component: () => import('@/views/admin/SettingsView.vue'),
+                        meta: { title: '系统配置' }
                     },
                 ]
             }
