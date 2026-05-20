@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 # 先复制依赖文件并下载，利用 Docker 缓存
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
 COPY . .
