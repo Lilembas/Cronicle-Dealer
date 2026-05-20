@@ -1,10 +1,10 @@
 # 二进制文件
 /bin/
 /dist/
-manager
-manager.exe
-worker
-worker.exe
+/manager
+/manager.exe
+/worker
+/worker.exe
 cmd/manager/manager
 cmd/manager/manager.exe
 cmd/worker/worker
