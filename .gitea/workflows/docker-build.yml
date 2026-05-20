@@ -1,0 +1,79 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  # 改成你的 Gitea 域名或 IP:端口
+  # 例如：gitea.example.com
+  # 例如：192.168.31.125:3000
+  REGISTRY: gitea.piratemoza.cc
+
+  # 改成你的 Gitea 用户名或组织名
+  IMAGE_OWNER: linnan
+
+  # 镜像名前缀，最终会生成 cronicle-next-manager 和 cronicle-next-worker
+  IMAGE_NAME: cronicle-next
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Show Docker version
+        run: |
+          docker version
+          docker info
+
+      - name: Login to Gitea Container Registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login "${{ env.REGISTRY }}" \
+            -u "${{ secrets.REGISTRY_USERNAME }}" \
+            --password-stdin
+
+      - name: Set image tags
+        run: |
+          echo "MANAGER_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-manager" >> $GITHUB_ENV
+          echo "WORKER_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}-worker" >> $GITHUB_ENV
+          echo "SHORT_SHA=$(echo '${{ gitea.sha }}' | cut -c1-8)" >> $GITHUB_ENV
+
+      - name: Build Manager Docker image
+        run: |
+          docker build \
+            --target manager \
+            --build-arg VERSION="$SHORT_SHA" \
+            --build-arg COMMIT="${{ gitea.sha }}" \
+            -t "$MANAGER_IMAGE:latest" \
+            -t "$MANAGER_IMAGE:$SHORT_SHA" \
+            .
+
+      - name: Build Worker Docker image
+        run: |
+          docker build \
+            --target worker \
+            --build-arg VERSION="$SHORT_SHA" \
+            --build-arg COMMIT="${{ gitea.sha }}" \
+            -t "$WORKER_IMAGE:latest" \
+            -t "$WORKER_IMAGE:$SHORT_SHA" \
+            .
+
+      - name: Push Docker images
+        run: |
+          docker push "$MANAGER_IMAGE:latest"
+          docker push "$MANAGER_IMAGE:$SHORT_SHA"
+          docker push "$WORKER_IMAGE:latest"
+          docker push "$WORKER_IMAGE:$SHORT_SHA"
+
+      - name: Show image info
+        run: |
+          echo "Pushed:"
+          echo "$MANAGER_IMAGE:latest"
+          echo "$MANAGER_IMAGE:$SHORT_SHA"
+          echo "$WORKER_IMAGE:latest"
+          echo "$WORKER_IMAGE:$SHORT_SHA"

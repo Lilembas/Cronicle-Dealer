@@ -76,8 +76,14 @@
 - **Data Fetching**: TanStack Query
 - **Log Terminal**: xterm.js
 
+## 🐳 Docker
+- Build both images: `make docker`
+- Build manager only: `docker build --target manager -t cronicle-manager:latest .`
+- Build worker only: `docker build --target worker -t cronicle-worker:latest .`
+- Run with compose: `make docker-up`
+
 ## 📋 TODO
-- [ ] Dockerfile
+- [x] Dockerfile
 - [ ] English Version
 
 ## 📸 ScreenShots

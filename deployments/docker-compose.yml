@@ -42,7 +42,8 @@ services:
   manager:
     build:
       context: ..
-      dockerfile: deployments/docker/manager.Dockerfile
+      dockerfile: Dockerfile
+      target: manager
     container_name: cronicle-manager
     ports:
       - "8080:8080"
@@ -71,7 +72,8 @@ services:
   worker:
     build:
       context: ..
-      dockerfile: deployments/docker/worker.Dockerfile
+      dockerfile: Dockerfile
+      target: worker
     environment:
       - CRONICLE_WORKER_MANAGER_ADDRESS=manager:9090
       - CRONICLE_WORKER_AUTH_TOKEN=change-me-in-production

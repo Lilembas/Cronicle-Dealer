@@ -60,12 +60,12 @@ docker: docker-manager docker-worker
 
 docker-manager:
 	@echo "构建 Manager Docker 镜像..."
-	docker build -f deployments/docker/manager.Dockerfile -t cronicle-manager:latest .
+	docker build --target manager -t cronicle-manager:latest .
 	@echo "✅ Manager 镜像构建完成"
 
 docker-worker:
 	@echo "构建 Worker Docker 镜像..."
-	docker build -f deployments/docker/worker.Dockerfile -t cronicle-worker:latest .
+	docker build --target worker -t cronicle-worker:latest .
 	@echo "✅ Worker 镜像构建完成"
 
 # 运行 Docker Compose

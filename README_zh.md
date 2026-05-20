@@ -76,8 +76,14 @@
 - **数据请求**：TanStack Query
 - **日志终端**：xterm.js
 
+## 🐳 Docker
+- 构建全部镜像：`make docker`
+- 仅构建 Manager：`docker build --target manager -t cronicle-manager:latest .`
+- 仅构建 Worker：`docker build --target worker -t cronicle-worker:latest .`
+- 使用 compose 启动：`make docker-up`
+
 ## 📋 TODO
-- [ ] Dockerfile
+- [x] Dockerfile
 
 ## 📸 ScreenShots
 ![🖥️ Dashboard](docs/screenshots/dashboard.png)

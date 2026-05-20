@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	version  = "0.1.0"
 	nodeType = "Worker"
 )
+
+var version = "0.1.0"
 
 var configPath = flag.String("config", "config.yaml", "配置文件路径")
 

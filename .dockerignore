@@ -3,6 +3,8 @@
 .gitignore
 
 # IDE
+.gitea
+.github
 .vscode
 .idea
 *.swp
