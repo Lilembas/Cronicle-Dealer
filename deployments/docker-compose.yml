@@ -49,12 +49,12 @@ services:
       - "8080:8080"
       - "9090:9090"
     environment:
-      - CRONICLE_DATABASE_DRIVER=sqlite
-      - CRONICLE_DATABASE_PATH=/app/data/cronicle.db
+      - CRONICLE_MANAGER_DATABASE_DRIVER=sqlite
+      - CRONICLE_MANAGER_DATABASE_PATH=/app/data/cronicle.db
       - CRONICLE_REDIS_HOST=redis
       - CRONICLE_REDIS_PORT=6379
-      - CRONICLE_SECURITY_JWT_SECRET=change-me-in-production
-      - CRONICLE_SECURITY_AUTH_TOKEN=change-me-in-production
+      - CRONICLE_MANAGER_SECURITY_JWT_SECRET=change-me-in-production
+      - CRONICLE_MANAGER_SECURITY_AUTH_TOKEN=change-me-in-production
       - CRONICLE_LOGGING_LEVEL=info
       - CRONICLE_MANAGER_HISTORY_EVENT_RETENTION_DAYS=30
       - CRONICLE_MANAGER_HISTORY_METRIC_RETENTION_DAYS=7

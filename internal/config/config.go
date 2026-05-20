@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -10,10 +11,10 @@ import (
 
 // Config 全局配置结构
 type Config struct {
-	Manager  ManagerConfig  `mapstructure:"manager"`
-	Worker   WorkerConfig   `mapstructure:"worker"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	Logging  LoggingConfig  `mapstructure:"logging"`
+	Manager ManagerConfig `mapstructure:"manager"`
+	Worker  WorkerConfig  `mapstructure:"worker"`
+	Redis   RedisConfig   `mapstructure:"redis"`
+	Logging LoggingConfig `mapstructure:"logging"`
 }
 
 // ManagerConfig Manager 配置
@@ -128,12 +129,12 @@ type JWTConfig struct {
 
 // LoggingConfig 日志配置
 type LoggingConfig struct {
-	Level           string `mapstructure:"level"`
-	Format          string `mapstructure:"format"`
-	Output          string `mapstructure:"output"`
-	LogDir          string `mapstructure:"log_dir"`
-	LogRetentionDays int   `mapstructure:"log_retention_days"`
-	MaxLogSizeMB    int    `mapstructure:"max_log_size_mb"`
+	Level            string `mapstructure:"level"`
+	Format           string `mapstructure:"format"`
+	Output           string `mapstructure:"output"`
+	LogDir           string `mapstructure:"log_dir"`
+	LogRetentionDays int    `mapstructure:"log_retention_days"`
+	MaxLogSizeMB     int    `mapstructure:"max_log_size_mb"`
 }
 
 // Load 加载配置文件
@@ -157,7 +158,54 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
+	applyEnvSliceOverrides(&cfg)
+
 	return &cfg, nil
+}
+
+func applyEnvSliceOverrides(cfg *Config) {
+	if tags, ok := parseEnvStringSlice("CRONICLE_WORKER_NODE_TAGS"); ok {
+		cfg.Worker.Node.Tags = tags
+	}
+}
+
+func parseEnvStringSlice(envKey string) ([]string, bool) {
+	raw, ok := os.LookupEnv(envKey)
+	if !ok {
+		return nil, false
+	}
+
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{}, true
+	}
+
+	var values []string
+	if strings.HasPrefix(raw, "[") {
+		if err := json.Unmarshal([]byte(raw), &values); err == nil {
+			return compactStringSlice(values), true
+		}
+	}
+
+	parts := strings.Split(raw, ",")
+	for _, part := range parts {
+		value := strings.Trim(strings.TrimSpace(part), `"'`)
+		if value != "" {
+			values = append(values, value)
+		}
+	}
+	return values, true
+}
+
+func compactStringSlice(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 // ApplyDBOverrides 用数据库中的 JSON 配置覆盖文件配置

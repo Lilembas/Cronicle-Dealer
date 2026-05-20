@@ -282,29 +282,42 @@ curl http://localhost:8080/api/v1/nodes
 ### 主要配置项（config.yaml）
 
 ```yaml
-server:
-  mode: manager          # manager 或 worker
-  http_port: 8080      # HTTP API 端口
-  grpc_port: 9090     # gRPC 端口
-
-database:
-  driver: sqlite       # 数据库驱动: sqlite 或 postgres
-  path: ./cronicle.db  # SQLite 数据库文件路径
-
-redis:
-  host: localhost
-  port: 6379
-
 manager:
-  election:
-    enabled: true     # 启用 Manager 选举
-  scheduler:
-    enabled: true     # 启用任务调度
+  host: "0.0.0.0"
+  http_port: 8080
+  grpc_port: 9090
+  security:
+    jwt:
+      secret: "change-me-in-production"
+      expire_hours: 24
+    auth_token: "change-me-in-production"
+  database:
+    driver: "sqlite"
+    path: "./cronicle.db"
 
 worker:
-  manager_address: localhost:9090
+  manager_address: "localhost:9090"
   node:
     tags: ["default"]
+  auth_token: "change-me-in-production"
+
+redis:
+  host: "localhost"
+  port: 6379
+
+logging:
+  level: "info"
+  log_dir: "./logs"
+```
+
+环境变量使用 `CRONICLE_` 前缀，并将配置路径中的 `.` 替换为 `_`。例如：
+
+```bash
+CRONICLE_MANAGER_DATABASE_PATH=/app/data/cronicle.db
+CRONICLE_MANAGER_SECURITY_AUTH_TOKEN=change-me-in-production
+CRONICLE_WORKER_MANAGER_ADDRESS=manager:9090
+CRONICLE_WORKER_NODE_TAGS=default,docker
+CRONICLE_REDIS_HOST=redis
 ```
 
 ---
